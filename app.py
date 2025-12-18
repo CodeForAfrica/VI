@@ -4,100 +4,144 @@ import plotly.express as px
 import plotly.graph_objects as go
 from data_manager import DataManager
 
-st.set_page_config(page_title="Strategic Vulnerability Index", layout="wide", initial_sidebar_state="expanded")
+# --- Page Config ---
+st.set_page_config(
+    page_title="Strategic Vulnerability Index",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- Custom Styling ---
+# --- Custom CSS for Professional Look ---
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .risk-card { border-left: 5px solid #ff4b4b; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e6e9ef; }
+    .css-1r6slb0 { background-color: #f0f2f6; }
+    .risk-high { border-left: 5px solid #ff4b4b; }
+    .risk-low { border-left: 5px solid #00c853; }
     </style>
     """, unsafe_allow_html=True)
 
-if "mgr" not in st.session_state: st.session_state.mgr = DataManager()
+# --- Initialization ---
+if "mgr" not in st.session_state:
+    st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- SIDEBAR & REFRESH ---
+# --- Helper Function: Radar Chart ---
+def create_radar_chart(score, intent_type):
+    # Simulated breakdown based on your contextual_all_intent logic components
+    categories = ['Debt', 'Military', 'Resources', 'Social Fragility']
+    
+    # Logic to shape the radar based on the Intent Type extracted by LLM
+    if intent_type == "Economic":
+        values = [score, score * 0.4, score * 0.8, score * 0.3]
+    elif intent_type == "MilitaryPresence":
+        values = [score * 0.5, score, score * 0.3, score * 0.6]
+    else: # SocialFragility
+        values = [score * 0.4, score * 0.5, score * 0.2, score]
+
+    fig = go.Figure(data=go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill='toself',
+        line_color='#FF4B4B'
+    ))
+
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=False, range=[0, 1])),
+        showlegend=False,
+        height=200,
+        margin=dict(l=30, r=30, t=10, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+    )
+    return fig
+
+# --- Sidebar ---
 with st.sidebar:
-    st.title("🛰️ Intelligence Control")
-    if st.button("🔄 Sync Strategic Data", type="primary", use_container_width=True):
-        with st.status("Running Geopolitical Matrix...") as status:
-            count = mgr.update_news()
-            status.update(label=f"Sync Complete: {count} Insights Found", state="complete")
+    st.title("🛡️ Intelligence Hub")
+    st.markdown("---")
+    
+    if st.button("🔄 Sync Live Intelligence", type="primary", use_container_width=True):
+        with st.status("Recalculating Strategic Matrices...") as status:
+            new_count = mgr.update_news()
+            status.update(label=f"Analysis Complete: {new_count} news updated", state="complete")
         st.rerun()
+
+    st.markdown("### Filters")
+    actor_filter = st.multiselect("Actors", ["China", "Russia", "USA", "France", "UAE", "Turkey"])
+    country_filter = st.multiselect("Target Countries", ["Senegal", "DRC", "CoteIvoire", "Ethiopia"])
     
     st.divider()
-    actor_filter = st.multiselect("Filter Actors", ["China", "Russia", "France", "USA", "UAE", "Turkey"])
-    country_filter = st.multiselect("Filter Countries", ["DRC", "Senegal", "Ethiopia", "CoteIvoire"])
+    st.caption("Model Version: v2.4 (Contextual Intent Logic)")
 
-# --- DATA PROCESSING ---
-df = mgr.fetch_articles(limit=20)
+# --- Main Dashboard ---
+st.title("🛡️ Geopolitical Vulnerability Index")
+st.markdown("Real-time tracking of foreign influence via Debt, Military, and Resource Dependency data.")
+
+# Fetch Data
+df = mgr.fetch_articles(limit=18)
 
 if df.empty:
-    st.info("📊 Waiting for Intelligence Stream... Click 'Sync' in the sidebar.")
+    st.warning("No data found in the database. Please use the 'Sync' button in the sidebar to fetch news.")
 else:
-    # Filter logic (client-side for speed)
-    if actor_filter:
-        df = df[df['raw_text'].str.contains('|'.join(actor_filter), case=False)]
-    
-    # --- TOP INSIGHTS ROW ---
-    st.title("🛡️ Africa Strategic Vulnerability Index")
+    # 1. KPI Row
+    avg_score = df['contextual_score'].mean()
+    high_risks = len(df[df['contextual_score'] >= 0.80])
     
     k1, k2, k3, k4 = st.columns(4)
-    avg_score = df['contextual_score'].mean()
-    k1.metric("Global Intent Intensity", f"{int(avg_score*100)}%", delta="Live Matrix")
-    k2.metric("Critical Alerts", len(df[df['contextual_score'] > 0.85]))
-    k3.metric("Top Actor Presence", "China" if not df.empty else "N/A")
-    k4.metric("Highest Risk Node", "DRC" if not df.empty else "N/A")
+    k1.metric("Avg. Regional Risk", f"{int(avg_score*100)}%", delta="Strategic")
+    k2.metric("Critical Alerts", high_risks, delta_color="inverse")
+    k3.metric("Nodes Monitored", df['country'].nunique() if 'country' in df.columns else "4")
+    k4.metric("Active Sources", df['media_outlet'].nunique())
+
+    # 2. Risk Heatmap (Actor vs Country)
+    st.subheader("🌐 Strategic Heatmap: Influence Concentration")
+    if 'actor' in df.columns and 'country' in df.columns:
+        fig_heat = px.density_heatmap(
+            df, x="country", y="actor", z="contextual_score",
+            color_continuous_scale="Reds",
+            labels={'contextual_score': 'Risk Intensity'}
+        )
+        st.plotly_chart(fig_heat, use_container_width=True)
 
     st.divider()
 
-    # --- NEW: RISK HEATMAP ---
-    st.subheader("🌐 Geographic Risk Concentration")
-    # Generating a mock-up heatmap based on your data logic
-    fig_heat = px.density_heatmap(df, x="media_outlet", y="contextual_score", 
-                                  nbinsy=5, color_continuous_scale="Reds",
-                                  labels={'media_outlet': 'Media Source', 'contextual_score': 'Risk Level'})
-    st.plotly_chart(fig_heat, use_container_width=True)
-
-    # --- ARTICLE GRID WITH RADAR-INSIGHTS ---
-    st.subheader("📰 Recent Strategic Developments")
+    # 3. News Feed Grid
+    st.subheader("📰 Strategic Intelligence Feed")
     
-    for idx, row in df.iterrows():
+    # Apply Filters (Client Side)
+    display_df = df.copy()
+    if actor_filter:
+        display_df = display_df[display_df['actor'].isin(actor_filter)]
+    if country_filter:
+        display_df = display_df[display_df['country'].isin(country_filter)]
+
+    for idx, row in display_df.iterrows():
         with st.container(border=True):
-            col1, col2 = st.columns([1, 2])
+            col1, col2, col3 = st.columns([1, 2, 1])
             
+            # Left: Image
             with col1:
                 st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
-                
-                # --- NEW: RADAR CHART FOR DEBT/MIL/RES ---
-                # This visualizes the components of your contextual_all_intent logic
-                score = row['contextual_score']
-                categories = ['Debt', 'Military', 'Res', 'Intent']
-                # We simulate the breakdown for visualization (or pull from DB if you store them)
-                values = [score * 0.8, score * 0.9, score * 0.5, score] 
-                
-                fig = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', line_color='#ff4b4b'))
-                fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 1])), showlegend=False, height=200, margin=dict(l=20, r=20, t=20, b=20))
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
+            
+            # Middle: Summary & Meta
             with col2:
-                risk_color = "🔴" if row['contextual_score'] > 0.8 else "🟡" if row['contextual_score'] > 0.5 else "🟢"
-                st.markdown(f"### {risk_color} {row['title']}")
-                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at'][:10]}")
+                risk_emoji = "🔴" if row['contextual_score'] >= 0.80 else "🟡" if row['contextual_score'] >= 0.50 else "🟢"
+                st.markdown(f"### {risk_emoji} {row['title']}")
+                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at']}")
+                st.write(row['raw_text']) # This is the 1-sentence summary
                 
-                st.markdown(f"**Strategic Summary:** {row['raw_text']}")
-                
-                # Dynamic Tags based on content
-                tags = []
-                if "Military" in row['raw_text']: tags.append("🎖️ Military")
-                if "Economic" in row['raw_text']: tags.append("💰 Economic")
-                if "Debt" in row['raw_text']: tags.append("📉 Debt-Trap")
-                st.write(" ".join([f"`{t}`" for t in tags]))
-                
-                st.link_button("Access Full Intelligence Report", row['url'])
+                # Tags for Intent
+                intent = row.get('intent_type', 'General')
+                st.markdown(f"`Intent: {intent}` `Actor: {row.get('actor', 'N/A')}`")
+                st.link_button("View Source Article", row['url'])
 
-    # --- FOOTER NAVIGATION ---
-    st.divider()
-    st.caption("Data Model: v2.4 Multi-Intent Framework | Powered by Llama-3.3 & Groq")
+            # Right: Radar Chart
+            with col3:
+                st.write("**Risk Dimension Analysis**")
+                radar_fig = create_radar_chart(row['contextual_score'], intent)
+                st.plotly_chart(radar_fig, use_container_width=True, config={'displayModeBar': False})
+
+# Navigation Footer
+st.markdown("---")
+st.caption("Strategic Vulnerability Index Framework | User: admin | Data updated via NewsAPI & Groq LLM.")
