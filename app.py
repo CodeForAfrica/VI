@@ -3,9 +3,59 @@ import pandas as pd
 from data_manager import DataManager
 import plotly.graph_objects as go
 from datetime import datetime
+from fpdf import FPDF  # Added for PDF generation
+from io import BytesIO
 
 # --- Page Config ---
 st.set_page_config(page_title="Strategic Vulnerability Index", page_icon="🛡️", layout="wide")
+
+# --- PDF Generation Function (New Functionality) ---
+def generate_pdf(df, month_str, actor_f, country_f):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f"Geopolitical Vulnerability Report: {month_str}", ln=True, align='C')
+    
+    # Filter Metadata
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(0, 10, f"Filters: Actor: {actor_f} | Country: {country_f} | Generated: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Executive Summary Calculation
+    if not df.empty:
+        avg_risk = df['contextual_score'].mean() * 100
+        top_intent = df['intent_type'].mode()[0] if not df.empty else "N/A"
+        
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, "1. Executive Risk Summary", ln=True)
+        pdf.set_font("Arial", '', 11)
+        summary = (f"During this period, the analyzed region showed an average vulnerability index of {avg_risk:.1f}%. "
+                   f"The primary strategic intent identified across signals was '{top_intent}'.")
+        pdf.multi_cell(0, 10, summary)
+        pdf.ln(5)
+
+    # Intelligence Feed
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, "2. Intelligence Signal Log", ln=True)
+    pdf.set_font("Arial", '', 9)
+    
+    for i, row in df.iterrows():
+        pdf.set_font("Arial", 'B', 10)
+        pdf.multi_cell(0, 8, f"{i+1}. {row['title']} (Risk: {int(row['contextual_score']*100)}%)")
+        pdf.set_font("Arial", 'I', 8)
+        pdf.cell(0, 5, f"Source: {row['media_outlet']} | Actor: {row['actor']} | Intent: {row['intent_type']}", ln=True)
+        pdf.set_font("Arial", '', 9)
+        # Clean text for PDF encoding
+        clean_text = row['raw_text'][:400].encode('latin-1', 'ignore').decode('latin-1')
+        pdf.multi_cell(0, 5, f"{clean_text}...")
+        pdf.ln(5)
+        
+        if pdf.get_y() > 260:  # Page break handling
+            pdf.add_page()
+            
+    return pdf.output()
 
 # --- Custom Styling ---
 st.markdown("""
@@ -58,13 +108,12 @@ def create_radar_chart(score, intent_type):
 # --- Header ---
 st.title("🛡️ Geopolitical Vulnerability Index")
 
-# --- Filters Section ---
+# --- Filters Section (Updated with Export Button) ---
 st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-f1, f2, f3 = st.columns(3)
+f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
 with f1: f_actor = st.selectbox("Foreign Actor", ["All Actors"] + mgr.actors)
 with f2: f_country = st.selectbox("Target Nation", ["All Countries"] + mgr.countries)
 with f3: f_intent = st.selectbox("Primary Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()))
-st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Monthly Pagination Logic ---
 raw_df = mgr.fetch_articles(limit=100)
@@ -76,6 +125,26 @@ if not raw_df.empty:
     
     if "m_idx" not in st.session_state: st.session_state.m_idx = 0
     
+    # Filter Data for current view
+    current_m = available_months[st.session_state.m_idx]
+    df_view = raw_df[raw_df['month_year'] == current_m]
+    if f_actor != "All Actors": df_view = df_view[df_view['actor'] == f_actor]
+    if f_country != "All Countries": df_view = df_view[df_view['country'] == f_country]
+    if f_intent != "All Intents": df_view = df_view[df_view['intent_type'] == f_intent]
+
+    # --- PDF Button in Filter Bar ---
+    with f4:
+        st.write("") # Spacer
+        if not df_view.empty:
+            pdf_out = generate_pdf(df_view, current_m.strftime('%B %Y'), f_actor, f_country)
+            st.download_button(
+                label="📥 Export PDF",
+                data=pdf_out,
+                file_name=f"Vulnerability_Report_{current_m}.pdf",
+                mime="application/pdf"
+            )
+    st.markdown('</div>', unsafe_allow_html=True)
+
     # Nav Buttons
     nb1, nb2, nb3 = st.columns([1, 4, 1])
     with nb1: 
@@ -85,17 +154,10 @@ if not raw_df.empty:
         if st.button("Next Month ➡️") and st.session_state.m_idx > 0:
             st.session_state.m_idx -= 1
             
-    current_m = available_months[st.session_state.m_idx]
     st.subheader(f"📅 Intelligence for {current_m.strftime('%B %Y')}")
 
-    # Filtering Data
-    df = raw_df[raw_df['month_year'] == current_m]
-    if f_actor != "All Actors": df = df[df[ 'actor'] == f_actor]
-    if f_country != "All Countries": df = df[df['country'] == f_country]
-    if f_intent != "All Intents": df = df[df['intent_type'] == f_intent]
-
     # --- Feed ---
-    for idx, row in df.iterrows():
+    for idx, row in df_view.iterrows():
         with st.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             
@@ -107,7 +169,6 @@ if not raw_df.empty:
                 st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at'].strftime('%Y-%m-%d')}")
                 st.write(row['raw_text'][:500] + "...")
                 
-                # Insights box for non-technical users
                 with st.expander("🔍 Strategic Insights", expanded=True):
                     if row['intent_type'] == "Economic":
                         st.info(f"**Insight:** This move primarily leverages financial instruments. High dependency on **Debt** and **Resources** detected.")
@@ -128,4 +189,8 @@ if not raw_df.empty:
                 st.markdown(f"<h1 style='text-align:center; color:{color}; margin-bottom:0;'>{score_pct}%</h1>", unsafe_allow_html=True)
                 st.markdown("<p style='text-align:center;' class='metric-text'>Vulnerability Index</p>", unsafe_allow_html=True)
 else:
+    st.markdown('</div>', unsafe_allow_html=True)
     st.info("No data found for the current selection.")
+
+st.markdown("---")
+st.caption("Strategic Intelligence Framework | Developed for Geopolitical Risk Assessment")
