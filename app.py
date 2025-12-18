@@ -15,16 +15,19 @@ if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- PDF Logic (Restored) ---
+# --- PDF Logic (Fixed for fpdf2 & No Encoding Error) ---
 def create_pdf(row, tone, summary):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"INTEL BRIEF: {row['country']}", ln=True, align='C')
+    # fpdf2 uses 'helvetica' as default; 'Arial' is substituted automatically
+    pdf.set_font("helvetica", 'B', 16)
+    pdf.cell(0, 10, f"INTEL BRIEF: {row['country']}", align='C', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(10)
-    pdf.set_font("Arial", '', 12)
-    pdf.multi_cell(0, 10, f"Title: {row['title']}\nActor: {row['actor']}\nScore: {int(row['contextual_score']*100)}%\n\nSummary: {summary}")
-    return pdf.output(dest='S').encode('latin-1')
+    pdf.set_font("helvetica", '', 12)
+    pdf.multi_cell(0, 10, f"Title: {row['title']}\nActor: {row['actor']}\nScore: {int(row['contextual_score']*100)}%\nTone: {tone}\n\nSummary: {summary}")
+    
+    # In fpdf2, output() without 'dest' returns bytes/bytearray directly
+    return bytes(pdf.output())
 
 # --- Luxury Styling ---
 st.markdown("""
@@ -64,7 +67,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Metric Explanation Legend (Restored) ---
+# --- Metric Explanation Legend ---
 def show_metric_legend():
     with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores"):
         st.markdown("""
@@ -78,10 +81,9 @@ def show_metric_legend():
             * **Cynical:** Questions the underlying motives of foreign actors.
         """)
 
-# --- Radar Visual (Restored & Enhanced for Unique Sides) ---
+# --- Radar Visual ---
 def create_radar(score, title, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
-    # Use title hash to make the shape unique per article
     h = int(hashlib.md5(title.encode()).hexdigest(), 16)
     r_values = [
         score,
@@ -100,7 +102,7 @@ def create_radar(score, title, tone):
 st.title("🛡️ Geopolitical Vulnerability Index")
 show_metric_legend()
 
-# --- Filters (Restored all 4) ---
+# --- Filters ---
 with st.container(border=True):
     st.markdown("### 🔍 Strategic Command Center")
     c1, c2, c3, c4 = st.columns(4)
@@ -112,10 +114,10 @@ with st.container(border=True):
     st.markdown("---")
     sc1, sc2, _ = st.columns([2, 2, 4])
     with sc1:
-        if st.button("🔄 Sync Global Intelligence", use_container_width=True):
+        if st.button("🔄 Sync Global Intelligence", width='stretch'):
             mgr.update_news(); st.cache_data.clear(); st.rerun()
     with sc2:
-        if st.button("🗑️ Reset Database", use_container_width=True):
+        if st.button("🗑️ Reset Database", width='stretch'):
             mgr.clear_db(); st.cache_data.clear(); st.rerun()
 
 # --- Data Engine ---
@@ -130,14 +132,13 @@ if not df.empty:
         except: return pd.Series(['Factual', row['raw_text']])
     df[['tone', 'summary']] = df.apply(extract_extra, axis=1)
 
-    # Filter Logic (Restored all 4)
     f_df = df.copy()
     if f_country != "All Nations": f_df = f_df[f_df['country'] == f_country]
     if f_actor != "All Actors": f_df = f_df[f_df['actor'] == f_actor]
     if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
     if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # --- Pagination (Restored) ---
+    # --- Pagination ---
     items_per_page = 6
     if "page" not in st.session_state: st.session_state.page = 1
     total_pages = max(1, (len(f_df) // items_per_page) + (1 if len(f_df) % items_per_page > 0 else 0))
@@ -172,15 +173,23 @@ if not df.empty:
 
         c_img, c_body, c_risk = st.columns([1.2, 2, 1.2])
         with c_img:
-            st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
+            st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", width='stretch')
         with c_body:
             t_colors = {"Alarmist": "#ff4b4b", "Sensationalist": "#ffa500", "Cynical": "#9b59b6", "Factual": "#2ecc71"}
             st.markdown(f"**Tone:** <span style='color:{t_colors.get(row['tone'], '#fff')}'>{row['tone'].upper()}</span>", unsafe_allow_html=True)
             st.caption(f"{row['media_outlet']} | {row['published_at'].strftime('%Y-%m-%d')}")
-            st.link_button("View Source", row['url'], use_container_width=True)
+            st.link_button("View Source", row['url'], width='stretch')
+            
+            # --- FIXED PDF SECTION ---
             pdf_bytes = create_pdf(row, row['tone'], row['summary'])
-            st.download_button("📥 PDF Summary", pdf_bytes, f"brief_{idx}.pdf", "application/pdf", use_container_width=True)
+            st.download_button(
+                label="📥 PDF Summary", 
+                data=pdf_bytes, 
+                file_name=f"brief_{idx}.pdf", 
+                mime="application/pdf", 
+                width='stretch'
+            )
         with c_risk:
-            st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), use_container_width=True, key=f"radar_{idx}")
+            st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), width='stretch', key=f"radar_{idx}")
 else:
     st.info("No data. Please Sync.")
