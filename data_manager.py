@@ -114,7 +114,7 @@ class DataManager:
                 f"q={query}&"
                 "mode=artlist&"
                 "format=json&"
-                "maxrecords=200&"
+                "maxrecords=100&"
                 f"timespan={days}D"
             )
             
