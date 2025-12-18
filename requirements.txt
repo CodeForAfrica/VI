@@ -1,8 +1,8 @@
 streamlit
 pandas
-plotly
-newsapi-python
-groq
 sqlalchemy
-psycopg2-binary
+requests
 fpdf2
+plotly
+groq
+beautifulsoup4
