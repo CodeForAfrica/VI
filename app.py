@@ -7,299 +7,192 @@ import json
 from datetime import datetime
 
 # --- Page Config ---
-st.set_page_config(
-    page_title="Strategic Vulnerability Index",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# --- Custom Styling (Professional Theme) ---
-st.markdown("""
-<style>
-    /* Global Font & Background */
-    html, body, [class*="css"] {
-        font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
-        background-color: #0e1117;
-        color: #e0e0e0;
-    }
-
-    /* Header & Titles */
-    h1, h2, h3 {
-        font-weight: 700;
-        color: #ffffff;
-    }
-
-    /* Command Center */
-    .command-center {
-        background: linear-gradient(135deg, #1a1f29 0%, #11151c 100%);
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        margin-bottom: 32px;
-        border: 1px solid #2d333f;
-    }
-
-    /* Article Card */
-    .stContainer > div {
-        border: 1px solid #2d333f !important;
-        border-radius: 12px !important;
-        background: #141922 !important;
-        padding: 16px !important;
-        margin-bottom: 20px !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .stContainer > div:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-    }
-
-    /* Button Styling */
-    .stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 8px 16px;
-        border: none;
-        transition: all 0.3s ease;
-    }
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3);
-    }
-
-    /* Metric Badge */
-    .metric-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.85em;
-        font-weight: bold;
-        margin-right: 8px;
-    }
-
-    /* Footer & Captions */
-    .caption {
-        color: #8a94a6;
-        font-size: 0.9em;
-    }
-
-    /* Radar Chart Container */
-    .risk-panel {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        text-align: center;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Strategic Vulnerability Index", layout="wide")
 
 # --- Initialize Data Manager ---
 if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- Metric Explanation Legend (as modal) ---
+# --- Custom Styling (The "Eye-Catching" Layer) ---
+st.markdown("""
+    <style>
+    /* Main Background & Font */
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
+    
+    /* Intelligence Dossier Card */
+    .dossier-card {
+        background: rgba(22, 27, 34, 0.8);
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        border-left: 6px solid #ff4b4b; /* Glow indicator */
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    
+    /* Metadata Badges */
+    .intel-badge {
+        display: inline-block;
+        padding: 2px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: #161b22;
+        border: 1px solid #444c56;
+        margin-right: 8px;
+        color: #8b949e;
+    }
+    
+    /* Large Risk Text */
+    .risk-hero {
+        font-family: 'Courier New', monospace;
+        font-weight: 900;
+        color: #ff4b4b;
+        margin: 0;
+        line-height: 1;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- Metric Explanation Legend ---
 def show_metric_legend():
-    with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores", expanded=False):
+    with st.expander("ℹ️ UNDERSTANDING THE VULNERABILITY MATRIX"):
         st.markdown("""
-        <div style="line-height: 1.6;">
-            <h4>Strategic Metrics Breakdown</h4>
-            <ul>
-                <li><b>Vulnerability Score:</b> A composite index (0–100%) where <span style="color:#ff4b4b;">>70%</span> signals critical foreign influence exposure.</li>
-                <li><b>Matrix Factors:</b> Derived from <i>Debt-to-GDP</i>, <i>Resource concessions</i>, and <i>Military access agreements</i>.</li>
-                <li><b>Media Tone Classification:</b>
-                    <ul style="margin-top:8px;">
-                        <li><span style="color:#2ecc71">Factual</span>: Neutral, evidence-based reporting.</li>
-                        <li><span style="color:#ffa500">Sensationalist</span>: Emotion-driven narratives.</li>
-                        <li><span style="color:#ff4b4b">Alarmist</span>: Urgent, destabilization-focused framing.</li>
-                        <li><span style="color:#9b59b6">Cynical</span>: Skeptical of foreign actor motives.</li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
+        ### Strategic Metrics Breakdown
+        * **Vulnerability Score:** A weighted index (0-100%) where **>70%** indicates critical foreign influence.
+        * **Matrix Factors:** Based on Debt-to-GDP ratios, Resource concessions, and Military agreements.
+        * **Media Tone Definitions:**
+            * <span style='color:#2ecc71'>**Factual:**</span> Neutral, data-heavy reporting.
+            * <span style='color:#ffa500'>**Sensationalist:**</span> Emphasizes emotion or shock.
+            * <span style='color:#ff4b4b'>**Alarmist:**</span> Focuses on immediate threats to stability.
+            * <span style='color:#9b59b6'>**Cynical:**</span> Questions underlying foreign motives.
         """, unsafe_allow_html=True)
 
-# --- Radar Chart (Enhanced) ---
+# --- Radar Visual ---
 def create_radar(score, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
-    mod = 1.15 if tone == "Alarmist" else 1.0
+    mod = 1.1 if tone == "Alarmist" else 1.0
     r_values = [score * mod, score * 0.7, score * 0.5, score * 0.8]
-
-    fig = go.Figure(go.Scatterpolar(
-        r=r_values,
-        theta=categories,
-        fill='toself',
-        fillcolor='rgba(255, 75, 75, 0.25)',
-        line=dict(color='#ff4b4b', width=2.2),
-        hoverinfo='skip'
+    
+    fig = go.Figure(data=go.Scatterpolar(
+        r=r_values, 
+        theta=categories, 
+        fill='toself', 
+        fillcolor='rgba(255, 75, 75, 0.25)', 
+        line=dict(color='#ff4b4b', width=2)
     ))
-
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=False, range=[0, 1.2]),
-            angularaxis=dict(tickfont=dict(size=9), color="#6c757d")
+            angularaxis=dict(tickfont=dict(size=10, color="#8b949e"), color="#30363d")
         ),
-        showlegend=False,
-        height=220,
-        margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
+        showlegend=False, height=220, margin=dict(l=40, r=40, t=20, b=20),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
     return fig
 
 # --- Header ---
-st.title("🛡️ Geopolitical Vulnerability Index")
+st.title("🛡️ Geopolitical Intelligence Dashboard")
 show_metric_legend()
 
-# --- Command Center (Stylish Filter Panel) ---
-st.markdown('<div class="command-center">', unsafe_allow_html=True)
-st.subheader("🔍 Strategic Command Center")
+# --- Command Center (Filters) ---
+with st.container(border=True):
+    st.markdown("### 🔍 Strategic Filters")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: f_country = st.selectbox("📍 Nation", ["All Nations"] + mgr.countries)
+    with c2: f_actor = st.selectbox("👤 Actor", ["All Actors"] + mgr.actors)
+    with c3: f_intent = st.selectbox("🎯 Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()))
+    with c4: f_tone = st.selectbox("🎭 Tone", ["All Tones", "Factual", "Alarmist", "Sensationalist", "Cynical"])
+    
+    st.markdown("---")
+    sync_c1, sync_c2, _ = st.columns([2, 2, 4])
+    with sync_c1:
+        if st.button("🔄 Sync Intelligence Feed", use_container_width=True):
+            mgr.update_news(); st.cache_data.clear(); st.rerun()
+    with sync_c2:
+        if st.button("🗑️ Purge Local DB", use_container_width=True):
+            mgr.clear_db(); st.cache_data.clear(); st.rerun()
 
-c1, c2, c3, c4 = st.columns(4)
-with c1: f_country = st.selectbox("📍 Target Nation", ["All Nations"] + mgr.countries, key="country_filter")
-with c2: f_actor = st.selectbox("👤 Foreign Actor", ["All Actors"] + mgr.actors, key="actor_filter")
-with c3: f_intent = st.selectbox("🎯 Primary Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()), key="intent_filter")
-with c4: f_tone = st.selectbox("🎭 Media Tone", ["All Tones", "Factual", "Alarmist", "Sensationalist", "Cynical"], key="tone_filter")
-
-st.markdown("<hr style='margin:16px 0; border-top:1px solid #2d333f;'>", unsafe_allow_html=True)
-
-sync_c1, sync_c2 = st.columns([1, 1])
-with sync_c1:
-    if st.button("🔄 Sync Global Intelligence", use_container_width=True, type="secondary"):
-        mgr.update_news()
-        st.cache_data.clear()
-        st.rerun()
-with sync_c2:
-    if st.button("🗑️ Reset Database", use_container_width=True, type="primary"):
-        mgr.clear_db()
-        st.cache_data.clear()
-        st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Fetch & Process Data ---
+# --- Data Fetching ---
 df = mgr.fetch_articles(limit=500)
 
 if not df.empty:
     df['published_at'] = pd.to_datetime(df['published_at'])
-
+    
     def extract_extra(row):
         try:
             data = json.loads(row['raw_text'])
             return pd.Series([data.get('tone', 'Factual'), data.get('summary', '...')])
-        except:
-            return pd.Series(['Factual', row['raw_text']])
-    
+        except: return pd.Series(['Factual', row['raw_text']])
     df[['tone', 'summary']] = df.apply(extract_extra, axis=1)
 
-    # Apply Filters
-    filtered_df = df.copy()
-    if f_country != "All Nations": filtered_df = filtered_df[filtered_df['country'] == f_country]
-    if f_actor != "All Actors": filtered_df = filtered_df[filtered_df['actor'] == f_actor]
-    if f_intent != "All Intents": filtered_df = filtered_df[filtered_df['intent_type'] == f_intent]
-    if f_tone != "All Tones": filtered_df = filtered_df[filtered_df['tone'] == f_tone]
+    # Filter Logic
+    f_df = df.copy()
+    if f_country != "All Nations": f_df = f_df[f_df['country'] == f_country]
+    if f_actor != "All Actors": f_df = f_df[f_df['actor'] == f_actor]
+    if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
+    if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # --- Trend Visualization ---
-    if not filtered_df.empty:
-        st.subheader("📈 Vulnerability Trend Analysis")
-        trend_data = filtered_df.groupby(filtered_df['published_at'].dt.date)['contextual_score'].mean().reset_index()
-        fig_trend = px.line(
-            trend_data,
-            x='published_at',
-            y='contextual_score',
-            template="plotly_dark",
-            line_shape='spline'
-        )
-        fig_trend.update_traces(
-            line_color='#ff6b6b',
-            line_width=3,
-            mode='lines+markers',
-            marker=dict(size=5, color='#ff4b4b')
-        )
-        fig_trend.update_layout(
-            height=260,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis_title=None,
-            yaxis_title="Avg. Vulnerability Score",
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
-
-    st.markdown("<hr style='margin:24px 0; border-top:1px solid #222833;'>", unsafe_allow_html=True)
+    # --- Trend Analysis ---
+    if not f_df.empty:
+        st.subheader("📈 Vulnerability Velocity (Time Series)")
+        trend = f_df.groupby(f_df['published_at'].dt.date)['contextual_score'].mean().reset_index()
+        fig_trend = px.line(trend, x='published_at', y='contextual_score', template="plotly_dark")
+        fig_trend.update_traces(line_color='#ff4b4b', line_width=4, mode='lines+markers')
+        fig_trend.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), 
+                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig_trend, use_container_width=True, key="trend_viz")
+    
+    st.markdown("---")
 
     # --- Pagination ---
     items_per_page = 6
     if "page" not in st.session_state: st.session_state.page = 1
-    total_pages = max(1, (len(filtered_df) + items_per_page - 1) // items_per_page)
+    total_pages = max(1, (len(f_df) // items_per_page) + (1 if len(f_df) % items_per_page > 0 else 0))
+    
+    p1, p2, p3 = st.columns([1, 4, 1])
+    if p1.button("⬅️ Previous") and st.session_state.page > 1: st.session_state.page -= 1; st.rerun()
+    p2.markdown(f"<div style='text-align:center;'>Page <b>{st.session_state.page}</b> of {total_pages} | Reports: {len(f_df)}</div>", unsafe_allow_html=True)
+    if p3.button("Next ➡️") and st.session_state.page < total_pages: st.session_state.page += 1; st.rerun()
 
-    nav1, nav2, nav3 = st.columns([1, 4, 1])
-    with nav1:
-        if st.button("← Previous", disabled=(st.session_state.page == 1)):
-            st.session_state.page -= 1
-            st.rerun()
-    with nav2:
-        st.markdown(f"<div style='text-align:center; font-size:1.05em; font-weight:600; color:#cccccc;'>Page {st.session_state.page} of {total_pages} • {len(filtered_df)} Reports</div>", unsafe_allow_html=True)
-    with nav3:
-        if st.button("Next →", disabled=(st.session_state.page == total_pages)):
-            st.session_state.page += 1
-            st.rerun()
-
-    # --- Article Feed (Professional Cards) ---
+    # --- Article Feed ---
     start_idx = (st.session_state.page - 1) * items_per_page
-    page_df = filtered_df.iloc[start_idx : start_idx + items_per_page]
+    for idx, row in f_df.iloc[start_idx : start_idx + items_per_page].iterrows():
+        # High-End Dossier Card
+        st.markdown(f"""
+            <div class="dossier-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="width: 75%;">
+                        <span class="intel-badge">📍 {row['country']}</span>
+                        <span class="intel-badge">👤 {row['actor']}</span>
+                        <span class="intel-badge">🎯 {row['intent_type']}</span>
+                        <h2 style="margin: 15px 0 10px 0; color: #f0f6fc;">{row['title']}</h2>
+                        <p style="color: #8b949e; line-height: 1.6;">{row['summary']}</p>
+                    </div>
+                    <div style="width: 20%; text-align: right;">
+                        <p style="font-size: 0.7rem; color: #58a6ff; letter-spacing: 2px; margin-bottom: 5px;">INDEX SCORE</p>
+                        <h1 class="risk-hero">{int(row['contextual_score'] * 100)}%</h1>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Details & Data Row
+        det_col1, det_col2, det_col3 = st.columns([1, 2, 1.2])
+        with det_col1:
+            st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400x250/161b22/8b949e?text=No+Image", use_container_width=True)
+        with det_col2:
+            t_colors = {"Alarmist": "#ff4b4b", "Sensationalist": "#ffa500", "Cynical": "#9b59b6", "Factual": "#2ecc71"}
+            t_color = t_colors.get(row['tone'], "#ffffff")
+            st.markdown(f"**Media Tone:** <span style='color:{t_color}; font-weight:bold;'>{row['tone'].upper()}</span>", unsafe_allow_html=True)
+            st.caption(f"Source: {row['media_outlet']} | Logged: {row['published_at'].strftime('%Y-%m-%d')}")
+            st.link_button("View Full Report", row['url'], use_container_width=True)
+        with det_col3:
+            st.plotly_chart(create_radar(row['contextual_score'], row['tone']), use_container_width=True, key=f"radar_{idx}")
 
-    for idx, row in page_df.iterrows():
-        with st.container():
-            col_img, col_body, col_risk = st.columns([1, 3, 1.5])
-
-            with col_img:
-                img_url = row['image_url'] or "https://placehold.co/400x250/1e232c/4a5568?text=No+Image"
-                st.image(img_url, use_column_width=True)
-
-            with col_body:
-                st.markdown(f"### {row['title']}")
-                tone_color_map = {
-                    "Factual": "#2ecc71", "Sensationalist": "#ffa500",
-                    "Alarmist": "#ff4b4b", "Cynical": "#9b59b6"
-                }
-                tone_color = tone_color_map.get(row['tone'], "#ffffff")
-
-                # Tags
-                st.markdown(
-                    f"""
-                    <span class="metric-badge" style="background:#1f2937; color:#94a3b8;">📍 {row['country']}</span>
-                    <span class="metric-badge" style="background:#1f2937; color:#94a3b8;">👤 {row['actor']}</span>
-                    <span class="metric-badge" style="background:#1f2937; color:#94a3b8;">🎯 {row['intent_type']}</span>
-                    <span class="metric-badge" style="background:{tone_color}20; color:{tone_color}; border:1px solid {tone_color}40;">{row['tone'].upper()}</span>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                st.write(f"**Insight**: {row['summary']}")
-                st.markdown(f'<p class="caption">{row["media_outlet"]} • {row["published_at"].strftime("%Y-%m-%d")}</p>', unsafe_allow_html=True)
-                st.link_button("🌐 View Source", row['url'], use_container_width=True)
-
-            with col_risk:
-                st.markdown('<div class="risk-panel">', unsafe_allow_html=True)
-                st.plotly_chart(
-                    create_radar(row['contextual_score'], row['tone']),
-                    use_container_width=True,
-                    config={'staticPlot': True}
-                )
-                score_pct = min(100, int(row['contextual_score'] * 100))
-                risk_color = "#ff4b4b" if score_pct > 70 else "#ff9e4b" if score_pct > 50 else "#2ecc71"
-                st.markdown(f"<h2 style='color:{risk_color}; margin:8px 0;'>{score_pct}%</h2>", unsafe_allow_html=True)
-                st.markdown("<small style='color:#8a94a6;'>VULNERABILITY<br>INDEX</small>", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- Raw Data Inspector (Collapsible) ---
-    with st.expander("🗄️ Raw Intelligence Feed"):
-        st.dataframe(
-            df[['published_at', 'country', 'actor', 'title', 'tone', 'contextual_score']],
-            use_container_width=True,
-            height=400
-        )
-
+    with st.expander("🗄️ Raw Data Archive"):
+        st.dataframe(df, use_container_width=True)
 else:
-    st.info("📭 Intelligence database is empty. Press **Sync Global Intelligence** to populate.")
+    st.info("System initialized. No intelligence signals detected.")
