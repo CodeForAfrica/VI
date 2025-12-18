@@ -103,7 +103,6 @@ class DataManager:
     def update_news(self, days=28):
         all_articles = []
         
-        # Map your internal codes to real-world names for GDELT
         actor_names = {
             "China": "China",
             "France": "France",
@@ -115,46 +114,70 @@ class DataManager:
             "UAE": "United Arab Emirates",
             "Israel": "Israel",
             "Iran": "Iran"
-            # Exclude "NonState" — GDELT won't recognize it
         }
     
         country_names = {
             "Senegal": "Senegal",
-            "DRC": "Democratic Republic of the Congo",  # GDELT uses full name
+            "DRC": "Democratic Republic of the Congo",
             "CoteIvoire": "Côte d'Ivoire",
             "Ethiopia": "Ethiopia"
         }
     
         for country_code in self.countries:
             country_gdelt = country_names.get(country_code, country_code)
-            # Try 1 actor at a time to keep query simple
             for actor_code, actor_gdelt in actor_names.items():
+                # Build simple query: just two quoted terms
                 query = f'"{country_gdelt}" "{actor_gdelt}"'
+                encoded_query = requests.utils.quote(query)
                 gdel_url = (
-                    "https://api.gdeltproject.org/api/v2/doc/doc?"
-                    f"q={requests.utils.quote(query)}&"
-                    "mode=artlist&"
-                    "format=json&"
-                    "maxrecords=100&"
+                    f"https://api.gdeltproject.org/api/v2/doc/doc?"
+                    f"q={encoded_query}&"
+                    f"mode=artlist&"
+                    f"format=json&"
+                    f"maxrecords=50&"  # Reduced to be safe
                     f"timespan={days}D"
                 )
                 
                 try:
-                    response = requests.get(gdel_url, timeout=10)
-                    if response.status_code == 200:
+                    st.sidebar.write(f"📡 Requesting: {country_code} + {actor_code}")
+                    response = requests.get(gdel_url, timeout=12)
+                    
+                    # DEBUG: Show status and first 200 chars
+                    st.sidebar.write(f"   → Status: {response.status_code}")
+                    
+                    if response.status_code != 200:
+                        st.sidebar.error(f"   ❌ HTTP {response.status_code}: {response.text[:200]}")
+                        time.sleep(2)  # Longer wait on error
+                        continue
+    
+                    # Check if response is empty
+                    if not response.text.strip():
+                        st.sidebar.error("   ❌ Empty response")
+                        time.sleep(2)
+                        continue
+    
+                    # Try to parse JSON
+                    try:
                         data = response.json()
-                        articles = data.get('articles', [])
-                        all_articles.extend(articles)
-                        st.sidebar.write(f"✓ {country_code} + {actor_code}: {len(articles)} articles")
-                    else:
-                        st.sidebar.warning(f"⚠️ HTTP {response.status_code} for {country_code}/{actor_code}")
-                    time.sleep(0.3)  # Rate limit
+                    except json_lib.JSONDecodeError:
+                        st.sidebar.error(f"   ❌ Invalid JSON: {response.text[:300]}...")
+                        time.sleep(2)
+                        continue
+    
+                    articles = data.get('articles', [])
+                    all_articles.extend(articles)
+                    st.sidebar.write(f"   ✓ Got {len(articles)} articles")
+    
+                    time.sleep(1.0)  # Slower: 1 second between requests
+    
                 except Exception as e:
-                    st.sidebar.error(f"❌ Failed: {country_code}/{actor_code} - {str(e)[:60]}")
+                    st.sidebar.error(f"   ❌ Exception: {repr(e)}")
+                    time.sleep(2)
                     continue
     
         st.sidebar.write(f"📥 Total raw articles: {len(all_articles)}")
         
+        # --- Save to DB (same as before) ---
         count = 0
         seen_urls = set()
         for art in all_articles:
@@ -167,8 +190,6 @@ class DataManager:
             snippet = art.get('snippet', '')
             
             facts = self.extract_tags(title, snippet)
-            
-            # ONLY keep valid country/actor pairs
             if facts['country'] not in self.countries or facts['actor'] not in self.actors:
                 continue
     
@@ -201,6 +222,7 @@ class DataManager:
                 
         st.sidebar.success(f"✅ Synced {count} new relevant articles!")
         return count
+    
     @st.cache_data(ttl=300, show_spinner=False)
     def fetch_articles(_self, limit=500, _cache_version="v2_gdelt_fixed"):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
