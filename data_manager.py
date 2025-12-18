@@ -112,74 +112,70 @@ class DataManager:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
 
     # --- AFRICA NEWS SCRAPER (REPLACES GDELT/NEWSAPI) ---
-    def update_news(self, days=28):
+    def update_news(self, days=7):  # Shorter window for freshness
         if self.engine is None:
             st.error("Database not available — cannot sync")
             return 0
-
+    
+        import requests
+        import time
+        import json as json_lib
+    
         all_articles = []
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; GeopoliticalMonitor/1.0)"}
-
-        # --- 1. RFI Afrique ---
+        headers = {"User-Agent": "Mozilla/5.0"}
+    
+        # Fetch general recent articles (no query = global news)
+        gdel_url = (
+            "https://api.gdeltproject.org/api/v2/doc/doc?"
+            "mode=artlist&"
+            "format=json&"
+            "maxrecords=200&"      # Get 200 latest global articles
+            f"timespan={days}D"
+        )
+        
         try:
-            r = requests.get("https://www.rfi.fr/en/africa/", headers=headers, timeout=10)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('a[data-molecule="card"]')[:25]:
-                    title = (item.get('title') or (item.find('h3') or item).get_text(strip=True))[:200]
-                    link = item.get('href')
-                    if link and title and len(title) > 10:
-                        url = link if link.startswith('http') else f"https://www.rfi.fr{link}"
-                        all_articles.append({"title": title, "url": url, "source": "RFI"})
-            time.sleep(1)
+            st.sidebar.write("📡 Fetching 200 latest global articles from GDELT...")
+            response = requests.get(gdel_url, headers=headers, timeout=12)
+            
+            if not response.content.strip():
+                st.sidebar.error("❌ Empty response from GDELT")
+                return 0
+    
+            # Check for HTML error pages
+            if response.text.strip().startswith('<'):
+                st.sidebar.error("❌ GDELT returned HTML (likely blocked)")
+                st.sidebar.write(response.text[:200])
+                return 0
+    
+            data = response.json()
+            articles = data.get('articles', [])
+            st.sidebar.write(f"✅ Got {len(articles)} global articles from GDELT")
+            all_articles = articles[:200]  # Safe limit
+    
+        except json_lib.JSONDecodeError as e:
+            st.sidebar.error(f"❌ JSON decode failed: {str(e)}")
+            st.sidebar.write(f"Raw response: {response.text[:300]}")
+            return 0
         except Exception as e:
-            st.sidebar.error(f"RFI failed: {str(e)[:50]}")
-
-        # --- 2. Jeune Afrique ---
-        try:
-            r = requests.get("https://www.jeuneafrique.com/en/", headers=headers, timeout=10)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('article a')[:25]:
-                    title = item.get_text(strip=True)[:200]
-                    link = item.get('href')
-                    if link and title and len(title) > 20:
-                        url = link if link.startswith('http') else f"https://www.jeuneafrique.com{link}"
-                        all_articles.append({"title": title, "url": url, "source": "Jeune Afrique"})
-            time.sleep(1)
-        except Exception as e:
-            st.sidebar.error(f"JA failed: {str(e)[:50]}")
-
-        # --- 3. BBC Afrique ---
-        try:
-            r = requests.get("https://www.bbc.com/afrique", headers=headers, timeout=10)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('a[class*="media__link"]')[:25]:
-                    title = item.get_text(strip=True)[:200]
-                    link = item.get('href')
-                    if link and title and len(title) > 20:
-                        url = f"https://www.bbc.com{link}" if link.startswith('/') else link
-                        all_articles.append({"title": title, "url": url, "source": "BBC Afrique"})
-            time.sleep(1)
-        except Exception as e:
-            st.sidebar.error(f"BBC failed: {str(e)[:50]}")
-
-        st.sidebar.write(f"📥 Scraped {len(all_articles)} raw articles")
-
-        # --- Process & Save ---
+            st,sidebar.error(f"❌ Request failed: {repr(e)}")
+            return 0
+    
+        # --- Now let LLM filter for relevance ---
         count = 0
         seen_urls = set()
         for art in all_articles:
-            url = art['url']
-            if url in seen_urls:
+            url = art.get('url')
+            if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-
-            title = art['title']
-            snippet = title  # Simple fallback
-
+            
+            title = art.get('title', 'No title')
+            snippet = art.get('snippet', '')
+            
+            # Let LLM decide if it's about our countries/actors
             facts = self.extract_tags(title, snippet)
+            
+            # ONLY keep if BOTH are in our target lists
             if facts['country'] in self.countries and facts['actor'] in self.actors:
                 score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
                 extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
@@ -194,9 +190,9 @@ class DataManager:
                         conn.execute(sql, {
                             "t": title,
                             "u": url,
-                            "i": "",
-                            "m": art['source'],
-                            "d": datetime.utcnow().isoformat(),
+                            "i": art.get('image', ''),
+                            "m": art.get('domain', 'Unknown'),
+                            "d": art.get('date', datetime.utcnow().isoformat()),
                             "s": extra_data,
                             "sc": score,
                             "actor": facts['actor'],
@@ -205,11 +201,10 @@ class DataManager:
                         })
                     count += 1
                 except Exception as e:
-                    st.sidebar.error(f"DB insert failed: {e}")
-
-        st.sidebar.success(f"✅ Synced {count} relevant African articles!")
+                    st.sidebar.error(f"DB error: {e}")
+    
+        st.sidebar.success(f"✅ Synced {count} relevant articles from {len(all_articles)} global!")
         return count
-
     # --- Fetch Articles (with engine check) ---
     @st.cache_data(ttl=300, show_spinner=False)
     def fetch_articles(_self, limit=500, _cache_version="v3_scraper_final"):
