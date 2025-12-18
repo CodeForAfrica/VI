@@ -139,10 +139,10 @@ with st.container(border=True):
     st.markdown("---")
     sc1, sc2, sc3 = st.columns([2, 2, 4])
     with sc1:
-        if st.button("🔄 Sync Global Intelligence", width='stretch'):
+        if st.button("🔄 Sync Global Intelligence", use_container_width=True):
             mgr.update_news(); st.cache_data.clear(); st.rerun()
     with sc2:
-        if st.button("🗑️ Reset Database", width='stretch'):
+        if st.button("🗑️ Reset Database", use_container_width=True):
             mgr.clear_db(); st.cache_data.clear(); st.rerun()
 
 # --- Data Engine ---
@@ -172,7 +172,7 @@ if not df.empty:
                 data=master_pdf,
                 file_name="Intelligence_Summary_Report.pdf",
                 mime="application/pdf",
-                width='stretch'
+                use_container_width=True
             )
 
     # --- Pagination ---
@@ -208,11 +208,11 @@ if not df.empty:
         """, unsafe_allow_html=True)
 
         c1, c2, c3 = st.columns([1.2, 2, 1.2])
-        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", width='stretch')
+        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400  ", use_container_width=True)
         with c2:
             st.write(f"**Tone:** {row['tone']} | **Source:** {row['media_outlet']}")
-            st.link_button("View Source", row['url'], width='stretch')
+            st.link_button("View Source", row['url'], use_container_width=True)
         with c3:
-            st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), width='stretch', key=f"radar_{idx}")
+            st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), use_container_width=True, key=f"radar_{idx}")
 else:
     st.info("No intelligence data found.")
