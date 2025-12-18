@@ -15,11 +15,6 @@ class DataManager:
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
 
-        self.INTENT_FACTORS = {
-            "Economic": ["debt", "res"], "Sovereignty": ["debt", "mil"],
-            "MilitaryPresence": ["mil", "debt"], "ResourceDependency": ["res", "debt"]
-        }
-
         try:
             self.db_url = st.secrets["DB_URL"]
             self.engine = create_engine(self.db_url)
@@ -33,12 +28,8 @@ class DataManager:
         g_debt = min(1.0, debt / self.GDP.get(c, 1e10))
         g_res = self.G_RES.get(a, {}).get(c, 0.2)
         g_mil = self.G_MIL.get(a, {}).get(c, 0.1)
-        
-        factors_map = {"debt": g_debt, "res": g_res, "mil": g_mil}
-        factors = self.INTENT_FACTORS.get(intent, ["debt", "res"])
-        ca_score = sum(factors_map.get(f, 0.1) for f in factors) / len(factors)
-        
         avg_base = 0.40
+        ca_score = (g_debt + g_res + g_mil) / 3
         return round(max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca_score)), 2)
 
     def update_news(self, start_date=None):
@@ -52,7 +43,6 @@ class DataManager:
             for art in raw_news.get('articles', []):
                 facts = self.extract_tags(art['title'], art['description'])
                 score = self.calculate_v2_risk(facts['actor'], facts['country'], facts['intent'])
-                # We store 'tone' and 'summary' in the raw_text column as a JSON string for easy access
                 extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
                 
                 sql = text("""
@@ -72,15 +62,24 @@ class DataManager:
         except: return 0
 
     def extract_tags(self, title, desc):
-        prompt = f"Analyze: {title}. Return JSON: actor, country, intent, summary, tone (Aggressive/Coercive/Neutral/Cooperative). Categories: {self.actors}, {self.countries}."
+        # Using your 4 specific categories
+        prompt = f"""Analyze this news: {title}. Return JSON with:
+        actor, country, intent, summary, 
+        tone (Choose one: Sensationalist, Alarmist, Factual, Cynical).
+        Categories: {self.actors}, {self.countries}."""
         try:
             res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
             return json.loads(res.choices[0].message.content)
         except:
-            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Neutral"}
+            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
 
     @st.cache_data(ttl=300)
     def fetch_articles(_self, limit=500):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         with _self.engine.connect() as conn:
             return pd.read_sql(query, conn, params={"l": limit})
+
+    def clear_db(self):
+        """Used to clear the 'stuck' 10 articles and start fresh"""
+        with self.engine.begin() as conn:
+            conn.execute(text("DELETE FROM articles"))
