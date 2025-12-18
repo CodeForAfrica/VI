@@ -31,33 +31,102 @@ class DataManager:
         except Exception as e:
             st.error(f"Initialization Error: {e}")
 
-    def calculate_v2_risk(self, a, c, intent):
-        debt = self.DEBT.get(a, {}).get(c, 0.1)
-        g_debt = min(1.0, debt / self.GDP.get(c, 1e10))
-        g_res = self.G_RES.get(a, {}).get(c, 0.2)
-        g_mil = self.G_MIL.get(a, {}).get(c, 0.1)
-        avg_base = 0.40
-        ca_score = (g_debt + g_res + g_mil) / 3
-        return round(max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca_score)), 2)
+    # --- NEW: Full contextual_v2 logic integrated ---
+    def compute_gs(self):
+        """Compute g-factors (debt, res, mil) per actor-country"""
+        g = {}
+        for a in self.actors:
+            g[a] = {}
+            for c in self.countries:
+                debt = self.DEBT.get(a, {}).get(c, 0.0)
+                g_debt = min(1.0, debt / self.GDP.get(c, 1)) if self.GDP.get(c, 0) > 0 else 0.0
+                g_res = self.G_RES.get(a, {}).get(c, 0.0)
+                g_mil = self.G_MIL.get(a, {}).get(c, 0.0)
+                g[a][c] = {"debt": g_debt, "res": g_res, "mil": g_mil}
+        return g
+
+    def compute_R(self, g):
+        """Compute R-normalization per factor across all actor-country pairs"""
+        R = {a: {c: {} for c in self.countries} for a in self.actors}
+        for factor in ["debt", "res", "mil"]:
+            max_val = max(
+                (g[a][c][factor] for a in self.actors for c in self.countries),
+                default=1.0
+            )
+            max_val = max_val if max_val > 0 else 1.0
+            for a in self.actors:
+                for c in self.countries:
+                    R[a][c][factor] = g[a][c][factor] / max_val
+        return R
+
+    def calculate_intent_risk(self, actor, country, intent):
+        """Compute final risk using intent-aware weighting and normalization"""
+        if actor not in self.actors or country not in self.countries:
+            return 0.4  # fallback
+
+        if intent not in self.INTENT_FACTORS:
+            intent = "Economic"  # default fallback
+
+        g = self.compute_gs()
+        R = self.compute_R(g)
+        factors = self.INTENT_FACTORS[intent]
+
+        # Compute weights based on R-normalized values
+        r_values = [R[actor][country].get(f, 0.0) for f in factors]
+        denom = sum(r_values)
+        if denom == 0:
+            weights = {f: 1.0 / len(factors) for f in factors}
+        else:
+            weights = {f: R[actor][country][f] / denom for f in factors}
+
+        # Compute Composite Actor (CA) score
+        ca = sum(weights[f] * g[actor][country][f] for f in factors)
+
+        # Final risk: base + (1 - base) * CA
+        avg_base = 0.35  # calibrated base vulnerability
+        final_score = avg_base + (1.0 - avg_base) * ca
+        return max(0.0, min(1.0, final_score))
+
+    # --- END contextual_v2 integration ---
 
     def update_news(self, start_date=None):
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
-        try:
-            raw_news = self.newsapi.get_everything(
-                q=query_str, language='en', sort_by='publishedAt', page_size=100,
-                from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
-            )
-            count = 0
-            for art in raw_news.get('articles', []):
-                facts = self.extract_tags(art['title'], art['description'])
-                score = self.calculate_v2_risk(facts['actor'], facts['country'], facts['intent'])
-                extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
-                
-                sql = text("""
-                    INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
-                    VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
-                    ON CONFLICT (url) DO NOTHING
-                """)
+        all_articles = []
+        
+        # Paginate up to 5 pages (free tier limit)
+        for page in range(1, 6):
+            try:
+                batch = self.newsapi.get_everything(
+                    q=query_str,
+                    language='en',
+                    sort_by='publishedAt',
+                    page_size=20,  # Max per page on free tier
+                    page=page,
+                    from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
+                )
+                articles = batch.get('articles', [])
+                if not articles:
+                    break
+                all_articles.extend(articles)
+                if len(articles) < 20:  # Last page
+                    break
+            except Exception as e:
+                st.warning(f"NewsAPI page {page} failed: {e}")
+                break
+
+        count = 0
+        for art in all_articles:
+            facts = self.extract_tags(art['title'], art['description'])
+            # Use new risk calculator
+            score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
+            extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
+            
+            sql = text("""
+                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
+                VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
+                ON CONFLICT (url) DO NOTHING
+            """)
+            try:
                 with self.engine.begin() as conn:
                     conn.execute(sql, {
                         "t": art['title'], "u": art['url'], "i": art['urlToImage'],
@@ -66,8 +135,10 @@ class DataManager:
                         "actor": facts['actor'], "country": facts['country'], "intent": facts['intent']
                     })
                 count += 1
-            return count
-        except: return 0
+            except Exception as e:
+                st.warning(f"Insert failed for {art['url']}: {e}")
+                continue
+        return count
 
     def extract_tags(self, title, desc):
         prompt = f"""Analyze this news: {title}. Return JSON with:
