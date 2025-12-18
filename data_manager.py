@@ -9,10 +9,22 @@ from datetime import datetime, timedelta
 
 class DataManager:
     def __init__(self):
+        # Configuration & Seed Data
         self.countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia"]
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
-        self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
         
+        self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
+        self.FSI_RAW = {"Senegal": 74.2, "DRC": 106.7, "CoteIvoire": 85.3, "Ethiopia": 98.1}
+        self.L = {"Senegal": 0.90, "DRC": 0.20, "CoteIvoire": 0.20, "Ethiopia": 0.95}
+        
+        # Load Matrices from Secrets
+        self.DEBT = st.secrets.get("DEBT", {})
+        self.G_RES = st.secrets.get("G_RES", {})
+        self.G_MIL = st.secrets.get("G_MIL", {})
+        self.ACTOR_ELEC = st.secrets.get("ACTOR_ELEC", {})
+        self.ACTOR_LGBTQ = st.secrets.get("ACTOR_LGBTQ", {})
+        self.ACTOR_DISINFO = st.secrets.get("ACTOR_DISINFO", {})
+
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"],
             "Sovereignty": ["debt", "mil", "elec"],
@@ -32,15 +44,24 @@ class DataManager:
             st.error(f"Initialization Error: {e}")
 
     def calculate_v2_risk(self, a, c, intent):
+        debt = self.DEBT.get(a, {}).get(c, 0.0)
+        g_debt = min(1.0, debt / self.GDP.get(c, 1e10))
+        g_res = self.G_RES.get(a, {}).get(c, 0.0)
+        g_mil = self.G_MIL.get(a, {}).get(c, 0.0)
+        
+        factors_map = {"debt": g_debt, "res": g_res, "mil": g_mil, "frag": 0.5, "elec": 0.4, "lgbt": 0.3}
+        factors = self.INTENT_FACTORS.get(intent, ["debt", "res"])
+        ca_score = sum(factors_map.get(f, 0.0) for f in factors) / len(factors)
+        
         avg_base = 0.40
-        # Simple placeholder for matrix logic to keep code clean
-        return round(avg_base + (1.0 - avg_base) * 0.3, 2)
+        return round(max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca_score)), 2)
 
     def update_news(self, start_date=None):
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
         
         try:
             if start_date:
+                # Target the specific month requested
                 dt_obj = datetime.strptime(start_date, "%Y-%m-%d")
                 end_date = (dt_obj + timedelta(days=31)).replace(day=1).strftime("%Y-%m-%d")
                 raw_news = self.newsapi.get_everything(
@@ -48,15 +69,11 @@ class DataManager:
                     sort_by='publishedAt', page_size=100
                 )
             else:
-                raw_news = self.newsapi.get_everything(
-                    q=query_str, language='en', sort_by='publishedAt', page_size=100
-                )
-        except NewsAPIException as e:
-            # Handle the 'too far in the past' error gracefully
-            st.warning(f"Note: Your NewsAPI plan only allows fetching data from the last 30 days.")
+                raw_news = self.newsapi.get_everything(q=query_str, language='en', sort_by='publishedAt', page_size=100)
+        except NewsAPIException:
+            st.warning("Historical limit reached for your NewsAPI plan (last 30 days only).")
             return 0
-        except Exception as e:
-            st.error(f"Sync Error: {e}")
+        except:
             return 0
         
         count = 0
@@ -92,7 +109,7 @@ class DataManager:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"Analysis pending."}
 
     @st.cache_data(ttl=600)
-    def fetch_articles(_self, limit=1000):
+    def fetch_articles(_self, limit=500):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         try:
             with _self.engine.connect() as conn:
