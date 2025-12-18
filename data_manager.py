@@ -12,7 +12,6 @@ class DataManager:
         self.countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia"]
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
         self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
-        
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"], "Sovereignty": ["debt", "mil", "elec"],
             "LGBTQ": ["lgbt", "elec"], "MilitaryPresence": ["mil", "debt"],
@@ -32,34 +31,29 @@ class DataManager:
         return round(avg_base + (1.0 - avg_base) * 0.3, 2)
 
     def update_news(self, start_date=None):
-        """Fetches from API and INSERTS into DB"""
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR US OR UAE)"
-        
         try:
             if start_date:
                 dt_obj = datetime.strptime(start_date, "%Y-%m-%d")
-                # Define the end of that specific month
-                end_date = (dt_obj + timedelta(days=31)).replace(day=1).strftime("%Y-%m-%d")
+                end_date = (dt_obj + timedelta(days=30)).strftime("%Y-%m-%d")
                 raw_news = self.newsapi.get_everything(
                     q=query_str, language='en', from_param=start_date, to=end_date,
-                    sort_by='publishedAt', page_size=100 
+                    sort_by='publishedAt', page_size=100
                 )
             else:
                 raw_news = self.newsapi.get_everything(
                     q=query_str, language='en', sort_by='publishedAt', page_size=100
                 )
         except NewsAPIException:
-            return -1 
+            return -1
         except:
             return 0
         
         count = 0
         if 'articles' not in raw_news: return 0
-
         for art in raw_news['articles']:
             facts = self.extract_tags(art['title'], art['description'])
             score = self.calculate_v2_risk(facts['actor'], facts['country'], facts['intent'])
-            
             sql = text("""
                 INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
                 VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
@@ -78,14 +72,14 @@ class DataManager:
         return count
 
     def extract_tags(self, title, desc):
-        prompt = f"Extract JSON from news: {title}. Return actor, country, intent, summary. Use: {self.actors} and {self.countries}."
+        prompt = f"Extract JSON from news: {title}. Return actor, country, intent, summary. Use categories: {self.actors} and {self.countries}."
         try:
             res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
             return json.loads(res.choices[0].message.content)
         except:
-            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"..."}
+            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"Analysis pending."}
 
-    @st.cache_data(ttl=600)
+    @st.cache_data(ttl=300)
     def fetch_articles(_self, limit=500):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         try:
