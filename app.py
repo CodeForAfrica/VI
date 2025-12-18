@@ -1,103 +1,78 @@
 import streamlit as st
 import pandas as pd
 from data_manager import DataManager
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from fpdf import FPDF, XPos, YPos
-import re
+import json
 
-# --- Page Config ---
-st.set_page_config(page_title="Strategic Vulnerability Index", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Strategic Vulnerability Index", layout="wide")
 
-def safe_text(text):
-    if not text: return ""
-    text = str(text)
-    text = re.sub(r'[‘’]', "'", text); text = re.sub(r'[“”]', '"', text); text = re.sub(r'[—–]', "-", text)
-    return text.encode('ascii', 'ignore').decode('ascii')
-
-def generate_pdf(df, month_str):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(0, 10, f"Strategic Brief: {month_str}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-    pdf.ln(10)
-    for _, row in df.iterrows():
-        pdf.set_font("helvetica", 'B', 11)
-        pdf.multi_cell(0, 7, safe_text(row['title']))
-        pdf.set_font("helvetica", 'I', 8)
-        pdf.cell(0, 5, safe_text(f"Source: {row['media_outlet']} | Risk: {int(row['contextual_score']*100)}%"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(5)
-    # Important: Ensure the output is converted to bytes for Streamlit
-    return bytes(pdf.output())
-
+# --- Initialize ---
 if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-if "view_date" not in st.session_state:
-    st.session_state.view_date = datetime.now().replace(day=1)
+# --- Metric Explanation Helper ---
+def show_metric_legend():
+    with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores"):
+        st.write("**Score Meaning:** 0-40% (Stable), 41-70% (At Risk), 71-100% (Critical Vulnerability).")
+        st.write("**Debt/Res/Mil:** Measures the ratio of foreign-held debt, resource concessions, and military agreements against national GDP.")
+        st.write("**Tone Categories:** **Sensationalist** (Emotional bias), **Alarmist** (Urgent threats), **Factual** (Data-driven), **Cynical** (Distrustful of motives).")
 
-# --- Header & Navigation ---
-st.title("🛡️ Geopolitical Vulnerability Index")
+# --- Radar Visual ---
+def create_radar(score, tone):
+    categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
+    # Radar shape shifts slightly based on tone
+    mod = 1.2 if tone == "Alarmist" else 1.0
+    r_values = [score * mod, score * 0.7, score * 0.5, score * 0.8]
+    fig = go.Figure(data=go.Scatterpolar(r=r_values, theta=categories, fill='toself', fillcolor='rgba(255, 75, 75, 0.3)', line=dict(color='#ff4b4b')))
+    fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 1.5])), showlegend=False, height=180, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)')
+    return fig
 
-n1, n2, n3 = st.columns([1, 2, 1])
+st.title("🛡️ Africa Geopolitical Vulnerability Dashboard")
+show_metric_legend()
 
-with n1:
-    if st.button("⬅️ Fetch Previous Month"):
-        st.session_state.view_date = (st.session_state.view_date - timedelta(days=1)).replace(day=1)
-        target = st.session_state.view_date.strftime("%Y-%m-%d")
-        with st.spinner("API: Fetching historical news..."):
-            mgr.update_news(start_date=target)
-            st.cache_data.clear()
-            st.rerun()
+# --- Database Management (The 'Unstick' Tools) ---
+admin_col1, admin_col2 = st.columns(2)
+with admin_col1:
+    if st.button("🔄 Full API Sync (Fetch 100 Articles)"):
+        with st.spinner("Syncing..."):
+            count = mgr.update_news()
+            st.success(f"Successfully added {count} new reports.")
+            st.cache_data.clear(); st.rerun()
+with admin_col2:
+    if st.button("🗑️ Reset Database (Clear Stuck Data)"):
+        mgr.clear_db(); st.cache_data.clear(); st.success("Database cleared."); st.rerun()
 
-with n2:
-    st.markdown(f"<h2 style='text-align:center;'>📅 {st.session_state.view_date.strftime('%B %Y')}</h2>", unsafe_allow_html=True)
+# --- Main Dashboard ---
+df = mgr.fetch_articles()
+if not df.empty:
+    df['published_at'] = pd.to_datetime(df['published_at'])
+    
+    for _, row in df.iterrows():
+        try:
+            extra = json.loads(row['raw_text'])
+            tone = extra.get('tone', 'Factual')
+            summary = extra.get('summary', 'No summary available.')
+        except: tone = "Factual"; summary = row['raw_text']
 
-with n3:
-    if st.button("Fetch Current Month ➡️"):
-        st.session_state.view_date = datetime.now().replace(day=1)
-        with st.spinner("API: Syncing latest news..."):
-            mgr.update_news()
-            st.cache_data.clear()
-            st.rerun()
-
-# --- Data Logic ---
-raw_df = mgr.fetch_articles(limit=500)
-
-if not raw_df.empty:
-    raw_df['published_at'] = pd.to_datetime(raw_df['published_at'])
-    df_view = raw_df[(raw_df['published_at'].dt.month == st.session_state.view_date.month) & 
-                     (raw_df['published_at'].dt.year == st.session_state.view_date.year)]
-
-    # Filter Bar
-    st.markdown('<div style="background:#1c2128; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:20px;">', unsafe_allow_html=True)
-    f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
-    with f1: f_actor = st.selectbox("Actor", ["All"] + mgr.actors)
-    with f2: f_country = st.selectbox("Country", ["All"] + mgr.countries)
-    with f3: f_intent = st.selectbox("Intent", ["All"] + list(mgr.INTENT_FACTORS.keys()))
-    with f4:
-        if not df_view.empty:
-            pdf_data = generate_pdf(df_view, st.session_state.view_date.strftime('%B %Y'))
-            st.download_button(label="📥 Download PDF", data=pdf_data, file_name=f"Intelligence_Report_{st.session_state.view_date.month}.pdf", mime="application/pdf")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if df_view.empty:
-        st.info(f"No local data for {st.session_state.view_date.strftime('%B')}. Click 'Fetch' above to check the API.")
-    else:
-        if f_actor != "All": df_view = df_view[df_view['actor'] == f_actor]
-        if f_country != "All": df_view = df_view[df_view['country'] == f_country]
-        
-        st.write(f"Total Intelligence Reports: **{len(df_view)}**")
-        for idx, row in df_view.iterrows():
-            with st.container():
-                c1, c2, c3 = st.columns([1, 2, 1])
-                with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400")
-                with c2:
-                    st.subheader(row['title'])
-                    st.caption(f"{row['media_outlet']} | {row['published_at'].strftime('%Y-%m-%d')}")
-                    st.write(row['raw_text'][:500] + "...")
-                    st.link_button("Source", row['url'])
-                with c3:
-                    st.metric("Vulnerability Score", f"{int(row['contextual_score']*100)}%")
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([1, 2.5, 1.2])
+            with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400")
+            with c2:
+                st.subheader(row['title'])
+                # Layout Badges
+                st.markdown(f"`{row['country']}` `{row['actor']}` `{row['intent_type']}`")
+                st.write(f"**Strategic Insight:** {summary}")
+                
+                # Dynamic Tone Color
+                t_colors = {"Alarmist": "#ff4b4b", "Sensationalist": "#ffa500", "Cynical": "#9b59b6", "Factual": "#2ecc71"}
+                st.markdown(f"**Media Tone:** <span style='color:{t_colors.get(tone, '#fff')}; font-weight:bold;'>{tone.upper()}</span>", unsafe_allow_html=True)
+                st.caption(f"Outlet: {row['media_outlet']} | Date: {row['published_at'].strftime('%Y-%m-%d')}")
+            with c3:
+                st.plotly_chart(create_radar(row['contextual_score'], tone), use_container_width=True)
+                score = int(row['contextual_score'] * 100)
+                st.markdown(f"<h1 style='text-align:center; color:#ff4b4b;'>{score}%</h1>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-size:0.7em;'>VULNERABILITY LEVEL</p>", unsafe_allow_html=True)
 else:
-    st.warning("Database is empty. Please use the fetch buttons to pull intelligence from the NewsAPI.")
+    st.info("No data found. Click 'Full API Sync' to fetch reports.")
