@@ -7,7 +7,7 @@ import streamlit as st
 
 class DataManager:
     def __init__(self):
-        # --- 1. CONFIG & SEED DATA (From contextual_all_intents_v2.py) ---
+        # Configuration & Seed Data
         self.countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia"]
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
         
@@ -15,7 +15,7 @@ class DataManager:
         self.FSI_RAW = {"Senegal": 74.2, "DRC": 106.7, "CoteIvoire": 85.3, "Ethiopia": 98.1}
         self.L = {"Senegal": 0.90, "DRC": 0.20, "CoteIvoire": 0.20, "Ethiopia": 0.95}
         
-        # Load Matrices from Secrets or Defaults
+        # Load Matrices from Secrets
         self.DEBT = st.secrets.get("DEBT", {})
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
@@ -41,55 +41,24 @@ class DataManager:
         except Exception as e:
             st.error(f"Initialization Error: {e}")
 
-    # --- 2. CORE MATH LOGIC ---
-    def clip(self, x): return max(0.0, min(1.0, float(x)))
-
-    def get_g_factors(self, a, c):
-        """Computes the current g-values for a specific actor-country pair"""
-        # Debt
-        debt = self.DEBT.get(a, {}).get(c, 0.0)
-        g_debt = self.clip(debt / self.GDP[c]) if c in self.GDP else 0.0
-        
-        # Elec (simplified time logic)
-        months_to_elec = 3 if c == "CoteIvoire" else 999
-        g_elec_time = 1 - min(months_to_elec, 24)/24 if months_to_elec < 999 else 0.25
-        g_elec = self.ACTOR_ELEC.get(a, {}).get(c, 0.0) * g_elec_time
-        
-        # LGBTQ & Fragility
-        g_lgbt = (1 - self.L.get(c, 0.5)) * self.ACTOR_LGBTQ.get(a, {}).get(c, 0.0)
-        fsi_norm = self.clip((self.FSI_RAW.get(c, 70) - 22.0) / (120.0 - 22.0))
-        g_frag = fsi_norm * self.ACTOR_DISINFO.get(a, {}).get(c, 0.0)
-
-        return {
-            "debt": g_debt,
-            "res": self.G_RES.get(a, {}).get(c, 0.0),
-            "mil": self.G_MIL.get(a, {}).get(c, 0.0),
-            "elec": g_elec,
-            "lgbt": g_lgbt,
-            "frag": g_frag
-        }
-
     def calculate_v2_risk(self, a, c, intent):
-        """Implementation of CA calculation and FinalRisk formula"""
-        if a not in self.actors or c not in self.countries:
-            return 0.45 # Baseline for unknown pairs
-
-        g = self.get_g_factors(a, c)
+        """Core math formula: avg_base + (1 - avg_base) * CA"""
+        debt = self.DEBT.get(a, {}).get(c, 0.0)
+        g_debt = min(1.0, debt / self.GDP.get(c, 1e10))
+        g_res = self.G_RES.get(a, {}).get(c, 0.0)
+        g_mil = self.G_MIL.get(a, {}).get(c, 0.0)
+        
+        # Mapping factors to scores
+        factors_map = {"debt": g_debt, "res": g_res, "mil": g_mil, "frag": 0.5, "elec": 0.4, "lgbt": 0.3}
         factors = self.INTENT_FACTORS.get(intent, ["debt", "res"])
+        ca_score = sum(factors_map.get(f, 0.0) for f in factors) / len(factors)
         
-        # Simple weighted average for the dashboard (relative R-factors are 
-        # complex for single articles, so we use normalized G-values)
-        ca_score = sum(g[f] for f in factors) / len(factors)
-        
-        # Final Formula: avg_base + (1 - avg_base) * ca
         avg_base = 0.40
-        final_risk = avg_base + (1.0 - avg_base) * ca_score
-        return round(self.clip(final_risk), 2)
+        return round(max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca_score)), 2)
 
-    # --- 3. PIPELINE ---
     def update_news(self):
-        query_str = f"({' OR '.join(self.countries)}) AND ({' OR '.join(self.actors[:5])})"
-        raw_news = self.newsapi.get_everything(q=query_str, language='en', sort_by='publishedAt', page_size=10)
+        query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
+        raw_news = self.newsapi.get_everything(q=query_str, language='en', sort_by='publishedAt', page_size=8)
         
         count = 0
         for art in raw_news['articles']:
@@ -101,7 +70,6 @@ class DataManager:
                 VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
                 ON CONFLICT (url) DO NOTHING
             """)
-            
             try:
                 with self.engine.begin() as conn:
                     conn.execute(sql, {
@@ -111,23 +79,22 @@ class DataManager:
                         "actor": facts['actor'], "country": facts['country'], "intent": facts['intent']
                     })
                 count += 1
-            except Exception as e:
-                print(f"DB Error: {e}")
+            except: continue
         return count
 
     def extract_tags(self, title, desc):
-        prompt = f"Analyze news: {title}. Return JSON with actor, country, intent, summary. Use exact names from: {self.actors} and {self.countries}."
+        prompt = f"Extract JSON from news: {title}. Return actor, country, intent, summary. Use categories: {self.actors} and {self.countries}."
         try:
-            res = self.groq.chat.completions.create(
-                messages=[{"role":"user","content":prompt}], 
-                model="llama-3.3-70b-versatile", 
-                response_format={"type":"json_object"}
-            )
+            res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
             return json.loads(res.choices[0].message.content)
         except:
-            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"Analysis timed out."}
+            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"Analysis pending."}
 
-    def fetch_articles(self, limit=10):
+    @st.cache_data(ttl=600)
+    def fetch_articles(_self, limit=15):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
-        with self.engine.connect() as conn:
-            return pd.read_sql(query, conn, params={"l": limit})
+        try:
+            with _self.engine.connect() as conn:
+                return pd.read_sql(query, conn, params={"l": limit})
+        except:
+            return pd.DataFrame()
