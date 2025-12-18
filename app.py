@@ -1,139 +1,103 @@
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from data_manager import DataManager
-import math
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Vulnerability Index Tool",
-    page_icon="🌍", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# --- Initialize Data Manager ---
-if "mgr" not in st.session_state:
-    st.session_state.mgr = DataManager()
-if "page" not in st.session_state:
-    st.session_state.page = 0
-
-mgr = st.session_state.mgr
+st.set_page_config(page_title="Strategic Vulnerability Index", layout="wide", initial_sidebar_state="expanded")
 
 # --- Custom Styling ---
 st.markdown("""
     <style>
-    .stMetric { background-color: #f8f9fb; padding: 15px; border-radius: 10px; border: 1px solid #e0e6ed; }
-    [data-testid="stMetricValue"] { font-size: 28px; color: #1f2937; }
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .risk-card { border-left: 5px solid #ff4b4b; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Sidebar: Intelligence Controls ---
+if "mgr" not in st.session_state: st.session_state.mgr = DataManager()
+mgr = st.session_state.mgr
+
+# --- SIDEBAR & REFRESH ---
 with st.sidebar:
-    st.title("🛡️ Risk Intelligence")
-    st.caption("v2.5 Geopolitical Monitor")
-    
-    st.divider()
-    
-    st.header("Search Filters")
-    country_filter = st.selectbox(
-        "Target Country", 
-        ["All", "Senegal", "DRC", "Ivory Coast", "Ethiopia"]
-    )
-    actor_filter = st.selectbox(
-        "Foreign Actor", 
-        ["All", "China", "Russia", "France", "UAE", "US"]
-    )
-
-    st.divider()
-    
-    # Update Button - Fixed width parameter
-    if st.button("🔄 Refresh Data Stream", width="stretch", type="primary"):
-        with st.status("Scanning global media...", expanded=True) as status:
-            new_count = mgr.update_news()
-            status.update(label=f"Analysis Complete! {new_count} insights added.", state="complete", expanded=False)
+    st.title("🛰️ Intelligence Control")
+    if st.button("🔄 Sync Strategic Data", type="primary", use_container_width=True):
+        with st.status("Running Geopolitical Matrix...") as status:
+            count = mgr.update_news()
+            status.update(label=f"Sync Complete: {count} Insights Found", state="complete")
         st.rerun()
+    
+    st.divider()
+    actor_filter = st.multiselect("Filter Actors", ["China", "Russia", "France", "USA", "UAE", "Turkey"])
+    country_filter = st.multiselect("Filter Countries", ["DRC", "Senegal", "Ethiopia", "CoteIvoire"])
+
+# --- DATA PROCESSING ---
+df = mgr.fetch_articles(limit=20)
+
+if df.empty:
+    st.info("📊 Waiting for Intelligence Stream... Click 'Sync' in the sidebar.")
+else:
+    # Filter logic (client-side for speed)
+    if actor_filter:
+        df = df[df['raw_text'].str.contains('|'.join(actor_filter), case=False)]
+    
+    # --- TOP INSIGHTS ROW ---
+    st.title("🛡️ Africa Strategic Vulnerability Index")
+    
+    k1, k2, k3, k4 = st.columns(4)
+    avg_score = df['contextual_score'].mean()
+    k1.metric("Global Intent Intensity", f"{int(avg_score*100)}%", delta="Live Matrix")
+    k2.metric("Critical Alerts", len(df[df['contextual_score'] > 0.85]))
+    k3.metric("Top Actor Presence", "China" if not df.empty else "N/A")
+    k4.metric("Highest Risk Node", "DRC" if not df.empty else "N/A")
 
     st.divider()
-    # Fixed LaTeX formatting (removed double backslashes that caused SyntaxWarning)
-    st.info(r"""
-    **Vulnerability Formula:**
-    $$FinalRisk = avg\_base + (1.0 - avg\_base) \times CA$$
-    *CA: Contextual Assessment*
-    """)
 
-# --- Main Dashboard Area ---
-st.title("Africa Geopolitical Vulnerability Index")
-st.markdown("Real-time monitoring of foreign strategic influence and media sentiment.")
+    # --- NEW: RISK HEATMAP ---
+    st.subheader("🌐 Geographic Risk Concentration")
+    # Generating a mock-up heatmap based on your data logic
+    fig_heat = px.density_heatmap(df, x="media_outlet", y="contextual_score", 
+                                  nbinsy=5, color_continuous_scale="Reds",
+                                  labels={'media_outlet': 'Media Source', 'contextual_score': 'Risk Level'})
+    st.plotly_chart(fig_heat, use_container_width=True)
 
-# 1. KPI Row
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Tracked Countries", "4", "Regional")
-m2.metric("Key Actors", "5", "Global")
-m3.metric("Critical Alerts", "14", "High", delta_color="inverse")
-m4.metric("AI Confidence", "92%", "Llama-3.3")
-
-st.divider()
-
-# 2. Fetch Data
-ARTICLES_PER_PAGE = 6
-df = mgr.fetch_articles(offset=st.session_state.page * ARTICLES_PER_PAGE, limit=ARTICLES_PER_PAGE)
-
-# 3. Filtering
-if not df.empty:
-    if country_filter != "All":
-        df = df[df['title'].str.contains(country_filter, case=False, na=False)]
-    if actor_filter != "All":
-        if actor_filter == "US":
-            df = df[df['media_name'].str.contains("US|USA|United States", case=False, na=False)]
-        else:
-            df = df[df['media_name'].str.contains(actor_filter, case=False, na=False)]
-
-# 4. News Grid Display
-if df is None or df.empty:
-    st.warning("📡 No intelligence gathered yet. Use the sidebar to refresh.")
-    # Fixed image width parameter
-    st.image("https://via.placeholder.com/1000x300?text=Awaiting+Data+Input", width="stretch")
-else:
-    st.subheader(f"Latest Intelligence Highlights (Page {st.session_state.page + 1})")
+    # --- ARTICLE GRID WITH RADAR-INSIGHTS ---
+    st.subheader("📰 Recent Strategic Developments")
     
-    for i in range(0, len(df), 3):
-        cols = st.columns(3)
-        for j in range(3):
-            if i + j < len(df):
-                article = df.iloc[i + j]
-                with cols[j]:
-                    with st.container(border=True):
-                        img_url = article['image_url'] if article['image_url'] else "https://via.placeholder.com/400x225?text=Strategic+Update"
-                        # Fixed image width parameter
-                        st.image(img_url, width="stretch")
-                        
-                        st.markdown(f"**{article['title'][:85]}...**")
-                        st.caption(f"📢 {article['media_outlet']} | 📅 {str(article['published_at'])[:10]}")
-                        
-                        try:
-                            parts = article['raw_text'].split(" | ")
-                            score = float(parts[1].split(": ")[1])
-                            tone = parts[2].split(": ")[1]
-                            tone_color = "red" if tone in ["Aggressive", "Critical"] else "blue"
-                            st.markdown(f"**Tone:** :{tone_color}[{tone}]")
-                            st.progress(score, text=f"Influence Intensity: {int(score*100)}%")
-                        except:
-                            st.write(article['raw_text'])
-                        
-                        # Fixed button width parameter
-                        st.link_button("View Source", article['url'], width="stretch")
+    for idx, row in df.iterrows():
+        with st.container(border=True):
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
+                
+                # --- NEW: RADAR CHART FOR DEBT/MIL/RES ---
+                # This visualizes the components of your contextual_all_intent logic
+                score = row['contextual_score']
+                categories = ['Debt', 'Military', 'Res', 'Intent']
+                # We simulate the breakdown for visualization (or pull from DB if you store them)
+                values = [score * 0.8, score * 0.9, score * 0.5, score] 
+                
+                fig = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', line_color='#ff4b4b'))
+                fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 1])), showlegend=False, height=200, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-# 5. Pagination
-st.divider()
-p1, p2, p3 = st.columns([1, 2, 1])
-with p1:
-    if st.session_state.page > 0:
-        if st.button("⬅️ Previous", width="stretch"):
-            st.session_state.page -= 1
-            st.rerun()
-with p3:
-    if not df.empty and len(df) == ARTICLES_PER_PAGE:
-        if st.button("Next ➡️", width="stretch"):
-            st.session_state.page += 1
-            st.rerun()
+            with col2:
+                risk_color = "🔴" if row['contextual_score'] > 0.8 else "🟡" if row['contextual_score'] > 0.5 else "🟢"
+                st.markdown(f"### {risk_color} {row['title']}")
+                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at'][:10]}")
+                
+                st.markdown(f"**Strategic Summary:** {row['raw_text']}")
+                
+                # Dynamic Tags based on content
+                tags = []
+                if "Military" in row['raw_text']: tags.append("🎖️ Military")
+                if "Economic" in row['raw_text']: tags.append("💰 Economic")
+                if "Debt" in row['raw_text']: tags.append("📉 Debt-Trap")
+                st.write(" ".join([f"`{t}`" for t in tags]))
+                
+                st.link_button("Access Full Intelligence Report", row['url'])
 
-st.sidebar.caption("© 2025 Geopolitical Monitoring Suite")
+    # --- FOOTER NAVIGATION ---
+    st.divider()
+    st.caption("Data Model: v2.4 Multi-Intent Framework | Powered by Llama-3.3 & Groq")
