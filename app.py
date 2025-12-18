@@ -3,80 +3,37 @@ import pandas as pd
 from data_manager import DataManager
 import plotly.graph_objects as go
 from datetime import datetime
-from fpdf import FPDF, XPos, YPos # Updated imports for new syntax
+from fpdf import FPDF, XPos, YPos
 from io import BytesIO
 
 # --- Page Config ---
 st.set_page_config(page_title="Strategic Vulnerability Index", page_icon="🛡️", layout="wide")
 
-# --- Helper: Clean Text for PDF ---
+# --- Helper: Force Latin-1 Compatibility for PDF ---
 def clean_for_pdf(text):
     if not text: return ""
-    # Replaces common unicode characters that crash standard PDF fonts
-    replacements = {
-        "\u2018": "'", "\u2019": "'",  # Smart quotes
-        "\u201c": '"', "\u201d": '"',  # Double smart quotes
-        "\u2013": "-", "\u2014": "-",  # Dashes
-        "\u2026": "..."                # Ellipsis
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
+    # Hard-replace common characters that break PDF engines
+    text = text.replace('\u2019', "'").replace('\u2018', "'").replace('\u201c', '"').replace('\u201d', '"')
+    text = text.replace('\u2014', '-').replace('\u2013', '-')
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 # --- PDF Generation Function ---
 def generate_pdf(df, month_str, actor_f, country_f):
     pdf = FPDF()
     pdf.add_page()
-    
-    # Title
     pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(0, 10, f"Geopolitical Vulnerability Report: {month_str}", 
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
-    
-    # Filter Metadata
+    pdf.cell(0, 10, f"Strategic Report: {month_str}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
     pdf.set_font("helvetica", '', 10)
-    meta = f"Filters: Actor: {actor_f} | Country: {country_f} | Generated: {datetime.now().strftime('%Y-%m-%d')}"
-    pdf.cell(0, 10, meta, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+    pdf.cell(0, 10, f"Scope: {actor_f} | {country_f}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
     pdf.ln(10)
-    
-    # Executive Summary Calculation
-    if not df.empty:
-        avg_risk = df['contextual_score'].mean() * 100
-        top_intent = df['intent_type'].mode()[0] if not df.empty else "N/A"
-        
-        pdf.set_font("helvetica", 'B', 12)
-        pdf.cell(0, 10, "1. Executive Risk Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_font("helvetica", '', 11)
-        summary = (f"During this period, the analyzed region showed an average vulnerability index of {avg_risk:.1f}%. "
-                   f"The primary strategic intent identified across signals was '{top_intent}'.")
-        pdf.multi_cell(0, 10, clean_for_pdf(summary))
-        pdf.ln(5)
 
-    # Intelligence Feed
-    pdf.set_font("helvetica", 'B', 12)
-    pdf.cell(0, 10, "2. Intelligence Signal Log", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 9)
-    
     for i, row in df.iterrows():
-        # Title
-        pdf.set_font("helvetica", 'B', 10)
-        title_text = f"{idx+1}. {row['title']} (Risk: {int(row['contextual_score']*100)}%)"
-        pdf.multi_cell(0, 8, clean_for_pdf(title_text))
-        
-        # Metadata line
+        pdf.set_font("helvetica", 'B', 11)
+        pdf.multi_cell(0, 8, clean_for_pdf(f"{row['title']}"))
         pdf.set_font("helvetica", 'I', 8)
-        meta_line = f"Source: {row['media_outlet']} | Actor: {row['actor']} | Intent: {row['intent_type']}"
-        pdf.cell(0, 5, clean_for_pdf(meta_line), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        
-        # Body text
-        pdf.set_font("helvetica", '', 9)
-        body_text = row['raw_text'][:400] + "..."
-        pdf.multi_cell(0, 5, clean_for_pdf(body_text))
-        pdf.ln(5)
-        
-        if pdf.get_y() > 260:
-            pdf.add_page()
-            
+        pdf.cell(0, 5, clean_for_pdf(f"Source: {row['media_outlet']} | Risk: {int(row['contextual_score']*100)}%"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(4)
+        if pdf.get_y() > 250: pdf.add_page()
     return pdf.output()
 
 # --- Custom Styling ---
@@ -88,20 +45,11 @@ st.markdown("""
         border: 1px solid #30363d !important;
         border-radius: 10px !important;
         padding: 20px !important;
-        margin-bottom: 15px !important;
     }
-    .filter-container {
-        background-color: #1c2128;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #444;
-        margin-bottom: 20px;
-    }
-    .metric-text { font-size: 0.85em; color: #888; text-transform: uppercase; }
+    .filter-container { background-color: #1c2128; padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize
 if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
@@ -112,74 +60,67 @@ def create_radar_chart(score, intent_type):
     if intent_type == "Economic": values = [score, score*0.2, score*0.9, score*0.3]
     elif intent_type == "MilitaryPresence": values = [score*0.3, score, score*0.2, score*0.6]
     else: values = [score*0.5, score*0.5, score*0.4, score]
-    
-    fig = go.Figure(data=go.Scatterpolar(
-        r=values, theta=categories, fill='toself', 
-        fillcolor='rgba(255, 75, 75, 0.4)', line=dict(color='#ff4b4b', width=2)
-    ))
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=False, range=[0, 1]),
-            angularaxis=dict(gridcolor="#444", linecolor="#444")
-        ),
-        showlegend=False, height=180, margin=dict(l=40, r=40, t=20, b=20),
-        paper_bgcolor='rgba(0,0,0,0)', font_color="#aaa"
-    )
+    fig = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', fillcolor='rgba(255, 75, 75, 0.4)', line=dict(color='#ff4b4b', width=2)))
+    fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 1]), angularaxis=dict(gridcolor="#444")),
+        showlegend=False, height=180, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', font_color="#aaa")
     return fig
 
 # --- Header ---
-st.title("🛡️ Geopolitical Vulnerability Index")
+st.title("🛡️ Africa Geopolitical Vulnerability Index")
 
-# --- Filters Section ---
-st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
-with f1: f_actor = st.selectbox("Foreign Actor", ["All Actors"] + mgr.actors)
-with f2: f_country = st.selectbox("Target Nation", ["All Countries"] + mgr.countries)
-with f3: f_intent = st.selectbox("Primary Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()))
+# --- INCREASED DATA POOL ---
+# We change this to 500 so the Month filter actually sees all data
+raw_df = mgr.fetch_articles(limit=500) 
 
-# --- Monthly Pagination Logic ---
-raw_df = mgr.fetch_articles(limit=100)
 if not raw_df.empty:
     raw_df['published_at'] = pd.to_datetime(raw_df['published_at'])
     raw_df['month_year'] = raw_df['published_at'].dt.to_period('M')
-    
     available_months = sorted(raw_df['month_year'].unique(), reverse=True)
-    if "m_idx" not in st.session_state: st.session_state.m_idx = 0
-    
+
+    # State management for Month Index
+    if "m_idx" not in st.session_state:
+        st.session_state.m_idx = 0
+
+    # --- Filters ---
+    st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+    f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
+    with f1: f_actor = st.selectbox("Foreign Actor", ["All Actors"] + mgr.actors)
+    with f2: f_country = st.selectbox("Target Nation", ["All Countries"] + mgr.countries)
+    with f3: f_intent = st.selectbox("Primary Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()))
+
+    # --- DATA FILTERING ---
     current_m = available_months[st.session_state.m_idx]
     df_view = raw_df[raw_df['month_year'] == current_m]
+    
     if f_actor != "All Actors": df_view = df_view[df_view['actor'] == f_actor]
     if f_country != "All Countries": df_view = df_view[df_view['country'] == f_country]
     if f_intent != "All Intents": df_view = df_view[df_view['intent_type'] == f_intent]
 
-    # --- PDF Button logic ---
     with f4:
-        st.write("") # Spacer
+        st.write("") 
         if not df_view.empty:
             try:
                 pdf_out = generate_pdf(df_view, current_m.strftime('%B %Y'), f_actor, f_country)
-                st.download_button(
-                    label="📥 Export PDF",
-                    data=pdf_out,
-                    file_name=f"Vulnerability_Report_{current_m}.pdf",
-                    mime="application/pdf"
-                )
-            except Exception as e:
-                st.error("PDF Error")
-
+                st.download_button("📥 Export PDF", data=pdf_out, file_name=f"Report_{current_m}.pdf", mime="application/pdf")
+            except: st.error("PDF Fail")
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- MONTH NAVIGATION ---
     nb1, nb2, nb3 = st.columns([1, 4, 1])
     with nb1: 
-        if st.button("⬅️ Previous Month") and st.session_state.m_idx < len(available_months) - 1:
-            st.session_state.m_idx += 1
+        if st.button("⬅️ Previous Month"):
+            if st.session_state.m_idx < len(available_months) - 1:
+                st.session_state.m_idx += 1
+                st.rerun() # Forces the UI to update immediately
     with nb3:
-        if st.button("Next Month ➡️") and st.session_state.m_idx > 0:
-            st.session_state.m_idx -= 1
+        if st.button("Next Month ➡️"):
+            if st.session_state.m_idx > 0:
+                st.session_state.m_idx -= 1
+                st.rerun() # Forces the UI to update immediately
             
-    st.subheader(f"📅 Intelligence for {current_m.strftime('%B %Y')}")
+    st.subheader(f"📅 Intelligence Brief: {current_m.strftime('%B %Y')} ({len(df_view)} articles)")
 
-    # --- Feed ---
+    # --- FEED RENDERING ---
     for idx, row in df_view.iterrows():
         with st.container():
             col1, col2, col3 = st.columns([1, 2, 1])
@@ -187,26 +128,12 @@ if not raw_df.empty:
                 st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
             with col2:
                 st.markdown(f"### {row['title']}")
-                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at'].strftime('%Y-%m-%d')}")
+                st.caption(f"**{row['media_outlet']}** | {row['published_at'].strftime('%Y-%m-%d')}")
                 st.write(row['raw_text'][:500] + "...")
-                with st.expander("🔍 Strategic Insights", expanded=True):
-                    if row['intent_type'] == "Economic":
-                        st.info("**Insight:** Financial focus. High dependency on **Debt** and **Resources**.")
-                    elif row['intent_type'] == "MilitaryPresence":
-                        st.warning("**Insight:** Security footprint detected. Increases long-term **Military** risks.")
-                    else:
-                        st.success("**Insight:** Soft-power engagement. Monitoring **Social Fragility**.")
-                st.link_button("View Intelligence Source", row['url'])
+                st.link_button("View Source", row['url'])
             with col3:
-                st.markdown("<p style='text-align:center;' class='metric-text'>Risk Distribution</p>", unsafe_allow_html=True)
-                st.plotly_chart(create_radar_chart(row['contextual_score'], row['intent_type']), use_container_width=True, key=f"r_{idx}", config={'displayModeBar': False})
+                st.plotly_chart(create_radar_chart(row['contextual_score'], row['intent_type']), use_container_width=True, key=f"r_{idx}")
                 score_pct = int(row['contextual_score'] * 100)
-                color = "#ff4b4b" if score_pct > 70 else "#ffa500" if score_pct > 40 else "#00ff00"
-                st.markdown(f"<h1 style='text-align:center; color:{color}; margin-bottom:0;'>{score_pct}%</h1>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align:center;' class='metric-text'>Vulnerability Index</p>", unsafe_allow_html=True)
+                st.markdown(f"<h1 style='text-align:center;'>{score_pct}%</h1>", unsafe_allow_html=True)
 else:
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.info("No data found for the current selection.")
-
-st.markdown("---")
-st.caption("Strategic Intelligence Framework | Developed for Geopolitical Risk Assessment")
+    st.info("No data found.")
