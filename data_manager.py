@@ -11,11 +11,16 @@ class DataManager:
         self.countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia"]
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
         self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
+        
+        # Load from secrets — critical for scoring
         self.DEBT = st.secrets.get("DEBT", {})
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
         
-        # Required for filters in app.py
+        # DEBUG: Remove these lines after confirming data loads
+        st.sidebar.write("✅ DEBT actors:", len(self.DEBT))
+        st.sidebar.write("✅ G_RES actors:", len(self.G_RES))
+
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"],
             "Sovereignty": ["debt", "mil"],
@@ -31,9 +36,8 @@ class DataManager:
         except Exception as e:
             st.error(f"Initialization Error: {e}")
 
-    # --- NEW: Full contextual_v2 logic integrated ---
+    # --- FULL contextual_v2 logic integrated ---
     def compute_gs(self):
-        """Compute g-factors (debt, res, mil) per actor-country"""
         g = {}
         for a in self.actors:
             g[a] = {}
@@ -46,7 +50,6 @@ class DataManager:
         return g
 
     def compute_R(self, g):
-        """Compute R-normalization per factor across all actor-country pairs"""
         R = {a: {c: {} for c in self.countries} for a in self.actors}
         for factor in ["debt", "res", "mil"]:
             max_val = max(
@@ -60,73 +63,50 @@ class DataManager:
         return R
 
     def calculate_intent_risk(self, actor, country, intent):
-        """Compute final risk using intent-aware weighting and normalization"""
         if actor not in self.actors or country not in self.countries:
-            return 0.4  # fallback
-
+            return 0.4
         if intent not in self.INTENT_FACTORS:
-            intent = "Economic"  # default fallback
-
+            intent = "Economic"
         g = self.compute_gs()
         R = self.compute_R(g)
         factors = self.INTENT_FACTORS[intent]
-
-        # Compute weights based on R-normalized values
         r_values = [R[actor][country].get(f, 0.0) for f in factors]
         denom = sum(r_values)
         if denom == 0:
             weights = {f: 1.0 / len(factors) for f in factors}
         else:
             weights = {f: R[actor][country][f] / denom for f in factors}
-
-        # Compute Composite Actor (CA) score
         ca = sum(weights[f] * g[actor][country][f] for f in factors)
-
-        # Final risk: base + (1 - base) * CA
-        avg_base = 0.35  # calibrated base vulnerability
-        final_score = avg_base + (1.0 - avg_base) * ca
-        return max(0.0, min(1.0, final_score))
-
-    # --- END contextual_v2 integration ---
+        avg_base = 0.35
+        return max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca))
 
     def update_news(self, start_date=None):
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
-        all_articles = []
-        
-        # Paginate up to 5 pages (free tier limit)
-        for page in range(1, 6):
-            try:
-                batch = self.newsapi.get_everything(
-                    q=query_str,
-                    language='en',
-                    sort_by='publishedAt',
-                    page_size=20,  # Max per page on free tier
-                    page=page,
-                    from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
-                )
-                articles = batch.get('articles', [])
-                if not articles:
-                    break
-                all_articles.extend(articles)
-                if len(articles) < 20:  # Last page
-                    break
-            except Exception as e:
-                st.warning(f"NewsAPI page {page} failed: {e}")
-                break
-
-        count = 0
-        for art in all_articles:
-            facts = self.extract_tags(art['title'], art['description'])
-            # Use new risk calculator
-            score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
-            extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
+        try:
+            # Free tier: max 10 results
+            raw_news = self.newsapi.get_everything(
+                q=query_str,
+                language='en',
+                sort_by='publishedAt',
+                page_size=10,
+                from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
+            )
+            articles = raw_news.get('articles', [])
+            st.sidebar.write(f"📡 Fetched {len(articles)} articles from NewsAPI")
             
-            sql = text("""
-                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
-                VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
-                ON CONFLICT (url) DO NOTHING
-            """)
-            try:
+            count = 0
+            for art in articles:
+                facts = self.extract_tags(art['title'], art['description'])
+                score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
+                # DEBUG: Remove after verification
+                st.sidebar.write(f"Score: {facts['actor']} → {facts['country']} = {score:.2f}")
+                
+                extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
+                sql = text("""
+                    INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
+                    VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
+                    ON CONFLICT (url) DO NOTHING
+                """)
                 with self.engine.begin() as conn:
                     conn.execute(sql, {
                         "t": art['title'], "u": art['url'], "i": art['urlToImage'],
@@ -135,10 +115,10 @@ class DataManager:
                         "actor": facts['actor'], "country": facts['country'], "intent": facts['intent']
                     })
                 count += 1
-            except Exception as e:
-                st.warning(f"Insert failed for {art['url']}: {e}")
-                continue
-        return count
+            return count
+        except Exception as e:
+            st.error(f"NewsAPI error: {e}")
+            return 0
 
     def extract_tags(self, title, desc):
         prompt = f"""Analyze this news: {title}. Return JSON with:
@@ -149,10 +129,11 @@ class DataManager:
             res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
             return json.loads(res.choices[0].message.content)
         except:
-            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
+            return {"actor":"China", "country":"Senegal", "intent":"Economic", "summary":"...", "tone":"Factual"}
 
-    @st.cache_data(ttl=300)
-    def fetch_articles(_self, limit=500):
+    # 💥 FIXED: Added cache version key to force reload when logic changes
+    @st.cache_data(ttl=300, show_spinner=False)
+    def fetch_articles(_self, limit=500, _cache_version="v2_intent_risk_final"):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         with _self.engine.connect() as conn:
             return pd.read_sql(query, conn, params={"l": limit})
@@ -160,3 +141,4 @@ class DataManager:
     def clear_db(self):
         with self.engine.begin() as conn:
             conn.execute(text("DELETE FROM articles"))
+        st.cache_data.clear()  # Clear cache on reset
