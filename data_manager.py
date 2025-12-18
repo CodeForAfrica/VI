@@ -105,81 +105,59 @@ class DataManager:
     
         all_articles = []
         
-        actor_names = {
-            "China": "China",
-            "France": "France",
-            "UnitedStates": "United States",
-            "Russia": "Russia",
-            "Rwanda": "Rwanda",
-            "Saudi": "Saudi Arabia",
-            "Turkey": "Turkey",
-            "UAE": "United Arab Emirates",
-            "Israel": "Israel",
-            "Iran": "Iran"
-        }
-    
-        country_names = {
+        # Only use simple country names that GDELT accepts
+        simple_countries = {
             "Senegal": "Senegal",
-            "DRC": "Congo",
+            "DRC": "Congo",           # GDELT uses "Congo" for DRC
             "CoteIvoire": "Ivory Coast",
             "Ethiopia": "Ethiopia"
         }
     
-        # Use a browser-like headers
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
     
         for country_code in self.countries:
-            country_name = country_names.get(country_code, country_code)
-            for actor_code, actor_name in actor_names.items():
-                query = f"{country_name} {actor_name}"
-                encoded_query = requests.utils.quote(query)
-                gdel_url = (
-                    f"https://api.gdeltproject.org/api/v2/doc/doc?"
-                    f"q={encoded_query}&"
-                    f"mode=artlist&"
-                    f"format=json&"
-                    f"maxrecords=30&"
-                    f"timespan={days}D"
-                )
+            country_name = simple_countries.get(country_code, country_code)
+            query = country_name
+            encoded_query = requests.utils.quote(query)
+            gdel_url = (
+                f"https://api.gdeltproject.org/api/v2/doc/doc?"
+                f"q={encoded_query}&"
+                f"mode=artlist&"
+                f"format=json&"
+                f"maxrecords=100&"
+                f"timespan={days}D"
+            )
+            
+            try:
+                st.sidebar.write(f"📡 Fetching news for: {country_code}")
+                response = requests.get(gdel_url, headers=headers, timeout=12)
                 
-                try:
-                    st.sidebar.write(f"📡 {country_code} + {actor_code}")
-                    response = requests.get(gdel_url, headers=headers, timeout=12)
-                    
-                    # Check if response is empty
-                    if not response.content.strip():
-                        st.sidebar.warning("   ⚠️ Empty response")
-                        time.sleep(2)
-                        continue
-    
-                    # Check if it's HTML (error page)
-                    text_preview = response.text[:100]
-                    if text_preview.strip().startswith('<'):
-                        st.sidebar.warning(f"   ⚠️ HTML response (blocked?): {text_preview[:60]}...")
-                        time.sleep(3)
-                        continue
-    
-                    # Try to parse JSON
-                    try:
-                        data = response.json()
-                        articles = data.get('articles', [])
-                        all_articles.extend(articles)
-                        st.sidebar.write(f"   ✓ {len(articles)}")
-                    except json_lib.JSONDecodeError:
-                        st.sidebar.error(f"   ❌ Invalid JSON: {text_preview[:60]}...")
-                        time.sleep(2)
-                        continue
-    
-                    time.sleep(1.5)  # Gentle rate limit
-    
-                except Exception as e:
-                    st.sidebar.error(f"   ❌ Exception: {repr(e)[:60]}")
-                    time.sleep(2)
+                if not response.content.strip():
+                    st.sidebar.warning("   ⚠️ Empty response")
                     continue
     
-        # --- Save to DB ---
+                # Check for HTML error
+                if response.text.strip().startswith('<'):
+                    st.sidebar.warning(f"   ⚠️ HTML error: {response.text[:80]}...")
+                    time.sleep(3)
+                    continue
+    
+                try:
+                    data = response.json()
+                    articles = data.get('articles', [])
+                    all_articles.extend(articles)
+                    st.sidebar.write(f"   ✓ Got {len(articles)} articles")
+                except Exception as e:
+                    st.sidebar.error(f"   ❌ JSON parse error: {str(e)[:50]}")
+                    continue
+    
+                time.sleep(1.5)
+    
+            except Exception as e:
+                st.sidebar.error(f"   ❌ Request failed: {repr(e)[:60]}")
+                time.sleep(2)
+    
+        # --- Now process with LLM to extract actor/intent ---
         count = 0
         seen_urls = set()
         for art in all_articles:
@@ -188,40 +166,42 @@ class DataManager:
                 continue
             seen_urls.add(url)
             
-            title = art.get('title', 'No title')
+            title = art.get('title', '')
             snippet = art.get('snippet', '')
-            facts = self.extract_tags(title, snippet)
-            if facts['country'] not in self.countries or facts['actor'] not in self.actors:
-                continue
-    
-            score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
-            extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
             
-            sql = text("""
-                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
-                VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
-                ON CONFLICT (url) DO NOTHING
-            """)
-            try:
-                with self.engine.begin() as conn:
-                    conn.execute(sql, {
-                        "t": title,
-                        "u": url,
-                        "i": art.get('image', ''),
-                        "m": art.get('domain', 'Unknown'),
-                        "d": art.get('date', datetime.utcnow().isoformat()),
-                        "s": extra_data,
-                        "sc": score,
-                        "actor": facts['actor'],
-                        "country": facts['country'],
-                        "intent": facts['intent']
-                    })
-                count += 1
-            except Exception as e:
-                st.sidebar.error(f"DB error: {e}")
-                continue
+            # Let LLM decide if it's relevant
+            facts = self.extract_tags(title, snippet)
+            
+            # Only keep if BOTH country and actor are in our target lists
+            if facts['country'] in self.countries and facts['actor'] in self.actors:
+                score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
+                extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
                 
-        st.sidebar.success(f"✅ Synced {count} new relevant articles!")
+                sql = text("""
+                    INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
+                    VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
+                    ON CONFLICT (url) DO NOTHING
+                """)
+                try:
+                    with self.engine.begin() as conn:
+                        conn.execute(sql, {
+                            "t": title,
+                            "u": url,
+                            "i": art.get('image', ''),
+                            "m": art.get('domain', 'Unknown'),
+                            "d": art.get('date', datetime.utcnow().isoformat()),
+                            "s": extra_data,
+                            "sc": score,
+                            "actor": facts['actor'],
+                            "country": facts['country'],
+                            "intent": facts['intent']
+                        })
+                    count += 1
+                except Exception as e:
+                    st.sidebar.error(f"DB error: {e}")
+                    continue
+    
+        st.sidebar.success(f"✅ Synced {count} relevant articles!")
         return count
     
     @st.cache_data(ttl=300, show_spinner=False)
