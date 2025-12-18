@@ -1,10 +1,11 @@
 import pandas as pd
 import json
+import requests
 from sqlalchemy import create_engine, text
-from newsapi import NewsApiClient
 from groq import Groq
 import streamlit as st
 from datetime import datetime, timedelta
+import time
 
 class DataManager:
     def __init__(self):
@@ -26,11 +27,11 @@ class DataManager:
         try:
             self.db_url = st.secrets["DB_URL"]
             self.engine = create_engine(self.db_url)
-            self.newsapi = NewsApiClient(api_key=st.secrets["NEWS_API_KEY"])
             self.groq = Groq(api_key=st.secrets["GROQ_API_KEY"])
         except Exception as e:
             st.error(f"Initialization Error: {e}")
 
+    # --- Scoring logic (unchanged) ---
     def compute_gs(self):
         g = {}
         for a in self.actors:
@@ -74,6 +75,7 @@ class DataManager:
         avg_base = 0.35
         return max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca))
 
+    # --- Extract tags using LLM (unchanged) ---
     def extract_tags(self, title, desc):
         prompt = f"""Analyze this news: {title}. Return JSON with:
         actor, country, intent, summary, 
@@ -97,47 +99,90 @@ class DataManager:
         except:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
 
-    def update_news(self, start_date=None):
-        query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
-        try:
-            raw_news = self.newsapi.get_everything(
-                q=query_str,
-                language='en',
-                sort_by='publishedAt',
-                page_size=10,
-                from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
+    # 💥 NEW: GDELT-based news fetcher
+    def update_news(self, days=28):
+        all_articles = []
+        
+        # Build GDELT queries: one per country to avoid query too long
+        for country in self.countries:
+            # Combine actors into a single OR clause
+            actor_clause = " OR ".join([f'"{a}"' for a in self.actors if a != "NonState"])
+            query = f'"{country}" AND ({actor_clause})'
+            
+            gdel_url = (
+                "https://api.gdeltproject.org/api/v2/doc/doc?"
+                f"q={query}&"
+                "mode=artlist&"
+                "format=json&"
+                "maxrecords=200&"
+                f"timespan={days}D"
             )
-            articles = raw_news.get('articles', [])
-            count = 0
-            for art in articles:
-                facts = self.extract_tags(art['title'], art['description'])
-                
-                # ONLY process articles about our target countries and actors
-                if facts['country'] not in self.countries or facts['actor'] not in self.actors:
-                    continue
+            
+            try:
+                response = requests.get(gdel_url, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    articles = data.get('articles', [])
+                    all_articles.extend(articles)
+                    st.sidebar.write(f"✓ GDELT: {len(articles)} articles for {country}")
+                else:
+                    st.sidebar.warning(f"GDELT error for {country}: {response.status_code}")
+                time.sleep(0.5)  # Be kind to GDELT
+            except Exception as e:
+                st.sidebar.error(f"Request failed for {country}: {e}")
+                continue
 
-                score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
-                extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
-                sql = text("""
-                    INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
-                    VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
-                    ON CONFLICT (url) DO NOTHING
-                """)
+        st.sidebar.write(f"📥 Total GDELT articles fetched: {len(all_articles)}")
+        
+        count = 0
+        seen_urls = set()
+        for art in all_articles:
+            url = art.get('url')
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            
+            title = art.get('title', 'No title')
+            snippet = art.get('snippet', '')
+            
+            facts = self.extract_tags(title, snippet)
+            
+            # ONLY keep valid country/actor pairs
+            if facts['country'] not in self.countries or facts['actor'] not in self.actors:
+                continue
+
+            score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
+            extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
+            
+            sql = text("""
+                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
+                VALUES (:t, :u, :i, :m, :d, :s, :sc, :actor, :country, :intent)
+                ON CONFLICT (url) DO NOTHING
+            """)
+            try:
                 with self.engine.begin() as conn:
                     conn.execute(sql, {
-                        "t": art['title'], "u": art['url'], "i": art['urlToImage'],
-                        "m": art['source']['name'], "d": art['publishedAt'],
-                        "s": extra_data, "sc": score,
-                        "actor": facts['actor'], "country": facts['country'], "intent": facts['intent']
+                        "t": title,
+                        "u": url,
+                        "i": art.get('image', ''),
+                        "m": art.get('domain', 'Unknown'),
+                        "d": art.get('date', datetime.utcnow().isoformat()),
+                        "s": extra_data,
+                        "sc": score,
+                        "actor": facts['actor'],
+                        "country": facts['country'],
+                        "intent": facts['intent']
                     })
                 count += 1
-            return count
-        except Exception as e:
-            st.error(f"NewsAPI error: {e}")
-            return 0
+            except Exception as e:
+                st.sidebar.error(f"DB error: {e}")
+                continue
+                
+        st.sidebar.success(f"✅ Synced {count} new relevant articles!")
+        return count
 
     @st.cache_data(ttl=300, show_spinner=False)
-    def fetch_articles(_self, limit=500, _cache_version="v2_intent_risk_final"):
+    def fetch_articles(_self, limit=500, _cache_version="v2_gdelt_fixed"):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         with _self.engine.connect() as conn:
             return pd.read_sql(query, conn, params={"l": limit})
