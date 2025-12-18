@@ -10,7 +10,13 @@ from contextual_all_intents_v2 import compute_gs, compute_R, compute_CAs
 class StrategicManager:
     def __init__(self):
         # Database & API configuration from Streamlit Secrets
-        self.engine = create_engine(st.secrets["DB_URL"])
+        self.engine = create_engine(
+            st.secrets["DB_URL"],
+            pool_size=10,           # Matches your Supabase Nano limits
+            max_overflow=5,
+            pool_pre_ping=True,      # Tests connection before use
+            pool_recycle=300         # Refreshes connection every 5 minutes
+        )
         self.groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
         
         # Pre-compute contextual influence map once
