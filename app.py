@@ -15,7 +15,7 @@ if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- COMPREHENSIVE PDF LOGIC (RESTORED & UPGRADED) ---
+# --- COMPREHENSIVE PDF LOGIC ---
 def create_comprehensive_report(df, country_filter, actor_filter):
     pdf = FPDF()
     
@@ -25,7 +25,6 @@ def create_comprehensive_report(df, country_filter, actor_filter):
         for u, a in replacements.items(): text = text.replace(u, a)
         return text.encode('latin-1', 'ignore').decode('latin-1')
 
-    # --- Page 1: Executive Summary ---
     pdf.add_page()
     pdf.set_fill_color(30, 35, 45)
     pdf.rect(0, 0, 210, 40, 'F')
@@ -50,7 +49,6 @@ def create_comprehensive_report(df, country_filter, actor_filter):
         f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}."
     ))
     
-    # --- Intelligence Ledger ---
     pdf.ln(10)
     pdf.set_font("helvetica", 'B', 14)
     pdf.cell(0, 10, "2. CONSOLIDATED INTELLIGENCE LEDGER", new_x="LMARGIN", new_y="NEXT")
@@ -58,21 +56,18 @@ def create_comprehensive_report(df, country_filter, actor_filter):
 
     for idx, row in df.iterrows():
         if pdf.get_y() > 240: pdf.add_page()
-        
         pdf.set_font("helvetica", 'B', 11)
         pdf.set_fill_color(245, 245, 245)
         pdf.cell(0, 8, clean_text(f"ID-{idx+100}: {row['title']}"), fill=True, new_x="LMARGIN", new_y="NEXT")
-        
         pdf.set_font("helvetica", 'B', 9)
         pdf.cell(0, 6, f"SCORE: {int(row['contextual_score']*100)}% | ACTOR: {row['actor']} | TARGET: {row['country']}", new_x="LMARGIN", new_y="NEXT")
-        
         pdf.set_font("helvetica", '', 10)
         pdf.multi_cell(0, 6, clean_text(row['summary']))
         pdf.ln(5)
 
     return bytes(pdf.output())
 
-# --- Luxury Dossier Styling (STRICTLY KEPT) ---
+# --- Luxury Dossier Styling ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #e6edf3; }
@@ -96,7 +91,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Metric Explanation Legend (STRICTLY KEPT) ---
+# --- Metric Explanation Legend ---
 def show_metric_legend():
     with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores"):
         st.markdown("""
@@ -106,7 +101,7 @@ def show_metric_legend():
         * **Media Tones:** <span style='color:#2ecc71'>Factual</span>, <span style='color:#ffa500'>Sensationalist</span>, <span style='color:#ff4b4b'>Alarmist</span>, <span style='color:#9b59b6'>Cynical</span>.
         """, unsafe_allow_html=True)
 
-# --- Radar Visual (STRICTLY KEPT) ---
+# --- Radar Visual ---
 def create_radar(score, title, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
     h = int(hashlib.md5(title.encode()).hexdigest(), 16)
@@ -127,7 +122,7 @@ def create_radar(score, title, tone):
 st.title("🛡️ Strategic Vulnerability Command")
 show_metric_legend()
 
-# --- Command Center (ALL FILTERS & MASTER PDF RESTORED) ---
+# --- Command Center ---
 with st.container(border=True):
     st.markdown("### 🔍 Strategic Filters")
     c1, c2, c3, c4 = st.columns(4)
@@ -140,10 +135,13 @@ with st.container(border=True):
     sc1, sc2, sc3 = st.columns([2, 2, 4])
     with sc1:
         if st.button("🔄 Sync Global Intelligence", use_container_width=True):
-            mgr.update_news(); st.cache_data.clear(); st.rerun()
+            count = mgr.update_news()
+            st.cache_data.clear()
+            st.rerun()
     with sc2:
         if st.button("🗑️ Reset Database", use_container_width=True):
-            mgr.clear_db(); st.cache_data.clear(); st.rerun()
+            mgr.clear_db()
+            st.rerun()
 
 # --- Data Engine ---
 df = mgr.fetch_articles(limit=500)
@@ -163,7 +161,7 @@ if not df.empty:
     if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
     if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # MASTER PDF BUTTON (NEW COMPREHENSIVE POSITION)
+    # MASTER PDF BUTTON
     with sc3:
         if not f_df.empty:
             master_pdf = create_comprehensive_report(f_df, f_country, f_actor)
@@ -208,7 +206,7 @@ if not df.empty:
         """, unsafe_allow_html=True)
 
         c1, c2, c3 = st.columns([1.2, 2, 1.2])
-        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400  ", use_container_width=True)
+        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
         with c2:
             st.write(f"**Tone:** {row['tone']} | **Source:** {row['media_outlet']}")
             st.link_button("View Source", row['url'], use_container_width=True)
