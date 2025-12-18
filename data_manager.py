@@ -1,13 +1,12 @@
 import pandas as pd
 import json
-import requests
 from sqlalchemy import create_engine, text
 from groq import Groq
 import streamlit as st
-from datetime import datetime, timedelta
-import time
-import json as json_lib
+from datetime import datetime
+import requests
 from bs4 import BeautifulSoup
+import time
 
 class DataManager:
     def __init__(self):
@@ -26,14 +25,23 @@ class DataManager:
             "ResourceDependency": ["res", "debt"]
         }
 
+        # Initialize engine as None
+        self.engine = None
+        self.groq = None
+
         try:
+            # Database setup
             self.db_url = st.secrets["DB_URL"]
             self.engine = create_engine(self.db_url)
+            
+            # LLM setup
             self.groq = Groq(api_key=st.secrets["GROQ_API_KEY"])
+            
         except Exception as e:
             st.error(f"Initialization Error: {e}")
+            # App will run but DB features disabled
 
-    # --- Scoring logic (unchanged) ---
+    # --- Risk Calculation (UNCHANGED) ---
     def compute_gs(self):
         g = {}
         for a in self.actors:
@@ -77,7 +85,7 @@ class DataManager:
         avg_base = 0.35
         return max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca))
 
-    # --- Extract tags using LLM (unchanged) ---
+    # --- LLM Extraction (UNCHANGED) ---
     def extract_tags(self, title, desc):
         prompt = f"""Analyze this news: {title}. Return JSON with:
         actor, country, intent, summary, 
@@ -86,6 +94,8 @@ class DataManager:
         ONLY use countries from: {self.countries}
         If the article is not about any of these countries or actors, return actor='General', country='General'."""
         try:
+            if self.groq is None:
+                return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
             res = self.groq.chat.completions.create(
                 messages=[{"role":"user","content":prompt}],
                 model="llama-3.3-70b-versatile",
@@ -101,60 +111,63 @@ class DataManager:
         except:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
 
-    # 💥 NEW: GDELT-based news fetcher
+    # --- AFRICA NEWS SCRAPER (REPLACES GDELT/NEWSAPI) ---
     def update_news(self, days=28):
-    
+        if self.engine is None:
+            st.error("Database not available — cannot sync")
+            return 0
+
         all_articles = []
         headers = {"User-Agent": "Mozilla/5.0 (compatible; GeopoliticalMonitor/1.0)"}
-    
-        # --- 1. Scrape RFI Afrique (English) ---
+
+        # --- 1. RFI Afrique ---
         try:
             r = requests.get("https://www.rfi.fr/en/africa/", headers=headers, timeout=10)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('a[data-molecule="card"]')[:30]:
-                    title = item.get('title') or (item.find('h3') or item).get_text(strip=True)
+                for item in soup.select('a[data-molecule="card"]')[:25]:
+                    title = (item.get('title') or (item.find('h3') or item).get_text(strip=True))[:200]
                     link = item.get('href')
-                    if link and title:
+                    if link and title and len(title) > 10:
                         url = link if link.startswith('http') else f"https://www.rfi.fr{link}"
                         all_articles.append({"title": title, "url": url, "source": "RFI"})
             time.sleep(1)
         except Exception as e:
-            st.sidebar.error(f"RFI scrape failed: {str(e)[:60]}")
-    
-        # --- 2. Scrape Jeune Afrique ---
+            st.sidebar.error(f"RFI failed: {str(e)[:50]}")
+
+        # --- 2. Jeune Afrique ---
         try:
             r = requests.get("https://www.jeuneafrique.com/en/", headers=headers, timeout=10)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('article a')[:30]:
-                    title = item.get_text(strip=True)
+                for item in soup.select('article a')[:25]:
+                    title = item.get_text(strip=True)[:200]
                     link = item.get('href')
                     if link and title and len(title) > 20:
                         url = link if link.startswith('http') else f"https://www.jeuneafrique.com{link}"
                         all_articles.append({"title": title, "url": url, "source": "Jeune Afrique"})
             time.sleep(1)
         except Exception as e:
-            st.sidebar.error(f"Jeune Afrique scrape failed: {str(e)[:60]}")
-    
-        # --- 3. Scrape BBC Afrique ---
+            st.sidebar.error(f"JA failed: {str(e)[:50]}")
+
+        # --- 3. BBC Afrique ---
         try:
             r = requests.get("https://www.bbc.com/afrique", headers=headers, timeout=10)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.content, 'html.parser')
-                for item in soup.select('a[class*="media__link"]')[:30]:
-                    title = item.get_text(strip=True)
+                for item in soup.select('a[class*="media__link"]')[:25]:
+                    title = item.get_text(strip=True)[:200]
                     link = item.get('href')
                     if link and title and len(title) > 20:
                         url = f"https://www.bbc.com{link}" if link.startswith('/') else link
                         all_articles.append({"title": title, "url": url, "source": "BBC Afrique"})
             time.sleep(1)
         except Exception as e:
-            st.sidebar.error(f"BBC scrape failed: {str(e)[:60]}")
-    
+            st.sidebar.error(f"BBC failed: {str(e)[:50]}")
+
         st.sidebar.write(f"📥 Scraped {len(all_articles)} raw articles")
-    
-        # --- Process with LLM ---
+
+        # --- Process & Save ---
         count = 0
         seen_urls = set()
         for art in all_articles:
@@ -162,21 +175,10 @@ class DataManager:
             if url in seen_urls:
                 continue
             seen_urls.add(url)
-    
+
             title = art['title']
-            # Fetch article text for snippet (optional but helpful)
-            snippet = ""
-            try:
-                r = requests.get(url, headers=headers, timeout=8)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.content, 'html.parser')
-                    for tag in soup.select('script, style, nav, footer'):
-                        tag.decompose()
-                    text = ' '.join(soup.stripped_strings)
-                    snippet = text[:500]
-            except:
-                snippet = title  # fallback
-    
+            snippet = title  # Simple fallback
+
             facts = self.extract_tags(title, snippet)
             if facts['country'] in self.countries and facts['actor'] in self.actors:
                 score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
@@ -192,7 +194,7 @@ class DataManager:
                         conn.execute(sql, {
                             "t": title,
                             "u": url,
-                            "i": "",  # You can add image extraction if needed
+                            "i": "",
                             "m": art['source'],
                             "d": datetime.utcnow().isoformat(),
                             "s": extra_data,
@@ -203,18 +205,25 @@ class DataManager:
                         })
                     count += 1
                 except Exception as e:
-                    st.sidebar.error(f"DB error: {e}")
-    
+                    st.sidebar.error(f"DB insert failed: {e}")
+
         st.sidebar.success(f"✅ Synced {count} relevant African articles!")
         return count
-    
+
+    # --- Fetch Articles (with engine check) ---
     @st.cache_data(ttl=300, show_spinner=False)
-    def fetch_articles(_self, limit=500, _cache_version="v2_gdelt_fixed"):
+    def fetch_articles(_self, limit=500, _cache_version="v3_scraper_final"):
+        if _self.engine is None:
+            return pd.DataFrame()
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         with _self.engine.connect() as conn:
             return pd.read_sql(query, conn, params={"l": limit})
 
+    # --- Clear DB (with engine check) ---
     def clear_db(self):
+        if self.engine is None:
+            st.error("Database not available")
+            return
         with self.engine.begin() as conn:
             conn.execute(text("DELETE FROM articles"))
         st.cache_data.clear()
