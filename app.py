@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from data_manager import DataManager
 import plotly.graph_objects as go
+from datetime import datetime
 
 # --- Page Config ---
 st.set_page_config(page_title="Strategic Vulnerability Index", page_icon="🛡️", layout="wide")
 
-# --- Custom Styling (Dark theme, no white cards) ---
+# --- Custom Styling ---
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #fafafa; }
@@ -17,12 +18,18 @@ st.markdown("""
         padding: 20px !important;
         margin-bottom: 15px !important;
     }
-    h1, h2, h3 { color: #ffffff !important; }
-    .stButton>button { width: 100%; border-radius: 5px; }
+    .filter-container {
+        background-color: #1c2128;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #444;
+        margin-bottom: 20px;
+    }
+    .metric-text { font-size: 0.85em; color: #888; text-transform: uppercase; }
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize Manager
+# Initialize
 if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
@@ -30,73 +37,95 @@ mgr = st.session_state.mgr
 # --- Radar Chart Function ---
 def create_radar_chart(score, intent_type):
     categories = ['Debt', 'Military', 'Resources', 'Fragility']
-    # Dynamic values based on intent
-    if intent_type == "Economic": values = [score, score*0.3, score*0.9, score*0.2]
-    elif intent_type == "MilitaryPresence": values = [score*0.4, score, score*0.2, score*0.7]
+    if intent_type == "Economic": values = [score, score*0.2, score*0.9, score*0.3]
+    elif intent_type == "MilitaryPresence": values = [score*0.3, score, score*0.2, score*0.6]
     else: values = [score*0.5, score*0.5, score*0.4, score]
     
-    fig = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', line_color='#ff4b4b'))
+    fig = go.Figure(data=go.Scatterpolar(
+        r=values, theta=categories, fill='toself', 
+        fillcolor='rgba(255, 75, 75, 0.4)', line=dict(color='#ff4b4b', width=2)
+    ))
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=False, range=[0, 1])),
-        showlegend=False, height=180, margin=dict(l=30, r=30, t=20, b=20),
-        paper_bgcolor='rgba(0,0,0,0)', font_color="white"
+        polar=dict(
+            radialaxis=dict(visible=False, range=[0, 1]),
+            angularaxis=dict(gridcolor="#444", linecolor="#444")
+        ),
+        showlegend=False, height=180, margin=dict(l=40, r=40, t=20, b=20),
+        paper_bgcolor='rgba(0,0,0,0)', font_color="#aaa"
     )
     return fig
 
 # --- Header ---
 st.title("🛡️ Geopolitical Vulnerability Index")
-st.markdown("Real-time tracking of foreign influence and strategic vulnerability.")
 
-# --- Sidebar ---
-with st.sidebar:
-    st.header("Intelligence Controls")
-    if st.button("🔄 Sync Live Intelligence"):
-        with st.status("Fetching global signals...") as status:
-            mgr.update_news()
-            st.cache_data.clear() # Clear cache to show new results
-            status.update(label="Sync Complete!", state="complete")
-        st.rerun()
+# --- Filters Section ---
+st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+f1, f2, f3 = st.columns(3)
+with f1: f_actor = st.selectbox("Foreign Actor", ["All Actors"] + mgr.actors)
+with f2: f_country = st.selectbox("Target Nation", ["All Countries"] + mgr.countries)
+with f3: f_intent = st.selectbox("Primary Intent", ["All Intents"] + list(mgr.INTENT_FACTORS.keys()))
+st.markdown('</div>', unsafe_allow_html=True)
 
-st.divider()
-st.subheader("📰 Strategic Intelligence Feed")
+# --- Monthly Pagination Logic ---
+raw_df = mgr.fetch_articles(limit=100)
+if not raw_df.empty:
+    raw_df['published_at'] = pd.to_datetime(raw_df['published_at'])
+    raw_df['month_year'] = raw_df['published_at'].dt.to_period('M')
+    
+    available_months = sorted(raw_df['month_year'].unique(), reverse=True)
+    
+    if "m_idx" not in st.session_state: st.session_state.m_idx = 0
+    
+    # Nav Buttons
+    nb1, nb2, nb3 = st.columns([1, 4, 1])
+    with nb1: 
+        if st.button("⬅️ Previous Month") and st.session_state.m_idx < len(available_months) - 1:
+            st.session_state.m_idx += 1
+    with nb3:
+        if st.button("Next Month ➡️") and st.session_state.m_idx > 0:
+            st.session_state.m_idx -= 1
+            
+    current_m = available_months[st.session_state.m_idx]
+    st.subheader(f"📅 Intelligence for {current_m.strftime('%B %Y')}")
 
-# --- Feed Grid ---
-df = mgr.fetch_articles(limit=15)
+    # Filtering Data
+    df = raw_df[raw_df['month_year'] == current_m]
+    if f_actor != "All Actors": df = df[df[ 'actor'] == f_actor]
+    if f_country != "All Countries": df = df[df['country'] == f_country]
+    if f_intent != "All Intents": df = df[df['intent_type'] == f_intent]
 
-if df.empty:
-    st.info("No intelligence signals found. Click 'Sync' in the sidebar.")
-else:
-    # FIXED: Loop with idx to avoid NameError and duplicate Plotly IDs
+    # --- Feed ---
     for idx, row in df.iterrows():
         with st.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             
             with col1:
-                img = row['image_url'] if row['image_url'] else "https://via.placeholder.com/400x250?text=Geopolitical+Intelligence"
-                st.image(img, use_container_width=True)
-            
-            with col2:
-                risk_color = "🔴" if row['contextual_score'] >= 0.75 else "🟡" if row['contextual_score'] >= 0.45 else "🟢"
-                st.markdown(f"### {risk_color} {row['title']}")
-                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at']}")
-                st.write(row['raw_text'])
+                st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
                 
-                # Tags
-                t1, t2, t3 = st.columns(3)
-                t1.button(f"👤 {row['actor']}", key=f"a_{idx}", disabled=True)
-                t2.button(f"📍 {row['country']}", key=f"c_{idx}", disabled=True)
-                t3.button(f"🎯 {row['intent_type']}", key=f"i_{idx}", disabled=True)
-                st.link_button("Read Source Intelligence", row['url'])
+            with col2:
+                st.markdown(f"### {row['title']}")
+                st.caption(f"**SOURCE:** {row['media_outlet']} | **DATE:** {row['published_at'].strftime('%Y-%m-%d')}")
+                st.write(row['raw_text'][:500] + "...")
+                
+                # Insights box for non-technical users
+                with st.expander("🔍 Strategic Insights", expanded=True):
+                    if row['intent_type'] == "Economic":
+                        st.info(f"**Insight:** This move primarily leverages financial instruments. High dependency on **Debt** and **Resources** detected.")
+                    elif row['intent_type'] == "MilitaryPresence":
+                        st.warning(f"**Insight:** Physical security footprint detected. This increases long-term **Military** and **Fragility** risks.")
+                    else:
+                        st.success(f"**Insight:** General soft-power engagement. Monitoring for shifts in **Social Fragility**.")
+
+                st.link_button("View Intelligence Source", row['url'])
 
             with col3:
-                st.markdown("<p style='text-align:center; font-size:0.9em; color:#888;'>RISK DIMENSIONS</p>", unsafe_allow_html=True)
-                radar_fig = create_radar_chart(row['contextual_score'], row['intent_type'])
-                st.plotly_chart(radar_fig, use_container_width=True, key=f"radar_plt_{idx}", config={'displayModeBar': False})
+                st.markdown("<p style='text-align:center;' class='metric-text'>Risk Distribution</p>", unsafe_allow_html=True)
+                st.plotly_chart(create_radar_chart(row['contextual_score'], row['intent_type']), use_container_width=True, key=f"r_{idx}", config={'displayModeBar': False})
                 
                 # Score display
                 score_pct = int(row['contextual_score'] * 100)
-                st.markdown(f"<h2 style='text-align:center;'>{score_pct}%</h2>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align:center; font-size:0.8em;'>VULNERABILITY INDEX</p>", unsafe_allow_html=True)
-
-st.markdown("---")
-st.caption("Strategic Intelligence Framework | Developed for Geopolitical Risk Assessment")
+                color = "#ff4b4b" if score_pct > 70 else "#ffa500" if score_pct > 40 else "#00ff00"
+                st.markdown(f"<h1 style='text-align:center; color:{color}; margin-bottom:0;'>{score_pct}%</h1>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center;' class='metric-text'>Vulnerability Index</p>", unsafe_allow_html=True)
+else:
+    st.info("No data found for the current selection.")
