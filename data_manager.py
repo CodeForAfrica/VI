@@ -12,6 +12,7 @@ class DataManager:
         self.countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia"]
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
         self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
+        
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"], "Sovereignty": ["debt", "mil", "elec"],
             "LGBTQ": ["lgbt", "elec"], "MilitaryPresence": ["mil", "debt"],
@@ -27,27 +28,28 @@ class DataManager:
             st.error(f"Initialization Error: {e}")
 
     def calculate_v2_risk(self, a, c, intent):
-        # Math remains the same
         avg_base = 0.40
         return round(avg_base + (1.0 - avg_base) * 0.3, 2)
 
     def update_news(self, start_date=None):
+        """Fetches from API and INSERTS into DB"""
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR US OR UAE)"
         
         try:
             if start_date:
                 dt_obj = datetime.strptime(start_date, "%Y-%m-%d")
+                # Define the end of that specific month
                 end_date = (dt_obj + timedelta(days=31)).replace(day=1).strftime("%Y-%m-%d")
                 raw_news = self.newsapi.get_everything(
                     q=query_str, language='en', from_param=start_date, to=end_date,
-                    sort_by='publishedAt', page_size=100  # INCREASED TO MAX
+                    sort_by='publishedAt', page_size=100 
                 )
             else:
                 raw_news = self.newsapi.get_everything(
-                    q=query_str, language='en', sort_by='publishedAt', page_size=100 # INCREASED TO MAX
+                    q=query_str, language='en', sort_by='publishedAt', page_size=100
                 )
         except NewsAPIException:
-            return -1 # Special code for history limit
+            return -1 
         except:
             return 0
         
@@ -84,7 +86,7 @@ class DataManager:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"..."}
 
     @st.cache_data(ttl=600)
-    def fetch_articles(_self, limit=500): # INCREASED FROM 15 TO 500
+    def fetch_articles(_self, limit=500):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         try:
             with _self.engine.connect() as conn:
