@@ -1,6 +1,5 @@
-import os
 import pandas as pd
-import urllib.parse
+import json
 from sqlalchemy import create_engine, text
 from newsapi import NewsApiClient
 from groq import Groq
@@ -8,87 +7,83 @@ import streamlit as st
 
 class DataManager:
     def __init__(self):
-        # 1. Database Connection using your single DB_URL secret
-        try:
-            # This looks for the exact name you used in Streamlit Secrets
-            self.db_url = st.secrets["DB_URL"]
-            
-            # Create the engine directly from the URL
-            self.engine = create_engine(self.db_url)
-            
-            # Test the connection immediately
-            with self.engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-        except Exception as e:
-            st.error(f"Database Connection Error: {e}")
-            st.info("Check if your password in DB_URL contains special characters like '#' or '@'. If so, they must be encoded (e.g., # becomes %23).")
+        # 1. Exact Constants from your contextual_all_intent.py
+        self.GDP = {"Senegal":33.6e9, "DRC":70.75e9, "CoteIvoire":86.54e9, "Ethiopia":125.0e9}
+        self.FSI_NORM = {"Senegal":0.618, "DRC":0.889, "CoteIvoire":0.711, "Ethiopia":0.845} # Pre-normalized from your FSI_RAW
+        self.L_ENFORCEMENT = {"Senegal":0.90, "DRC":0.20, "CoteIvoire":0.20, "Ethiopia":0.95}
 
-        # 2. API Clients (Keep these names exactly as they are in your secrets)
+        # Debt, Resource, and Military Matrices (Seeded for your core countries)
+        self.DEBT_MATRIX = st.secrets.get("DEBT_MATRIX", {}) # Or hardcode from your script below
+        self.G_RES_MATRIX = st.secrets.get("G_RES_MATRIX", {})
+        self.G_MIL_MATRIX = st.secrets.get("G_MIL_MATRIX", {})
+        
+        # Connection Setup
+        self.db_url = st.secrets["DB_URL"]
+        self.engine = create_engine(self.db_url)
         self.newsapi = NewsApiClient(api_key=st.secrets["NEWS_API_KEY"])
         self.groq = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-    def fetch_articles(self, offset=0, limit=6):
-        """Gets processed articles from Supabase"""
-        if not hasattr(self, 'engine'):
-            return pd.DataFrame()
-            
-        query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :limit OFFSET :offset")
-        try:
-            with self.engine.connect() as conn:
-                return pd.read_sql(query, conn, params={"limit": limit, "offset": offset})
-        except Exception as e:
-            st.error(f"Error fetching from DB: {e}")
-            return pd.DataFrame()
+    def calculate_ca_score(self, actor, country, intent_type):
+        """The core math from your script: CA = sum(w[f]*g[a][c][f])"""
+        # 1. Helper: Presence Factor
+        # Simplified: If they have debt, resources, or military, presence is 1.0
+        presence = 1.0 if (actor in self.DEBT_MATRIX and country in self.DEBT_MATRIX[actor]) else 0.5
+        
+        # 2. Compute G-Factors for this specific news event
+        # g_debt
+        debt_amt = self.DEBT_MATRIX.get(actor, {}).get(country, 0.0)
+        g_debt = min(1.0, debt_amt / self.GDP.get(country, 1e10))
+        
+        # g_res & g_mil
+        g_res = self.G_RES_MATRIX.get(actor, {}).get(country, 0.0)
+        g_mil = self.G_MIL_MATRIX.get(actor, {}).get(country, 0.0)
+        
+        # g_lgbt (using your formula: (1-L) * index)
+        g_lgbt = (1 - self.L_ENFORCEMENT.get(country, 0.5)) * 0.5 # 0.5 is baseline index
+        
+        # 3. Intent Weighting (Matches your INTENT_FACTORS)
+        intents = {
+            "Economic": {"factors": [g_debt, g_res], "weights": [0.6, 0.4]},
+            "MilitaryPresence": {"factors": [g_mil, g_debt], "weights": [0.7, 0.3]},
+            "SocialFragility": {"factors": [self.FSI_NORM.get(country, 0.5), g_debt], "weights": [0.5, 0.5]}
+        }
+        
+        data = intents.get(intent_type, intents["Economic"])
+        # Final CA Calculation
+        ca_score = sum(f * w for f, w in zip(data["factors"], data["weights"]))
+        
+        # Final Risk Formula: avg_base + (1 - avg_base) * CA
+        avg_base = 0.40 
+        final_risk = avg_base + (1.0 - avg_base) * ca_score
+        return round(float(final_risk), 2)
 
     def update_news(self):
-        """The Pipeline: NewsAPI -> LLM -> Supabase"""
-        # Search for strategic keywords
-        keywords = "(Senegal OR DRC OR 'Ivory Coast') AND (Russia OR China OR investment OR Wagner)"
+        # Using your exact country list for keywords
+        keywords = "(Senegal OR DRC OR 'Cote d'Ivoire' OR Ethiopia) AND (China OR Russia OR France OR 'United States' OR UAE)"
         raw_news = self.newsapi.get_everything(q=keywords, language='en', sort_by='publishedAt', page_size=10)
         
-        new_entries = 0
         for art in raw_news['articles']:
-            # Check if article already exists to avoid duplicates
-            exists = pd.read_sql(f"SELECT id FROM articles WHERE url = '{art['url']}'", self.engine)
-            if not exists.empty:
-                continue
-                
-            # AI Analysis Logic
-            analysis = self.analyze_with_llm(art['title'], art['description'])
+            # LLM only extracts tags, not scores
+            facts = self.extract_tags(art['title'], art['description'])
             
-            # Save to Database
-            # Note: We use 'raw_text' to store the AI summary for the UI to parse
+            # Use your script's logic to calculate the score
+            strat_score = self.calculate_ca_score(facts['actor'], facts['country'], facts['intent'])
+            
             query = text("""
-                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, media_name)
-                VALUES (:title, :url, :img, :outlet, :date, :analysis, :actor)
+                INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score)
+                VALUES (:t, :u, :i, :m, :d, :s, :sc) ON CONFLICT (url) DO NOTHING
             """)
-            
             with self.engine.begin() as conn:
                 conn.execute(query, {
-                    "title": art['title'],
-                    "url": art['url'],
-                    "img": art['urlToImage'],
-                    "outlet": art['source']['name'],
-                    "date": art['publishedAt'],
-                    "analysis": analysis,
-                    "actor": "General" # You can refine this to extract the specific actor
+                    "t": art['title'], "u": art['url'], "i": art['urlToImage'],
+                    "m": art['source']['name'], "d": art['publishedAt'],
+                    "s": facts['summary'], "sc": strat_score
                 })
-            new_entries += 1
-            
-        return new_entries
 
-    def analyze_with_llm(self, title, description):
-        """Analyzes sentiment and influence via Groq"""
-        prompt = f"""
-        Analyze this news: Title: {title}. Desc: {description}.
-        Return ONLY in this format: 
-        Summary: [1 sentence] | Score: [0.0 to 1.0] | Tone: [Factual/Aggressive/Critical]
-        """
+    def extract_tags(self, title, desc):
+        prompt = f"Extract JSON from news: {title}. Desc: {desc}. Tags: actor, country, intent (Economic/MilitaryPresence/SocialFragility), summary."
         try:
-            chat_completion = self.groq.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-            )
-            return chat_completion.choices[0].message.content
+            res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
+            return json.loads(res.choices[0].message.content)
         except:
-            return "Summary: Analysis unavailable | Score: 0.5 | Tone: Factual"
+            return {"actor":"General", "country":"Senegal", "intent":"Economic", "summary":"Analysis failed."}
