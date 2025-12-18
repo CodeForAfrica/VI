@@ -139,8 +139,15 @@ else:
             # Right: Radar Chart
             with col3:
                 st.write("**Risk Dimension Analysis**")
-                radar_fig = create_radar_chart(row['contextual_score'], intent)
-                st.plotly_chart(radar_fig, use_container_width=True, config={'displayModeBar': False})
+                radar_fig = create_radar_chart(row['contextual_score'], ...)
+
+                # FIX: Add a unique 'key' using the loop index and replace 'use_container_width'
+                st.plotly_chart(
+                    radar_fig, 
+                    width="stretch",           # Replaces use_container_width=True
+                    key=f"radar_{index}",      # FIXES the Duplicate ID Error
+                    config={'displayModeBar': False}
+                )
 
 # Navigation Footer
 st.markdown("---")
