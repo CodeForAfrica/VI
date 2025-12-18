@@ -7,6 +7,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 import time
 import json as json_lib
+from bs4 import BeautifulSoup
 
 class DataManager:
     def __init__(self):
@@ -104,75 +105,79 @@ class DataManager:
     def update_news(self, days=28):
     
         all_articles = []
-        
-        # Only use simple country names that GDELT accepts
-        simple_countries = {
-            "Senegal": "Senegal",
-            "DRC": "Congo",           # GDELT uses "Congo" for DRC
-            "CoteIvoire": "Ivory Coast",
-            "Ethiopia": "Ethiopia"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; GeopoliticalMonitor/1.0)"}
     
-        headers = {"User-Agent": "Mozilla/5.0"}
+        # --- 1. Scrape RFI Afrique (English) ---
+        try:
+            r = requests.get("https://www.rfi.fr/en/africa/", headers=headers, timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.content, 'html.parser')
+                for item in soup.select('a[data-molecule="card"]')[:30]:
+                    title = item.get('title') or (item.find('h3') or item).get_text(strip=True)
+                    link = item.get('href')
+                    if link and title:
+                        url = link if link.startswith('http') else f"https://www.rfi.fr{link}"
+                        all_articles.append({"title": title, "url": url, "source": "RFI"})
+            time.sleep(1)
+        except Exception as e:
+            st.sidebar.error(f"RFI scrape failed: {str(e)[:60]}")
     
-        for country_code in self.countries:
-            country_name = simple_countries.get(country_code, country_code)
-            query = country_name
-            encoded_query = requests.utils.quote(query)
-            gdel_url = (
-                f"https://api.gdeltproject.org/api/v2/doc/doc?"
-                f"q={encoded_query}&"
-                f"mode=artlist&"
-                f"format=json&"
-                f"maxrecords=100&"
-                f"timespan={days}D"
-            )
-            
-            try:
-                st.sidebar.write(f"📡 Fetching news for: {country_code}")
-                response = requests.get(gdel_url, headers=headers, timeout=12)
-                
-                if not response.content.strip():
-                    st.sidebar.warning("   ⚠️ Empty response")
-                    continue
+        # --- 2. Scrape Jeune Afrique ---
+        try:
+            r = requests.get("https://www.jeuneafrique.com/en/", headers=headers, timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.content, 'html.parser')
+                for item in soup.select('article a')[:30]:
+                    title = item.get_text(strip=True)
+                    link = item.get('href')
+                    if link and title and len(title) > 20:
+                        url = link if link.startswith('http') else f"https://www.jeuneafrique.com{link}"
+                        all_articles.append({"title": title, "url": url, "source": "Jeune Afrique"})
+            time.sleep(1)
+        except Exception as e:
+            st.sidebar.error(f"Jeune Afrique scrape failed: {str(e)[:60]}")
     
-                # Check for HTML error
-                if response.text.strip().startswith('<'):
-                    st.sidebar.warning(f"   ⚠️ HTML error: {response.text[:80]}...")
-                    time.sleep(3)
-                    continue
+        # --- 3. Scrape BBC Afrique ---
+        try:
+            r = requests.get("https://www.bbc.com/afrique", headers=headers, timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.content, 'html.parser')
+                for item in soup.select('a[class*="media__link"]')[:30]:
+                    title = item.get_text(strip=True)
+                    link = item.get('href')
+                    if link and title and len(title) > 20:
+                        url = f"https://www.bbc.com{link}" if link.startswith('/') else link
+                        all_articles.append({"title": title, "url": url, "source": "BBC Afrique"})
+            time.sleep(1)
+        except Exception as e:
+            st.sidebar.error(f"BBC scrape failed: {str(e)[:60]}")
     
-                try:
-                    data = response.json()
-                    articles = data.get('articles', [])
-                    all_articles.extend(articles)
-                    st.sidebar.write(f"   ✓ Got {len(articles)} articles")
-                except Exception as e:
-                    st.sidebar.error(f"   ❌ JSON parse error: {str(e)[:50]}")
-                    continue
+        st.sidebar.write(f"📥 Scraped {len(all_articles)} raw articles")
     
-                time.sleep(1.5)
-    
-            except Exception as e:
-                st.sidebar.error(f"   ❌ Request failed: {repr(e)[:60]}")
-                time.sleep(2)
-    
-        # --- Now process with LLM to extract actor/intent ---
+        # --- Process with LLM ---
         count = 0
         seen_urls = set()
         for art in all_articles:
-            url = art.get('url')
-            if not url or url in seen_urls:
+            url = art['url']
+            if url in seen_urls:
                 continue
             seen_urls.add(url)
-            
-            title = art.get('title', '')
-            snippet = art.get('snippet', '')
-            
-            # Let LLM decide if it's relevant
+    
+            title = art['title']
+            # Fetch article text for snippet (optional but helpful)
+            snippet = ""
+            try:
+                r = requests.get(url, headers=headers, timeout=8)
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.content, 'html.parser')
+                    for tag in soup.select('script, style, nav, footer'):
+                        tag.decompose()
+                    text = ' '.join(soup.stripped_strings)
+                    snippet = text[:500]
+            except:
+                snippet = title  # fallback
+    
             facts = self.extract_tags(title, snippet)
-            
-            # Only keep if BOTH country and actor are in our target lists
             if facts['country'] in self.countries and facts['actor'] in self.actors:
                 score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
                 extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
@@ -187,9 +192,9 @@ class DataManager:
                         conn.execute(sql, {
                             "t": title,
                             "u": url,
-                            "i": art.get('image', ''),
-                            "m": art.get('domain', 'Unknown'),
-                            "d": art.get('date', datetime.utcnow().isoformat()),
+                            "i": "",  # You can add image extraction if needed
+                            "m": art['source'],
+                            "d": datetime.utcnow().isoformat(),
                             "s": extra_data,
                             "sc": score,
                             "actor": facts['actor'],
@@ -199,9 +204,8 @@ class DataManager:
                     count += 1
                 except Exception as e:
                     st.sidebar.error(f"DB error: {e}")
-                    continue
     
-        st.sidebar.success(f"✅ Synced {count} relevant articles!")
+        st.sidebar.success(f"✅ Synced {count} relevant African articles!")
         return count
     
     @st.cache_data(ttl=300, show_spinner=False)
