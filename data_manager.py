@@ -102,9 +102,9 @@ class DataManager:
 
     # 💥 NEW: GDELT-based news fetcher
     def update_news(self, days=28):
+    
         all_articles = []
         
-        # Use GDELT-friendly names (no accents, full names)
         actor_names = {
             "China": "China",
             "France": "France",
@@ -120,57 +120,66 @@ class DataManager:
     
         country_names = {
             "Senegal": "Senegal",
-            "DRC": "Congo",          # GDELT uses "Congo" for DRC
-            "CoteIvoire": "Ivory Coast",  # Avoid accents
+            "DRC": "Congo",
+            "CoteIvoire": "Ivory Coast",
             "Ethiopia": "Ethiopia"
+        }
+    
+        # Use a browser-like headers
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
     
         for country_code in self.countries:
             country_name = country_names.get(country_code, country_code)
             for actor_code, actor_name in actor_names.items():
-                # Build query as: Senegal China (no quotes, no special chars)
                 query = f"{country_name} {actor_name}"
-                
-                # Properly encode spaces as + and special chars
-                encoded_query = requests.utils.quote(query, safe='')
-                # GDELT prefers spaces as + in queries
-                encoded_query = encoded_query.replace('%20', '+')
-                
+                encoded_query = requests.utils.quote(query)
                 gdel_url = (
                     f"https://api.gdeltproject.org/api/v2/doc/doc?"
                     f"q={encoded_query}&"
                     f"mode=artlist&"
                     f"format=json&"
-                    f"maxrecords=50&"
+                    f"maxrecords=30&"
                     f"timespan={days}D"
                 )
                 
                 try:
                     st.sidebar.write(f"📡 {country_code} + {actor_code}")
-                    response = requests.get(gdel_url, timeout=10)
+                    response = requests.get(gdel_url, headers=headers, timeout=12)
                     
-                    if response.status_code == 200:
-                        try:
-                            data = response.json()
-                            articles = data.get('articles', [])
-                            all_articles.extend(articles)
-                            st.sidebar.write(f"   ✓ {len(articles)}")
-                        except Exception as e:
-                            st.sidebar.error(f"   ❌ JSON error: {str(e)[:50]}")
-                    else:
-                        # Often 200 even on error, but check content
-                        if "too short or too long" in response.text:
-                            st.sidebar.warning(f"   ⚠️ Query rejected: {query}")
-                        else:
-                            st.sidebar.error(f"   ❌ HTTP {response.status_code}")
-                    
-                    time.sleep(1.2)  # Be respectful
-                    
-                except Exception as e:
-                    st.sidebar.error(f"   ❌ Request failed: {repr(e)[:60]}")
-                    time.sleep(2)
+                    # Check if response is empty
+                    if not response.content.strip():
+                        st.sidebar.warning("   ⚠️ Empty response")
+                        time.sleep(2)
+                        continue
     
-        # --- Save to DB (same as before) ---
+                    # Check if it's HTML (error page)
+                    text_preview = response.text[:100]
+                    if text_preview.strip().startswith('<'):
+                        st.sidebar.warning(f"   ⚠️ HTML response (blocked?): {text_preview[:60]}...")
+                        time.sleep(3)
+                        continue
+    
+                    # Try to parse JSON
+                    try:
+                        data = response.json()
+                        articles = data.get('articles', [])
+                        all_articles.extend(articles)
+                        st.sidebar.write(f"   ✓ {len(articles)}")
+                    except json_lib.JSONDecodeError:
+                        st.sidebar.error(f"   ❌ Invalid JSON: {text_preview[:60]}...")
+                        time.sleep(2)
+                        continue
+    
+                    time.sleep(1.5)  # Gentle rate limit
+    
+                except Exception as e:
+                    st.sidebar.error(f"   ❌ Exception: {repr(e)[:60]}")
+                    time.sleep(2)
+                    continue
+    
+        # --- Save to DB ---
         count = 0
         seen_urls = set()
         for art in all_articles:
@@ -181,7 +190,6 @@ class DataManager:
             
             title = art.get('title', 'No title')
             snippet = art.get('snippet', '')
-            
             facts = self.extract_tags(title, snippet)
             if facts['country'] not in self.countries or facts['actor'] not in self.actors:
                 continue
