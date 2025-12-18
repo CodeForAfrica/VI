@@ -161,11 +161,56 @@ if not df.empty:
     if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
     if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # MASTER PDF BUTTON
+    # MASTER PDF BUTTON — CORRECTED
     with sc3:
         if not f_df.empty:
             master_pdf = create_comprehensive_report(f_df, f_country, f_actor)
             st.download_button(
                 label=f"📥 Download Comprehensive Report ({len(f_df)} items)",
                 data=master_pdf,
-                file
+                file_name="Intelligence_Summary_Report.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+
+    # --- Pagination ---
+    items_per_page = 6
+    if "page" not in st.session_state: st.session_state.page = 1
+    total_pages = max(1, (len(f_df) // items_per_page) + (1 if len(f_df) % items_per_page > 0 else 0))
+    
+    st.markdown("---")
+    p1, p2, p3 = st.columns([1, 4, 1])
+    if p1.button("⬅️ Previous") and st.session_state.page > 1: st.session_state.page -= 1; st.rerun()
+    p2.write(f"Page {st.session_state.page} of {total_pages} ({len(f_df)} reports)")
+    if p3.button("Next ➡️") and st.session_state.page < total_pages: st.session_state.page += 1; st.rerun()
+
+    # --- Article Feed ---
+    start = (st.session_state.page - 1) * items_per_page
+    for idx, row in f_df.iloc[start : start + items_per_page].iterrows():
+        st.markdown(f"""
+            <div class="dossier-card">
+                <div style="display: flex; justify-content: space-between;">
+                    <div style="width: 75%;">
+                        <span class="intel-badge">📍 {row['country']}</span>
+                        <span class="intel-badge">👤 {row['actor']}</span>
+                        <h2 style="margin: 15px 0 10px 0;">{row['title']}</h2>
+                        <p style="color: #8b949e; font-size: 0.95rem;">{row['summary']}</p>
+                    </div>
+                    <div style="width: 20%; text-align: center;">
+                        <div class="risk-circle">
+                            <span style="font-size: 1.8rem; font-weight: bold; color: #ff4b4b;">{int(row['contextual_score']*100)}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        c1, c2, c3 = st.columns([1.2, 2, 1.2])
+        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", use_container_width=True)
+        with c2:
+            st.write(f"**Tone:** {row['tone']} | **Source:** {row['media_outlet']}")
+            st.link_button("View Source", row['url'], use_container_width=True)
+        with c3:
+            st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), use_container_width=True, key=f"radar_{idx}")
+else:
+    st.info("No intelligence data found.")
