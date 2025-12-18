@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from newsapi import NewsApiClient
 from groq import Groq
 import streamlit as st
+from datetime import datetime, timedelta
 
 class DataManager:
     def __init__(self):
@@ -42,13 +43,11 @@ class DataManager:
             st.error(f"Initialization Error: {e}")
 
     def calculate_v2_risk(self, a, c, intent):
-        """Core math formula: avg_base + (1 - avg_base) * CA"""
         debt = self.DEBT.get(a, {}).get(c, 0.0)
         g_debt = min(1.0, debt / self.GDP.get(c, 1e10))
         g_res = self.G_RES.get(a, {}).get(c, 0.0)
         g_mil = self.G_MIL.get(a, {}).get(c, 0.0)
         
-        # Mapping factors to scores
         factors_map = {"debt": g_debt, "res": g_res, "mil": g_mil, "frag": 0.5, "elec": 0.4, "lgbt": 0.3}
         factors = self.INTENT_FACTORS.get(intent, ["debt", "res"])
         ca_score = sum(factors_map.get(f, 0.0) for f in factors) / len(factors)
@@ -56,11 +55,41 @@ class DataManager:
         avg_base = 0.40
         return round(max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca_score)), 2)
 
-    def update_news(self):
+    # --- UPDATED: Dynamic Fetching with Date Range ---
+    def update_news(self, start_date=None):
+        """
+        Fetches news. If start_date is provided (YYYY-MM-DD), 
+        it fetches articles for that specific month.
+        """
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
-        raw_news = self.newsapi.get_everything(q=query_str, language='en', sort_by='publishedAt', page_size=8)
+        
+        # Determine date range
+        if start_date:
+            # If we provide Nov 1, we want to look from Nov 1 to end of Nov
+            dt_obj = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date = (dt_obj + timedelta(days=31)).replace(day=1).strftime("%Y-%m-%d")
+            
+            raw_news = self.newsapi.get_everything(
+                q=query_str, 
+                language='en', 
+                from_param=start_date,
+                to=end_date,
+                sort_by='publishedAt', 
+                page_size=100  # INCREASED LIMIT
+            )
+        else:
+            # Default latest news
+            raw_news = self.newsapi.get_everything(
+                q=query_str, 
+                language='en', 
+                sort_by='publishedAt', 
+                page_size=100  # INCREASED LIMIT
+            )
         
         count = 0
+        if 'articles' not in raw_news:
+            return 0
+
         for art in raw_news['articles']:
             facts = self.extract_tags(art['title'], art['description'])
             score = self.calculate_v2_risk(facts['actor'], facts['country'], facts['intent'])
@@ -85,13 +114,17 @@ class DataManager:
     def extract_tags(self, title, desc):
         prompt = f"Extract JSON from news: {title}. Return actor, country, intent, summary. Use categories: {self.actors} and {self.countries}."
         try:
-            res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
+            res = self.groq.chat.completions.create(
+                messages=[{"role":"user","content":prompt}], 
+                model="llama-3.3-70b-versatile", 
+                response_format={"type":"json_object"}
+            )
             return json.loads(res.choices[0].message.content)
         except:
             return {"actor":"General", "country":"General", "intent":"Economic", "summary":"Analysis pending."}
 
     @st.cache_data(ttl=600)
-    def fetch_articles(_self, limit=15):
+    def fetch_articles(_self, limit=500): # INCREASED CACHE LIMIT
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
         try:
             with _self.engine.connect() as conn:
