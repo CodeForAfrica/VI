@@ -15,7 +15,7 @@ class DataManager:
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
         
-        # FIXED: Added this back so the filters in app.py have something to read
+        # Required for filters in app.py
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"],
             "Sovereignty": ["debt", "mil"],
