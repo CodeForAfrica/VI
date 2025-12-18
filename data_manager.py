@@ -8,31 +8,34 @@ import streamlit as st
 
 class DataManager:
     def __init__(self):
-        # 1. Database Connection with "Safe Password" Encoding
+        # 1. Database Connection using your single DB_URL secret
         try:
-            user = st.secrets["DB_USER"]
-            password = st.secrets["DB_PASS"]
-            host = st.secrets["DB_HOST"]
-            port = "6543"
-            dbname = "postgres"
+            # This looks for the exact name you used in Streamlit Secrets
+            self.db_url = st.secrets["DB_URL"]
             
-            # This handles special characters like @ or # in your password
-            safe_password = urllib.parse.quote_plus(password)
-            
-            self.db_url = f"postgresql://{user}:{safe_password}@{host}:{port}/{dbname}?sslmode=require"
+            # Create the engine directly from the URL
             self.engine = create_engine(self.db_url)
+            
+            # Test the connection immediately
+            with self.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
         except Exception as e:
-            st.error(f"Database Configuration Error: {e}")
+            st.error(f"Database Connection Error: {e}")
+            st.info("Check if your password in DB_URL contains special characters like '#' or '@'. If so, they must be encoded (e.g., # becomes %23).")
 
-        # 2. API Clients
+        # 2. API Clients (Keep these names exactly as they are in your secrets)
         self.newsapi = NewsApiClient(api_key=st.secrets["NEWS_API_KEY"])
         self.groq = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
     def fetch_articles(self, offset=0, limit=6):
         """Gets processed articles from Supabase"""
-        query = f"SELECT * FROM articles ORDER BY published_at DESC LIMIT {limit} OFFSET {offset}"
+        if not hasattr(self, 'engine'):
+            return pd.DataFrame()
+            
+        query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :limit OFFSET :offset")
         try:
-            return pd.read_sql(query, self.engine)
+            with self.engine.connect() as conn:
+                return pd.read_sql(query, conn, params={"limit": limit, "offset": offset})
         except Exception as e:
             st.error(f"Error fetching from DB: {e}")
             return pd.DataFrame()
