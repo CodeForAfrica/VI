@@ -15,25 +15,64 @@ if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- PDF Logic (With Unicode Safety & Deprecation Fixes) ---
-def create_pdf(row, tone, summary):
+# --- COMPREHENSIVE PDF LOGIC (RESTORED & UPGRADED) ---
+def create_comprehensive_report(df, country_filter, actor_filter):
+    pdf = FPDF()
+    
     def clean_text(text):
         if not text: return ""
         replacements = {'\u2018':"'", '\u2019':"'", '\u201c':'"', '\u201d':'"', '\u2013':'-', '\u2014':'-', '\u2026':'...'}
         for u, a in replacements.items(): text = text.replace(u, a)
         return text.encode('latin-1', 'ignore').decode('latin-1')
 
-    pdf = FPDF()
+    # --- Page 1: Executive Summary ---
     pdf.add_page()
-    pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(0, 10, clean_text(f"INTEL BRIEF: {row['country']}"), align='C', new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(10)
+    pdf.set_fill_color(30, 35, 45)
+    pdf.rect(0, 0, 210, 40, 'F')
+    
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", 'B', 22)
+    pdf.cell(0, 20, "STRATEGIC INTEL DOSSIER", align='C', new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(20)
+    pdf.set_font("helvetica", 'B', 14)
+    pdf.cell(0, 10, "1. EXECUTIVE OVERVIEW", new_x="LMARGIN", new_y="NEXT")
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(5)
+    
+    avg_score = int(df['contextual_score'].mean() * 100) if not df.empty else 0
     pdf.set_font("helvetica", '', 12)
-    content = f"Title: {row['title']}\nActor: {row['actor']}\nScore: {int(row['contextual_score']*100)}%\n\nSummary: {summary}"
-    pdf.multi_cell(0, 10, clean_text(content))
+    pdf.multi_cell(0, 10, clean_text(
+        f"This comprehensive report aggregates {len(df)} intelligence entries. "
+        f"The average Strategic Vulnerability Index for this dataset is {avg_score}%. "
+        f"Filters applied: Nation [{country_filter}] | Actor [{actor_filter}]. "
+        f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}."
+    ))
+    
+    # --- Intelligence Ledger ---
+    pdf.ln(10)
+    pdf.set_font("helvetica", 'B', 14)
+    pdf.cell(0, 10, "2. CONSOLIDATED INTELLIGENCE LEDGER", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    for idx, row in df.iterrows():
+        if pdf.get_y() > 240: pdf.add_page()
+        
+        pdf.set_font("helvetica", 'B', 11)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.cell(0, 8, clean_text(f"ID-{idx+100}: {row['title']}"), fill=True, new_x="LMARGIN", new_y="NEXT")
+        
+        pdf.set_font("helvetica", 'B', 9)
+        pdf.cell(0, 6, f"SCORE: {int(row['contextual_score']*100)}% | ACTOR: {row['actor']} | TARGET: {row['country']}", new_x="LMARGIN", new_y="NEXT")
+        
+        pdf.set_font("helvetica", '', 10)
+        pdf.multi_cell(0, 6, clean_text(row['summary']))
+        pdf.ln(5)
+
     return bytes(pdf.output())
 
-# --- Luxury Dossier Styling ---
+# --- Luxury Dossier Styling (STRICTLY KEPT) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #e6edf3; }
@@ -41,33 +80,23 @@ st.markdown("""
         background: linear-gradient(145deg, #161b22, #0d1117);
         border: 1px solid #30363d;
         border-left: 5px solid #ff4b4b;
-        border-radius: 8px;
-        padding: 24px;
-        margin-bottom: 25px;
+        border-radius: 8px; padding: 24px; margin-bottom: 25px;
     }
     .intel-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: bold;
-        background: #0d1117;
-        border: 1px solid #444c56;
-        margin-right: 5px;
-        color: #8b949e;
+        display: inline-block; padding: 2px 10px; border-radius: 4px;
+        font-size: 0.7rem; font-weight: bold; background: #0d1117;
+        border: 1px solid #444c56; margin-right: 5px; color: #8b949e;
     }
     .risk-circle {
-        border: 2px solid #30363d;
-        border-radius: 50%;
-        width: 100px; height: 100px;
-        display: flex; flex-direction: column;
+        border: 2px solid #30363d; border-radius: 50%;
+        width: 100px; height: 100px; display: flex; flex-direction: column;
         justify-content: center; align-items: center;
         background: rgba(255, 75, 75, 0.05); margin: 10px auto;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Metric Explanation Legend (RESTORED) ---
+# --- Metric Explanation Legend (STRICTLY KEPT) ---
 def show_metric_legend():
     with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores"):
         st.markdown("""
@@ -77,7 +106,7 @@ def show_metric_legend():
         * **Media Tones:** <span style='color:#2ecc71'>Factual</span>, <span style='color:#ffa500'>Sensationalist</span>, <span style='color:#ff4b4b'>Alarmist</span>, <span style='color:#9b59b6'>Cynical</span>.
         """, unsafe_allow_html=True)
 
-# --- Radar Visual (UNIQUE SIDES RESTORED) ---
+# --- Radar Visual (STRICTLY KEPT) ---
 def create_radar(score, title, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
     h = int(hashlib.md5(title.encode()).hexdigest(), 16)
@@ -98,7 +127,7 @@ def create_radar(score, title, tone):
 st.title("🛡️ Strategic Vulnerability Command")
 show_metric_legend()
 
-# --- Command Center (ALL FILTERS RESTORED) ---
+# --- Command Center (ALL FILTERS & MASTER PDF RESTORED) ---
 with st.container(border=True):
     st.markdown("### 🔍 Strategic Filters")
     c1, c2, c3, c4 = st.columns(4)
@@ -108,17 +137,18 @@ with st.container(border=True):
     with c4: f_tone = st.selectbox("🎭 Media Tone", ["All Tones", "Factual", "Alarmist", "Sensationalist", "Cynical"])
     
     st.markdown("---")
-    sc1, sc2, _ = st.columns([2, 2, 4])
-    if sc1.button("🔄 Sync Global Intelligence", width='stretch'):
-        mgr.update_news(); st.cache_data.clear(); st.rerun()
-    if sc2.button("🗑️ Reset Database", width='stretch'):
-        mgr.clear_db(); st.cache_data.clear(); st.rerun()
+    sc1, sc2, sc3 = st.columns([2, 2, 4])
+    with sc1:
+        if st.button("🔄 Sync Global Intelligence", width='stretch'):
+            mgr.update_news(); st.cache_data.clear(); st.rerun()
+    with sc2:
+        if st.button("🗑️ Reset Database", width='stretch'):
+            mgr.clear_db(); st.cache_data.clear(); st.rerun()
 
 # --- Data Engine ---
 df = mgr.fetch_articles(limit=500)
 if not df.empty:
     df['published_at'] = pd.to_datetime(df['published_at'])
-    
     def extract_extra(row):
         try:
             data = json.loads(row['raw_text'])
@@ -126,14 +156,26 @@ if not df.empty:
         except: return pd.Series(['Factual', row['raw_text']])
     df[['tone', 'summary']] = df.apply(extract_extra, axis=1)
 
-    # Filtering Logic
+    # Filter Logic
     f_df = df.copy()
     if f_country != "All Nations": f_df = f_df[f_df['country'] == f_country]
     if f_actor != "All Actors": f_df = f_df[f_df['actor'] == f_actor]
     if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
     if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # --- Pagination (RESTORED) ---
+    # MASTER PDF BUTTON (NEW COMPREHENSIVE POSITION)
+    with sc3:
+        if not f_df.empty:
+            master_pdf = create_comprehensive_report(f_df, f_country, f_actor)
+            st.download_button(
+                label=f"📥 Download Comprehensive Report ({len(f_df)} items)",
+                data=master_pdf,
+                file_name="Intelligence_Summary_Report.pdf",
+                mime="application/pdf",
+                width='stretch'
+            )
+
+    # --- Pagination ---
     items_per_page = 6
     if "page" not in st.session_state: st.session_state.page = 1
     total_pages = max(1, (len(f_df) // items_per_page) + (1 if len(f_df) % items_per_page > 0 else 0))
@@ -153,33 +195,24 @@ if not df.empty:
                     <div style="width: 75%;">
                         <span class="intel-badge">📍 {row['country']}</span>
                         <span class="intel-badge">👤 {row['actor']}</span>
-                        <span class="intel-badge">🎯 {row['intent_type']}</span>
                         <h2 style="margin: 15px 0 10px 0;">{row['title']}</h2>
                         <p style="color: #8b949e; font-size: 0.95rem;">{row['summary']}</p>
                     </div>
                     <div style="width: 20%; text-align: center;">
                         <div class="risk-circle">
                             <span style="font-size: 1.8rem; font-weight: bold; color: #ff4b4b;">{int(row['contextual_score']*100)}%</span>
-                            <span style="font-size: 0.6rem; color: #58a6ff;">INDEX</span>
                         </div>
                     </div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
 
-        c_img, c_body, c_risk = st.columns([1.2, 2, 1.2])
-        with c_img:
-            st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", width='stretch')
-        with c_body:
-            t_colors = {"Alarmist": "#ff4b4b", "Sensationalist": "#ffa500", "Cynical": "#9b59b6", "Factual": "#2ecc71"}
-            st.markdown(f"**Tone:** <span style='color:{t_colors.get(row['tone'], '#fff')}'>{row['tone'].upper()}</span>", unsafe_allow_html=True)
-            st.caption(f"{row['media_outlet']} | {row['published_at'].strftime('%Y-%m-%d')}")
+        c1, c2, c3 = st.columns([1.2, 2, 1.2])
+        with c1: st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400", width='stretch')
+        with c2:
+            st.write(f"**Tone:** {row['tone']} | **Source:** {row['media_outlet']}")
             st.link_button("View Source", row['url'], width='stretch')
-            
-            pdf_bytes = create_pdf(row, row['tone'], row['summary'])
-            st.download_button("📥 PDF Summary", pdf_bytes, f"brief_{idx}.pdf", "application/pdf", width='stretch')
-            
-        with c_risk:
+        with c3:
             st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), width='stretch', key=f"radar_{idx}")
 else:
-    st.info("No data. Please Sync.")
+    st.info("No intelligence data found.")
