@@ -104,6 +104,7 @@ class DataManager:
     def update_news(self, days=28):
         all_articles = []
         
+        # Use GDELT-friendly names (no accents, full names)
         actor_names = {
             "China": "China",
             "France": "France",
@@ -119,65 +120,56 @@ class DataManager:
     
         country_names = {
             "Senegal": "Senegal",
-            "DRC": "Democratic Republic of the Congo",
-            "CoteIvoire": "Côte d'Ivoire",
+            "DRC": "Congo",          # GDELT uses "Congo" for DRC
+            "CoteIvoire": "Ivory Coast",  # Avoid accents
             "Ethiopia": "Ethiopia"
         }
     
         for country_code in self.countries:
-            country_gdelt = country_names.get(country_code, country_code)
-            for actor_code, actor_gdelt in actor_names.items():
-                # Build simple query: just two quoted terms
-                query = f'"{country_gdelt}" "{actor_gdelt}"'
-                encoded_query = requests.utils.quote(query)
+            country_name = country_names.get(country_code, country_code)
+            for actor_code, actor_name in actor_names.items():
+                # Build query as: Senegal China (no quotes, no special chars)
+                query = f"{country_name} {actor_name}"
+                
+                # Properly encode spaces as + and special chars
+                encoded_query = requests.utils.quote(query, safe='')
+                # GDELT prefers spaces as + in queries
+                encoded_query = encoded_query.replace('%20', '+')
+                
                 gdel_url = (
                     f"https://api.gdeltproject.org/api/v2/doc/doc?"
                     f"q={encoded_query}&"
                     f"mode=artlist&"
                     f"format=json&"
-                    f"maxrecords=50&"  # Reduced to be safe
+                    f"maxrecords=50&"
                     f"timespan={days}D"
                 )
                 
                 try:
-                    st.sidebar.write(f"📡 Requesting: {country_code} + {actor_code}")
-                    response = requests.get(gdel_url, timeout=12)
+                    st.sidebar.write(f"📡 {country_code} + {actor_code}")
+                    response = requests.get(gdel_url, timeout=10)
                     
-                    # DEBUG: Show status and first 200 chars
-                    st.sidebar.write(f"   → Status: {response.status_code}")
+                    if response.status_code == 200:
+                        try:
+                            data = response.json()
+                            articles = data.get('articles', [])
+                            all_articles.extend(articles)
+                            st.sidebar.write(f"   ✓ {len(articles)}")
+                        except Exception as e:
+                            st.sidebar.error(f"   ❌ JSON error: {str(e)[:50]}")
+                    else:
+                        # Often 200 even on error, but check content
+                        if "too short or too long" in response.text:
+                            st.sidebar.warning(f"   ⚠️ Query rejected: {query}")
+                        else:
+                            st.sidebar.error(f"   ❌ HTTP {response.status_code}")
                     
-                    if response.status_code != 200:
-                        st.sidebar.error(f"   ❌ HTTP {response.status_code}: {response.text[:200]}")
-                        time.sleep(2)  # Longer wait on error
-                        continue
-    
-                    # Check if response is empty
-                    if not response.text.strip():
-                        st.sidebar.error("   ❌ Empty response")
-                        time.sleep(2)
-                        continue
-    
-                    # Try to parse JSON
-                    try:
-                        data = response.json()
-                    except json_lib.JSONDecodeError:
-                        st.sidebar.error(f"   ❌ Invalid JSON: {response.text[:300]}...")
-                        time.sleep(2)
-                        continue
-    
-                    articles = data.get('articles', [])
-                    all_articles.extend(articles)
-                    st.sidebar.write(f"   ✓ Got {len(articles)} articles")
-    
-                    time.sleep(1.0)  # Slower: 1 second between requests
-    
+                    time.sleep(1.2)  # Be respectful
+                    
                 except Exception as e:
-                    st.sidebar.error(f"   ❌ Exception: {repr(e)}")
+                    st.sidebar.error(f"   ❌ Request failed: {repr(e)[:60]}")
                     time.sleep(2)
-                    continue
     
-        st.sidebar.write(f"📥 Total raw articles: {len(all_articles)}")
-        
         # --- Save to DB (same as before) ---
         count = 0
         seen_urls = set()
