@@ -14,6 +14,14 @@ class DataManager:
         self.DEBT = st.secrets.get("DEBT", {})
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
+        
+        # FIXED: Added this back so the filters in app.py have something to read
+        self.INTENT_FACTORS = {
+            "Economic": ["debt", "res"],
+            "Sovereignty": ["debt", "mil"],
+            "MilitaryPresence": ["mil", "debt"],
+            "ResourceDependency": ["res", "debt"]
+        }
 
         try:
             self.db_url = st.secrets["DB_URL"]
@@ -62,7 +70,6 @@ class DataManager:
         except: return 0
 
     def extract_tags(self, title, desc):
-        # Using your 4 specific categories
         prompt = f"""Analyze this news: {title}. Return JSON with:
         actor, country, intent, summary, 
         tone (Choose one: Sensationalist, Alarmist, Factual, Cynical).
@@ -80,6 +87,5 @@ class DataManager:
             return pd.read_sql(query, conn, params={"l": limit})
 
     def clear_db(self):
-        """Used to clear the 'stuck' 10 articles and start fresh"""
         with self.engine.begin() as conn:
             conn.execute(text("DELETE FROM articles"))
