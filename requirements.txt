@@ -1,0 +1,6 @@
+streamlit
+pandas
+requests
+psycopg2-binary
+sqlalchemy
+google-generativeai
