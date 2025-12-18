@@ -15,21 +15,25 @@ if "mgr" not in st.session_state:
     st.session_state.mgr = DataManager()
 mgr = st.session_state.mgr
 
-# --- PDF Logic (Fixed for fpdf2 & No Encoding Error) ---
+# --- PDF Logic (With Unicode Safety & Deprecation Fixes) ---
 def create_pdf(row, tone, summary):
+    def clean_text(text):
+        if not text: return ""
+        replacements = {'\u2018':"'", '\u2019':"'", '\u201c':'"', '\u201d':'"', '\u2013':'-', '\u2014':'-', '\u2026':'...'}
+        for u, a in replacements.items(): text = text.replace(u, a)
+        return text.encode('latin-1', 'ignore').decode('latin-1')
+
     pdf = FPDF()
     pdf.add_page()
-    # fpdf2 uses 'helvetica' as default; 'Arial' is substituted automatically
     pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(0, 10, f"INTEL BRIEF: {row['country']}", align='C', new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, clean_text(f"INTEL BRIEF: {row['country']}"), align='C', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(10)
     pdf.set_font("helvetica", '', 12)
-    pdf.multi_cell(0, 10, f"Title: {row['title']}\nActor: {row['actor']}\nScore: {int(row['contextual_score']*100)}%\nTone: {tone}\n\nSummary: {summary}")
-    
-    # In fpdf2, output() without 'dest' returns bytes/bytearray directly
+    content = f"Title: {row['title']}\nActor: {row['actor']}\nScore: {int(row['contextual_score']*100)}%\n\nSummary: {summary}"
+    pdf.multi_cell(0, 10, clean_text(content))
     return bytes(pdf.output())
 
-# --- Luxury Styling ---
+# --- Luxury Dossier Styling ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #e6edf3; }
@@ -55,33 +59,25 @@ st.markdown("""
     .risk-circle {
         border: 2px solid #30363d;
         border-radius: 50%;
-        width: 100px;
-        height: 100px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        background: rgba(255, 75, 75, 0.05);
-        margin: 10px auto;
+        width: 100px; height: 100px;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        background: rgba(255, 75, 75, 0.05); margin: 10px auto;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Metric Explanation Legend ---
+# --- Metric Explanation Legend (RESTORED) ---
 def show_metric_legend():
     with st.expander("ℹ️ Understanding the Vulnerability Metrics & Scores"):
         st.markdown("""
         ### Strategic Metrics Breakdown
         * **Vulnerability Score:** A weighted index (0-100%) where **>70%** indicates critical foreign influence.
         * **Matrix Factors:** Based on Debt-to-GDP ratios, Resource concessions, and Military agreements.
-        * **Media Tone:**
-            * **Factual:** Neutral, data-heavy reporting.
-            * **Sensationalist:** Emphasizes emotion or shock over data.
-            * **Alarmist:** Focuses on immediate, extreme threats to stability.
-            * **Cynical:** Questions the underlying motives of foreign actors.
-        """)
+        * **Media Tones:** <span style='color:#2ecc71'>Factual</span>, <span style='color:#ffa500'>Sensationalist</span>, <span style='color:#ff4b4b'>Alarmist</span>, <span style='color:#9b59b6'>Cynical</span>.
+        """, unsafe_allow_html=True)
 
-# --- Radar Visual ---
+# --- Radar Visual (UNIQUE SIDES RESTORED) ---
 def create_radar(score, title, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
     h = int(hashlib.md5(title.encode()).hexdigest(), 16)
@@ -98,13 +94,13 @@ def create_radar(score, title, tone):
     )
     return fig
 
-# --- UI Header ---
-st.title("🛡️ Geopolitical Vulnerability Index")
+# --- Header ---
+st.title("🛡️ Strategic Vulnerability Command")
 show_metric_legend()
 
-# --- Filters ---
+# --- Command Center (ALL FILTERS RESTORED) ---
 with st.container(border=True):
-    st.markdown("### 🔍 Strategic Command Center")
+    st.markdown("### 🔍 Strategic Filters")
     c1, c2, c3, c4 = st.columns(4)
     with c1: f_country = st.selectbox("📍 Target Nation", ["All Nations"] + mgr.countries)
     with c2: f_actor = st.selectbox("👤 Foreign Actor", ["All Actors"] + mgr.actors)
@@ -113,12 +109,10 @@ with st.container(border=True):
     
     st.markdown("---")
     sc1, sc2, _ = st.columns([2, 2, 4])
-    with sc1:
-        if st.button("🔄 Sync Global Intelligence", width='stretch'):
-            mgr.update_news(); st.cache_data.clear(); st.rerun()
-    with sc2:
-        if st.button("🗑️ Reset Database", width='stretch'):
-            mgr.clear_db(); st.cache_data.clear(); st.rerun()
+    if sc1.button("🔄 Sync Global Intelligence", width='stretch'):
+        mgr.update_news(); st.cache_data.clear(); st.rerun()
+    if sc2.button("🗑️ Reset Database", width='stretch'):
+        mgr.clear_db(); st.cache_data.clear(); st.rerun()
 
 # --- Data Engine ---
 df = mgr.fetch_articles(limit=500)
@@ -132,17 +126,19 @@ if not df.empty:
         except: return pd.Series(['Factual', row['raw_text']])
     df[['tone', 'summary']] = df.apply(extract_extra, axis=1)
 
+    # Filtering Logic
     f_df = df.copy()
     if f_country != "All Nations": f_df = f_df[f_df['country'] == f_country]
     if f_actor != "All Actors": f_df = f_df[f_df['actor'] == f_actor]
     if f_intent != "All Intents": f_df = f_df[f_df['intent_type'] == f_intent]
     if f_tone != "All Tones": f_df = f_df[f_df['tone'] == f_tone]
 
-    # --- Pagination ---
+    # --- Pagination (RESTORED) ---
     items_per_page = 6
     if "page" not in st.session_state: st.session_state.page = 1
     total_pages = max(1, (len(f_df) // items_per_page) + (1 if len(f_df) % items_per_page > 0 else 0))
     
+    st.markdown("---")
     p1, p2, p3 = st.columns([1, 4, 1])
     if p1.button("⬅️ Previous") and st.session_state.page > 1: st.session_state.page -= 1; st.rerun()
     p2.write(f"Page {st.session_state.page} of {total_pages} ({len(f_df)} reports)")
@@ -164,7 +160,7 @@ if not df.empty:
                     <div style="width: 20%; text-align: center;">
                         <div class="risk-circle">
                             <span style="font-size: 1.8rem; font-weight: bold; color: #ff4b4b;">{int(row['contextual_score']*100)}%</span>
-                            <span style="font-size: 0.6rem; color: #58a6ff;">VULNERABILITY</span>
+                            <span style="font-size: 0.6rem; color: #58a6ff;">INDEX</span>
                         </div>
                     </div>
                 </div>
@@ -180,15 +176,9 @@ if not df.empty:
             st.caption(f"{row['media_outlet']} | {row['published_at'].strftime('%Y-%m-%d')}")
             st.link_button("View Source", row['url'], width='stretch')
             
-            # --- FIXED PDF SECTION ---
             pdf_bytes = create_pdf(row, row['tone'], row['summary'])
-            st.download_button(
-                label="📥 PDF Summary", 
-                data=pdf_bytes, 
-                file_name=f"brief_{idx}.pdf", 
-                mime="application/pdf", 
-                width='stretch'
-            )
+            st.download_button("📥 PDF Summary", pdf_bytes, f"brief_{idx}.pdf", "application/pdf", width='stretch')
+            
         with c_risk:
             st.plotly_chart(create_radar(row['contextual_score'], row['title'], row['tone']), width='stretch', key=f"radar_{idx}")
 else:
