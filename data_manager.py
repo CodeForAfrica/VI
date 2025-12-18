@@ -12,14 +12,9 @@ class DataManager:
         self.actors = ["China", "France", "UnitedStates", "Russia", "Rwanda", "Saudi", "Turkey", "UAE", "Israel", "Iran", "NonState"]
         self.GDP = {"Senegal": 33.6e9, "DRC": 70.75e9, "CoteIvoire": 86.54e9, "Ethiopia": 125.0e9}
         
-        # Load from secrets — critical for scoring
         self.DEBT = st.secrets.get("DEBT", {})
         self.G_RES = st.secrets.get("G_RES", {})
         self.G_MIL = st.secrets.get("G_MIL", {})
-        
-        # DEBUG: Remove these lines after confirming data loads
-        st.sidebar.write("✅ DEBT actors:", len(self.DEBT))
-        st.sidebar.write("✅ G_RES actors:", len(self.G_RES))
 
         self.INTENT_FACTORS = {
             "Economic": ["debt", "res"],
@@ -36,7 +31,6 @@ class DataManager:
         except Exception as e:
             st.error(f"Initialization Error: {e}")
 
-    # --- FULL contextual_v2 logic integrated ---
     def compute_gs(self):
         g = {}
         for a in self.actors:
@@ -80,10 +74,32 @@ class DataManager:
         avg_base = 0.35
         return max(0.0, min(1.0, avg_base + (1.0 - avg_base) * ca))
 
+    def extract_tags(self, title, desc):
+        prompt = f"""Analyze this news: {title}. Return JSON with:
+        actor, country, intent, summary, 
+        tone (Choose one: Sensationalist, Alarmist, Factual, Cynical).
+        ONLY use actors from: {self.actors}
+        ONLY use countries from: {self.countries}
+        If the article is not about any of these countries or actors, return actor='General', country='General'."""
+        try:
+            res = self.groq.chat.completions.create(
+                messages=[{"role":"user","content":prompt}],
+                model="llama-3.3-70b-versatile",
+                response_format={"type":"json_object"}
+            )
+            data = json.loads(res.choices[0].message.content)
+            actor = data.get('actor', 'General')
+            country = data.get('country', 'General')
+            intent = data.get('intent', 'Economic')
+            summary = data.get('summary', '...')
+            tone = data.get('tone', 'Factual')
+            return {"actor": actor, "country": country, "intent": intent, "summary": summary, "tone": tone}
+        except:
+            return {"actor":"General", "country":"General", "intent":"Economic", "summary":"...", "tone":"Factual"}
+
     def update_news(self, start_date=None):
         query_str = f"({' OR '.join(self.countries)}) AND (China OR Russia OR France OR Wagner)"
         try:
-            # Free tier: max 10 results
             raw_news = self.newsapi.get_everything(
                 q=query_str,
                 language='en',
@@ -92,15 +108,15 @@ class DataManager:
                 from_param=start_date if start_date else (datetime.now() - timedelta(days=28)).strftime("%Y-%m-%d")
             )
             articles = raw_news.get('articles', [])
-            st.sidebar.write(f"📡 Fetched {len(articles)} articles from NewsAPI")
-            
             count = 0
             for art in articles:
                 facts = self.extract_tags(art['title'], art['description'])
-                score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
-                # DEBUG: Remove after verification
-                st.sidebar.write(f"Score: {facts['actor']} → {facts['country']} = {score:.2f}")
                 
+                # ONLY process articles about our target countries and actors
+                if facts['country'] not in self.countries or facts['actor'] not in self.actors:
+                    continue
+
+                score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
                 extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
                 sql = text("""
                     INSERT INTO articles (title, url, image_url, media_outlet, published_at, raw_text, contextual_score, actor, country, intent_type)
@@ -120,18 +136,6 @@ class DataManager:
             st.error(f"NewsAPI error: {e}")
             return 0
 
-    def extract_tags(self, title, desc):
-        prompt = f"""Analyze this news: {title}. Return JSON with:
-        actor, country, intent, summary, 
-        tone (Choose one: Sensationalist, Alarmist, Factual, Cynical).
-        Categories: {self.actors}, {self.countries}."""
-        try:
-            res = self.groq.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile", response_format={"type":"json_object"})
-            return json.loads(res.choices[0].message.content)
-        except:
-            return {"actor":"China", "country":"Senegal", "intent":"Economic", "summary":"...", "tone":"Factual"}
-
-    # 💥 FIXED: Added cache version key to force reload when logic changes
     @st.cache_data(ttl=300, show_spinner=False)
     def fetch_articles(_self, limit=500, _cache_version="v2_intent_risk_final"):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
@@ -141,4 +145,4 @@ class DataManager:
     def clear_db(self):
         with self.engine.begin() as conn:
             conn.execute(text("DELETE FROM articles"))
-        st.cache_data.clear()  # Clear cache on reset
+        st.cache_data.clear()
