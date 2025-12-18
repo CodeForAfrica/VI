@@ -28,10 +28,9 @@ def show_metric_legend():
             * **Cynical:** Questions the underlying motives of foreign actors.
         """)
 
-# --- Radar Visual (Unique Key required in Loop) ---
+# --- Radar Visual (FIXED Plotly Property Path) ---
 def create_radar(score, tone):
     categories = ['Debt Depth', 'Resource Control', 'Military Presence', 'Sovereignty']
-    # Slightly adjust shape based on tone for visual depth
     mod = 1.1 if tone == "Alarmist" else 1.0
     r_values = [score * mod, score * 0.7, score * 0.5, score * 0.8]
     
@@ -42,10 +41,14 @@ def create_radar(score, tone):
         fillcolor='rgba(255, 75, 75, 0.3)', 
         line=dict(color='#ff4b4b', width=2)
     ))
+    
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=False, range=[0, 1.2]),
-            angularaxis=dict(font_size=10, color="#888")
+            angularaxis=dict(
+                tickfont=dict(size=10), # FIXED: Moved size into tickfont dictionary
+                color="#888"
+            )
         ),
         showlegend=False, 
         height=200, 
@@ -55,7 +58,7 @@ def create_radar(score, tone):
     return fig
 
 # --- Header ---
-st.title("🛡️ Africa Geopolitical Vulnerability Index")
+st.title("🛡️ Geopolitical Vulnerability Index")
 show_metric_legend()
 
 # --- Fancy Command Center (Filters) ---
@@ -94,13 +97,12 @@ with st.container():
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Main Logic ---
+# --- Data Fetching and Processing ---
 df = mgr.fetch_articles(limit=500)
 
 if not df.empty:
     df['published_at'] = pd.to_datetime(df['published_at'])
     
-    # Process AI JSON fields
     def extract_extra(row):
         try:
             data = json.loads(row['raw_text'])
@@ -109,14 +111,14 @@ if not df.empty:
             return pd.Series(['Factual', row['raw_text']])
     df[['tone', 'summary']] = df.apply(extract_extra, axis=1)
 
-    # Apply Filters
+    # Filter Logic
     filtered_df = df.copy()
     if f_country != "All Nations": filtered_df = filtered_df[filtered_df['country'] == f_country]
     if f_actor != "All Actors": filtered_df = filtered_df[filtered_df['actor'] == f_actor]
     if f_intent != "All Intents": filtered_df = filtered_df[filtered_df['intent_type'] == f_intent]
     if f_tone != "All Tones": filtered_df = filtered_df[filtered_df['tone'] == f_tone]
 
-    # --- Trend Analysis Section ---
+    # --- Trend Analysis ---
     if not filtered_df.empty:
         st.subheader("📈 Vulnerability Trend Analysis")
         trend_data = filtered_df.groupby(filtered_df['published_at'].dt.date)['contextual_score'].mean().reset_index()
@@ -148,24 +150,19 @@ if not df.empty:
     for idx, row in page_df.iterrows():
         with st.container(border=True):
             c_img, c_body, c_risk = st.columns([1, 2.5, 1.2])
-            
             with c_img:
                 st.image(row['image_url'] if row['image_url'] else "https://via.placeholder.com/400")
-            
             with c_body:
                 st.subheader(row['title'])
                 st.markdown(f"`📍 {row['country']}` `👤 {row['actor']}` `🎯 {row['intent_type']}`")
                 st.write(f"**Strategic Insight:** {row['summary']}")
-                
                 t_colors = {"Alarmist": "#ff4b4b", "Sensationalist": "#ffa500", "Cynical": "#9b59b6", "Factual": "#2ecc71"}
                 t_color = t_colors.get(row['tone'], "#ffffff")
                 st.markdown(f"**Media Tone:** <span style='color:{t_color}; font-weight:bold;'>{row['tone'].upper()}</span>", unsafe_allow_html=True)
-                
                 st.caption(f"{row['media_outlet']} | {row['published_at'].strftime('%Y-%m-%d')}")
                 st.link_button("View Source", row['url'])
-
             with c_risk:
-                # UNIQUE KEY PER CHART FIX
+                # UNIQUE KEY FOR STABILITY
                 st.plotly_chart(create_radar(row['contextual_score'], row['tone']), width='stretch', key=f"radar_chart_{idx}")
                 score_pct = int(row['contextual_score'] * 100)
                 st.markdown(f"<h1 style='text-align:center; color:#ff4b4b; margin-bottom:0;'>{score_pct}%</h1>", unsafe_allow_html=True)
