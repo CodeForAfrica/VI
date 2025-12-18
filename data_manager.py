@@ -103,36 +103,57 @@ class DataManager:
     def update_news(self, days=28):
         all_articles = []
         
-        # Build GDELT queries: one per country to avoid query too long
-        for country in self.countries:
-            # Combine actors into a single OR clause
-            actor_clause = " OR ".join([f'"{a}"' for a in self.actors if a != "NonState"])
-            query = f'"{country}" AND ({actor_clause})'
-            
-            gdel_url = (
-                "https://api.gdeltproject.org/api/v2/doc/doc?"
-                f"q={query}&"
-                "mode=artlist&"
-                "format=json&"
-                "maxrecords=100&"
-                f"timespan={days}D"
-            )
-            
-            try:
-                response = requests.get(gdel_url, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    articles = data.get('articles', [])
-                    all_articles.extend(articles)
-                    st.sidebar.write(f"✓ GDELT: {len(articles)} articles for {country}")
-                else:
-                    st.sidebar.warning(f"GDELT error for {country}: {response.status_code}")
-                time.sleep(0.5)  # Be kind to GDELT
-            except Exception as e:
-                st.sidebar.error(f"Request failed for {country}: {e}")
-                continue
-
-        st.sidebar.write(f"📥 Total GDELT articles fetched: {len(all_articles)}")
+        # Map your internal codes to real-world names for GDELT
+        actor_names = {
+            "China": "China",
+            "France": "France",
+            "UnitedStates": "United States",
+            "Russia": "Russia",
+            "Rwanda": "Rwanda",
+            "Saudi": "Saudi Arabia",
+            "Turkey": "Turkey",
+            "UAE": "United Arab Emirates",
+            "Israel": "Israel",
+            "Iran": "Iran"
+            # Exclude "NonState" — GDELT won't recognize it
+        }
+    
+        country_names = {
+            "Senegal": "Senegal",
+            "DRC": "Democratic Republic of the Congo",  # GDELT uses full name
+            "CoteIvoire": "Côte d'Ivoire",
+            "Ethiopia": "Ethiopia"
+        }
+    
+        for country_code in self.countries:
+            country_gdelt = country_names.get(country_code, country_code)
+            # Try 1 actor at a time to keep query simple
+            for actor_code, actor_gdelt in actor_names.items():
+                query = f'"{country_gdelt}" "{actor_gdelt}"'
+                gdel_url = (
+                    "https://api.gdeltproject.org/api/v2/doc/doc?"
+                    f"q={requests.utils.quote(query)}&"
+                    "mode=artlist&"
+                    "format=json&"
+                    "maxrecords=100&"
+                    f"timespan={days}D"
+                )
+                
+                try:
+                    response = requests.get(gdel_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        articles = data.get('articles', [])
+                        all_articles.extend(articles)
+                        st.sidebar.write(f"✓ {country_code} + {actor_code}: {len(articles)} articles")
+                    else:
+                        st.sidebar.warning(f"⚠️ HTTP {response.status_code} for {country_code}/{actor_code}")
+                    time.sleep(0.3)  # Rate limit
+                except Exception as e:
+                    st.sidebar.error(f"❌ Failed: {country_code}/{actor_code} - {str(e)[:60]}")
+                    continue
+    
+        st.sidebar.write(f"📥 Total raw articles: {len(all_articles)}")
         
         count = 0
         seen_urls = set()
@@ -150,7 +171,7 @@ class DataManager:
             # ONLY keep valid country/actor pairs
             if facts['country'] not in self.countries or facts['actor'] not in self.actors:
                 continue
-
+    
             score = self.calculate_intent_risk(facts['actor'], facts['country'], facts['intent'])
             extra_data = json.dumps({"tone": facts['tone'], "summary": facts['summary']})
             
@@ -180,7 +201,6 @@ class DataManager:
                 
         st.sidebar.success(f"✅ Synced {count} new relevant articles!")
         return count
-
     @st.cache_data(ttl=300, show_spinner=False)
     def fetch_articles(_self, limit=500, _cache_version="v2_gdelt_fixed"):
         query = text("SELECT * FROM articles ORDER BY published_at DESC LIMIT :l")
