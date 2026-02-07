@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
 from dashboard.services.summarizer import get_summary
@@ -13,6 +13,14 @@ from xhtml2pdf import pisa
 from io import BytesIO
 from datetime import datetime
 import base64
+import json
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import re
+from collections import defaultdict
+from django.db.models.functions import TruncMonth, TruncYear
+from django.db.models import DateTimeField
+from django.views.decorators.http import require_http_methods
 
 # =========================
 # CII CONSTANTS & HELPERS
@@ -216,6 +224,253 @@ def compute_finalrisk(CA, avg_base=0.4):
     return final
 
 # =========================
+# CHATBOT ASSISTANCE SYSTEM
+# =========================
+
+class DisinfoAnalysisChatbot:
+    """AI-powered chatbot for answering questions about disinformation analysis"""
+    
+    def __init__(self):
+        self.knowledge_base = {
+            'database_structure': {
+                'tables': ['MediaNarrative', 'Journalist', 'MediaOutlet'],
+                'fields': {
+                    'MediaNarrative': [
+                        'article_text', 'posting_time', 'media_outlet', 'inferred_actor',
+                        'strategic_intent', 'sector', 'tone', 'target_country', 'url',
+                        'confidence', 'lang_detect', 'use_afrolm', 'vulnerability_index'
+                    ],
+                    'Journalist': ['name', 'city', 'country_based', 'nationality', 'profiles'],
+                    'MediaOutlet': ['name', 'parent_organisation', 'website', 'country', 'city']
+                }
+            },
+            'analytics': {
+                'vulnerability_index': 'Composite risk score combining ML predictions with geopolitical factors',
+                'strategic_intent': 'Predicted intent behind the narrative (Economic, Sovereignty, etc.)',
+                'tone': 'Sentiment analysis of the article content',
+                'confidence': 'Confidence score of ML predictions',
+                'cii': 'Country Influence Index - measures foreign influence impact'
+            },
+            'data_sources': 'MediaCloud API for news articles, ML models for analysis, Geopolitical data for CII'
+        }
+    
+    def process_query(self, query):
+        """Process user query and return relevant response"""
+        query_lower = query.lower()
+        
+        # Analyze the query type
+        if any(word in query_lower for word in ['count', 'number', 'how many', 'total']):
+            return self._handle_count_query(query_lower)
+        elif any(word in query_lower for word in ['trend', 'change', 'over time', 'monthly', 'yearly']):
+            return self._handle_trend_query(query_lower)
+        elif any(word in query_lower for word in ['average', 'mean', 'typical', 'usual']):
+            return self._handle_average_query(query_lower)
+        elif any(word in query_lower for word in ['compare', 'comparison', 'vs', 'versus']):
+            return self._handle_comparison_query(query_lower)
+        elif any(word in query_lower for word in ['cii', 'index', 'risk', 'vulnerability']):
+            return self._handle_cii_query(query_lower)
+        elif any(word in query_lower for word in ['actor', 'country', 'media']):
+            return self._handle_specific_entity_query(query_lower)
+        else:
+            return self._handle_general_query(query_lower)
+    
+    def _handle_count_query(self, query):
+        """Handle queries about counts and numbers"""
+        if 'articles' in query or 'narratives' in query:
+            total = MediaNarrative.objects.count()
+            recent = MediaNarrative.objects.filter(posting_time__isnull=False).order_by('-posting_time').first()
+            if recent:
+                recent_date = recent.posting_time.strftime('%Y-%m-%d') if recent.posting_time else 'Unknown'
+                return f"We have analyzed {total:,} articles in our database. The most recent article was published on {recent_date}."
+            else:
+                return f"We have analyzed {total:,} articles in our database."
+        
+        elif 'countries' in query:
+            countries = MediaNarrative.objects.exclude(target_country__in=['', 'Unknown', None]).values_list('target_country', flat=True).distinct().count()
+            return f"We monitor disinformation activities across {countries} African countries: {', '.join(COUNTRIES)}."
+        
+        elif 'actors' in query:
+            actors = MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values_list('inferred_actor', flat=True).distinct().count()
+            return f"We track {actors} foreign actors: {', '.join(FOREIGN_ACTORS)}."
+        
+        elif 'outlets' in query:
+            outlets = MediaNarrative.objects.exclude(media_outlet__in=['', 'Unknown', None]).values_list('media_outlet', flat=True).distinct().count()
+            return f"We monitor content from {outlets} different media outlets."
+        
+        else:
+            return "I can provide information about article counts, country coverage, and actor tracking. What specific count would you like to know?"
+    
+    def _handle_trend_query(self, query):
+        """Handle queries about trends and time series"""
+        if 'recent' in query or 'last' in query:
+            recent_articles = MediaNarrative.objects.exclude(title__isnull=True).order_by('-posting_time')[:3]
+            if recent_articles.exists():
+                recent_titles = []
+                for article in recent_articles:
+                    title_preview = article.title[:50] + '...' if len(article.title) > 50 else article.title
+                    date_str = article.posting_time.strftime('%Y-%m-%d') if article.posting_time else 'Unknown'
+                    recent_titles.append(f"'{title_preview}' ({date_str})")
+                return f"Recent articles: {', '.join(recent_titles)}"
+        
+        elif 'monthly' in query or 'trend' in query:
+            monthly_data = MediaNarrative.objects.annotate(
+                month=TruncMonth('posting_time')
+            ).values('month').annotate(count=Count('id')).order_by('-month')[:6]
+            
+            if monthly_data:
+                trend_desc = "Based on recent data, disinformation activity has been "
+                data_list = list(monthly_data)
+                if len(data_list) >= 2:
+                    current_month = data_list[0]['count']
+                    prev_month = data_list[1]['count']
+                    if current_month > prev_month:
+                        trend_desc += f"increasing (current: {current_month}, previous: {prev_month})"
+                    elif current_month < prev_month:
+                        trend_desc += f"decreasing (current: {current_month}, previous: {prev_month})"
+                    else:
+                        trend_desc += f"stable at around {current_month} articles per month"
+                else:
+                    trend_desc += f"at {data_list[0]['count']} articles per month"
+                
+                return f"{trend_desc}. We track monthly trends to identify patterns in disinformation campaigns."
+            else:
+                return "I don't have enough data to show monthly trends yet."
+        
+        else:
+            return "I can analyze trends in disinformation activity over time. Would you like to know about recent trends or monthly patterns?"
+    
+    def _handle_average_query(self, query):
+        """Handle queries about averages"""
+        if 'confidence' in query:
+            avg_confidence = MediaNarrative.objects.aggregate(Avg('confidence'))['confidence__avg']
+            if avg_confidence:
+                return f"The average confidence score of our ML predictions is {avg_confidence:.3f} (scale 0-1). Higher scores indicate more reliable predictions."
+        
+        elif 'vulnerability' in query or 'risk' in query:
+            avg_vulnerability = MediaNarrative.objects.aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
+            if avg_vulnerability:
+                return f"The average vulnerability index across all articles is {avg_vulnerability:.3f} (scale 0-1). This combines ML analysis with geopolitical risk factors."
+        
+        else:
+            return "I can provide average values for confidence scores and vulnerability indices. What specific metric would you like to know about?"
+    
+    def _handle_comparison_query(self, query):
+        """Handle comparison queries"""
+        if any(word in query for word in ['actors', 'actor', 'foreign']):
+            actor_stats = MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').annotate(count=Count('id')).order_by('-count')[:5]
+            if actor_stats:
+                comparisons = [f"{stat['inferred_actor']}: {stat['count']} articles" for stat in actor_stats]
+                return f"Most active actors: {', '.join(comparisons)}"
+        
+        elif any(word in query for word in ['countries', 'country', 'target']):
+            country_stats = MediaNarrative.objects.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(count=Count('id')).order_by('-count')[:5]
+            if country_stats:
+                comparisons = [f"{stat['target_country']}: {stat['count']} articles" for stat in country_stats]
+                return f"Most targeted countries: {', '.join(comparisons)}"
+        
+        elif any(word in query for word in ['intents', 'intent', 'strategic']):
+            intent_stats = MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
+            if intent_stats:
+                comparisons = [f"{stat['strategic_intent']}: {stat['count']} articles" for stat in intent_stats]
+                return f"Most common strategic intents: {', '.join(comparisons)}"
+        
+        else:
+            return "I can compare activity levels between different actors, countries, and strategic intents. What comparison would you like to see?"
+    
+    def _handle_cii_query(self, query):
+        """Handle queries about Country Influence Index"""
+        return f"The Country Influence Index (CII) measures foreign influence impact on African countries. It uses factors like debt, military presence, resource control, and election influence. Our model tracks {len(ACTORS)} major actors across {len(COUNTRIES)} African countries using sophisticated geopolitical risk models. Each actor-country pair gets a risk score between 0-1."
+    
+    def _handle_specific_entity_query(self, query):
+        """Handle queries about specific entities"""
+        if 'actor' in query:
+            # Find specific actor mentions
+            for actor in FOREIGN_ACTORS:
+                if actor.lower() in query:
+                    count = MediaNarrative.objects.filter(inferred_actor__iexact=actor).count()
+                    return f"Articles mentioning {actor}: {count} articles. {actor} is typically associated with {self._get_actor_profile(actor)}."
+        
+        elif 'country' in query:
+            # Find specific country mentions
+            for country in COUNTRIES:
+                if country.lower() in query.replace(' ', ''):
+                    count = MediaNarrative.objects.filter(target_country__iexact=country).count()
+                    return f"Articles targeting {country}: {count} articles. {country} is monitored for foreign influence activities."
+        
+        elif 'media' in query or 'outlet' in query:
+            # Find specific media outlet mentions
+            outlets = MediaNarrative.objects.exclude(media_outlet__in=['', 'Unknown', None]).values_list('media_outlet', flat=True).distinct()[:5]
+            return f"We monitor these media outlets: {', '.join(outlets)}. Each outlet is analyzed for disinformation content."
+        
+        return "I can provide detailed information about specific actors, countries, or media outlets. What would you like to know?"
+    
+    def _get_actor_profile(self, actor):
+        """Get profile information about an actor"""
+        profiles = {
+            'France': 'focuses on economic ties and cultural influence',
+            'China': 'emphasizes infrastructure investments and trade partnerships',
+            'US': 'concentrates on security cooperation and democratic institutions',
+            'Russia': 'prioritizes military partnerships and energy deals',
+            'UAE': 'invests heavily in telecommunications and real estate',
+            'Turkey': 'engages in infrastructure projects and diplomatic initiatives',
+            'Saudi Arabia': 'focuses on religious and economic partnerships',
+            'Israel': 'emphasizes technology and security cooperation',
+            'Iran': 'seeks regional influence and economic ties'
+        }
+        return profiles.get(actor, 'various international activities')
+    
+    def _handle_general_query(self, query):
+        """Handle general informational queries"""
+        if any(word in query for word in ['what', 'tell me', 'explain', 'how', 'why']):
+            if 'vulnerability' in query or 'risk' in query:
+                return "The vulnerability index combines our ML predictions (strategic intent, tone) with geopolitical risk factors (debt, military presence, resource dependency) to assess potential impact of disinformation campaigns. Scores range from 0 (low risk) to 1 (high risk)."
+            elif 'strategic intent' in query or 'intent' in query:
+                return "Strategic intent refers to the underlying purpose behind narratives. Our ML models classify intents like Economic, Sovereignty, ElectionInfluence, MilitaryPresence, etc., based on content analysis and geopolitical context."
+            elif 'tone' in query:
+                return "Tone analysis determines the sentiment and emotional framing of articles. This helps identify whether content is positive, negative, critical, or supportive, which indicates potential manipulation tactics."
+            elif 'confidence' in query:
+                return "Confidence scores (0-1 scale) indicate the reliability of our ML predictions. Higher scores mean the model is more certain about its classifications. We use calibrated ensembles for more accurate confidence estimates."
+            elif 'database' in query or 'data' in query:
+                return f"Our database contains {MediaNarrative.objects.count():,} articles with rich metadata. We track articles from {MediaNarrative.objects.exclude(media_outlet__in=['', 'Unknown', None]).values_list('media_outlet', flat=True).distinct().count()} media outlets across {len(COUNTRIES)} African countries."
+            else:
+                return "I can help you understand our disinformation monitoring platform. I can explain our analytics, answer questions about data, and provide insights about trends. What would you like to know?"
+        
+        return "I'm here to help you understand our disinformation monitoring platform. You can ask me about article counts, trends, confidence scores, vulnerability indices, or any aspect of our analysis. Try asking 'How many articles do you have?' or 'What are the most active actors?'"
+
+# Global chatbot instance
+chatbot = DisinfoAnalysisChatbot()
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def chatbot_response(request):
+    """API endpoint for chatbot responses"""
+    try:
+        data = json.loads(request.body)
+        user_message = data.get('message', '').strip()
+        
+        if user_message:
+            bot_response = chatbot.process_query(user_message)
+            return JsonResponse({
+                'response': bot_response,
+                'success': True
+            })
+        else:
+            return JsonResponse({
+                'response': 'Please provide a message.',
+                'success': False
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'response': 'Invalid JSON format.',
+            'success': False
+        })
+    except Exception as e:
+        return JsonResponse({
+            'response': f'Error processing your request: {str(e)}',
+            'success': False
+        })
+
+# =========================
 # OVERVIEW PAGE
 # =========================
 def overview(request):
@@ -248,14 +503,23 @@ def overview(request):
 
     # Key Stats (from full dataset)
     full_stats_qs = MediaNarrative.objects.all()
-    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent__exact='').values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__exact='').values('inferred_actor').distinct().count()
+    unique_outlets = full_stats_qs.exclude(media_outlet__in=['', 'Unknown', None]).values('media_outlet').distinct().count()
+    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
+    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
+
+    # Average vulnerability index and confidence
+    stats = full_stats_qs.aggregate(
+        avg_vulnerability=Avg('vulnerability_index'),
+        avg_confidence=Avg('confidence')
+    )
+    avg_vulnerability = stats['avg_vulnerability']
+    avg_confidence = stats['avg_confidence']
 
     # Chart: Full narrative volume over time
     chart_qs = MediaNarrative.objects.all()
     if chart_qs.exists():
         df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
+        df = df.dropna(subset=['posting_time'])
         df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
         daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
 
@@ -284,10 +548,10 @@ def overview(request):
         article.summary = get_summary(article.article_text)
 
     # Filter choices for dropdowns
-    outlet_choices = MediaNarrative.objects.values('media_outlet').distinct().order_by('media_outlet')
-    country_choices = MediaNarrative.objects.values('target_country').distinct().order_by('target_country')
-    intent_choices = MediaNarrative.objects.values('strategic_intent').distinct().order_by('strategic_intent')
-    tone_choices = MediaNarrative.objects.values('tone').distinct().order_by('tone')
+    outlet_choices = MediaNarrative.objects.exclude(media_outlet__in=['', 'Unknown', None]).values('media_outlet').distinct().order_by('media_outlet')
+    country_choices = MediaNarrative.objects.exclude(target_country__in=['', 'Unknown', None]).values('target_country').distinct().order_by('target_country')
+    intent_choices = MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().order_by('strategic_intent')
+    tone_choices = MediaNarrative.objects.exclude(tone__in=['', 'Unknown', None]).values('tone').distinct().order_by('tone')
 
     context = {
         'chart': chart,
@@ -296,6 +560,8 @@ def overview(request):
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
+        'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
+        'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
 
         'outlet_choices': outlet_choices,
         'country_choices': country_choices,
@@ -312,16 +578,9 @@ def overview(request):
     }
     return render(request, 'overview.html', context)
 
-
 # =========================
 # COUNTRIES PAGE
 # =========================
-
-
-
-
-TARGET_POWERS = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Arabia', 'Israel', 'Iran']
-
 def countries(request):
     selected_country = request.GET.get('country', '').strip()
 
@@ -331,7 +590,7 @@ def countries(request):
         qs = qs.filter(target_country__iexact=selected_country)
 
     # 1. Top African countries by total articles (target_country)
-    top_publishers = MediaNarrative.objects.values('target_country').annotate(
+    top_publishers = MediaNarrative.objects.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(
         article_count=Count('target_country')
     ).order_by('-article_count')[:10]
 
@@ -354,7 +613,7 @@ def countries(request):
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     # 2. Top subjects mentioned (inferred_actor)
-    top_subjects = MediaNarrative.objects.values('inferred_actor').annotate(
+    top_subjects = MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').annotate(
         mention_count=Count('inferred_actor')
     ).order_by('-mention_count')[:10]
 
@@ -376,7 +635,7 @@ def countries(request):
         fig.update_layout(height=500, showlegend=False, template="plotly_white")
         subject_chart = fig.to_html(full_html=False, include_plotlyjs=False)
 
-    # Simple table of top publishers (since target coverage is 0)
+    # Simple table of top publishers
     coverage_table = list(top_publishers)
 
     sample_articles = qs[:5]
@@ -389,11 +648,10 @@ def countries(request):
         'selected_country': selected_country or "All Countries",
     }
     return render(request, 'dashboard/countries.html', context)
+
 # =========================
 # AUTHORS PAGE
 # =========================
-
-
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
 
@@ -452,16 +710,16 @@ def authors(request):
     }
     return render(request, 'dashboard/authors.html', context)
 
-
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
-    articles = Article.objects.all().order_by("-posting_time")
+    # Using MediaNarrative instead of Article
+    articles = MediaNarrative.objects.all().order_by("-posting_time")
 
     if search_query:
         articles = articles.filter(article_text__icontains=search_query)
 
-    paginator = Paginator(articles, 5)  # ✅ 5 articles per page
+    paginator = Paginator(articles, 5)  # 5 articles per page
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
@@ -470,8 +728,6 @@ def articles_view(request):
         "search_query": search_query,
     }
     return render(request, "articles.html", context)
-
-
 
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
@@ -533,7 +789,7 @@ def media(request):
         'target_countries': TARGET_COUNTRIES,
     }
     return render(request, 'dashboard/media.html', context)
- 
+
 def intents(request):
     intent_name = request.GET.get('intent', '').strip()
 
@@ -571,8 +827,6 @@ def intents(request):
         intents_chart = "<p class='text-center text-muted'>No strategic intent data available.</p>"
 
     # Chart 2: Top 5 Strategic Intents per Target Country
-    TARGET_COUNTRIES = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Arabia', 'Israel', 'Iran']
-
     # Get top 5 intents overall (from full dataset)
     top_5_intents = (
         MediaNarrative.objects
@@ -673,8 +927,6 @@ def cii(request):
     }
     return render(request, 'dashboard/cii.html', context)
 
-
-
 def all_articles(request):
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
@@ -704,8 +956,6 @@ def all_articles(request):
     }
     return render(request, 'dashboard/all_articles.html', context)
 
-
-
 def generate_report(request):
     selected_country = request.GET.get('country')
     selected_actors = request.GET.getlist('actors')  # Multiple selection allowed
@@ -729,7 +979,6 @@ def generate_report(request):
     final = compute_finalrisk(CA)
 
     for actor in selected_actors:
-        actor_map = {"US": "UnitedStates"}
         norm_actor = actor_map.get(actor, actor)
         if selected_country in COUNTRIES and norm_actor in ACTORS:
             score = final["Economic"][norm_actor][selected_country]
