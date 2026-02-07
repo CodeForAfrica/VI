@@ -13,7 +13,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 # Security: Allow specific hosts only
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,3.254.121.126,ec2-3-254-121-126.eu-west-1.compute.amazonaws.com').split(',')
 
-NSTALLED_APPS = [
+INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
