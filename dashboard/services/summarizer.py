@@ -10,7 +10,7 @@ def _get_summarizer_en():
     if _summarizer_en is None:
         from transformers import pipeline
         _summarizer_en = pipeline(
-            "text2text-generation",
+            "text-generation",
             model="facebook/bart-large-cnn",
             tokenizer="facebook/bart-large-cnn",
             device=-1  # CPU
@@ -23,7 +23,7 @@ def _get_summarizer_fr():
     if _summarizer_fr is None:
         from transformers import pipeline
         _summarizer_fr = pipeline(
-            "text2text-generation",
+            "text-generation",
             model="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
             tokenizer="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
             device=-1
@@ -60,21 +60,25 @@ def get_summary(text):
         # Load appropriate summarizer based on language
         if detected_lang == 'fr':
             summarizer = _get_summarizer_fr()
-            summary_text = summarizer(
+            outputs = summarizer(
                 text,
                 max_length=150,
                 min_length=50,
-                do_sample=False
-            )[0]['generated_text']  # Use 'generated_text' for text2text-generation
+                do_sample=False,
+                pad_token_id=50256  # Added to prevent warning
+            )
+            summary_text = outputs[0]['generated_text'][len(text):].strip()
         else:
             # Default to English for 'en' or any other language
             summarizer = _get_summarizer_en()
-            summary_text = summarizer(
+            outputs = summarizer(
                 text,
                 max_length=150,
                 min_length=50,
-                do_sample=False
-            )[0]['generated_text']  # Use 'generated_text' for text2text-generation
+                do_sample=False,
+                pad_token_id=50256  # Added to prevent warning
+            )
+            summary_text = outputs[0]['generated_text'][len(text):].strip()
 
         return summary_text.strip()
 
