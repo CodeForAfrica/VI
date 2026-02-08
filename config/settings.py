@@ -2,16 +2,25 @@ import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: Don't expose secret key in code
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'fallback-secret-key-for-development')
+# SECURITY WARNING: keep the secret key used in production secret!
+# Handle special characters in secret key
+try:
+    # Try to get from environment variable first
+    SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'fallback-secret-key-for-development')
+    # If it's the fallback, use the actual key
+    if SECRET_KEY == 'fallback-secret-key-for-development':
+        SECRET_KEY = "(@lhxdh^3z1aea9xjny21q^0crno_h48*3!y7en!g#x(5^*zad"
+except:
+    # Fallback if environment variable access fails
+    SECRET_KEY = "(@lhxdh^3z1aea9xjny21q^0crno_h48*3!y7en!g#x(5^*zad"
 
 # SECURITY WARNING: Don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Security: Allow specific hosts only
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,3.254.121.126,ec2-3-254-121-126.eu-west-1.compute.amazonaws.com').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'ec2-3-254-121-126.eu-west-1.compute.amazonaws.com').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -59,10 +68,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('DB_NAME', 'postgres'),
         'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),  # NEVER hardcoded
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST', 'ec2-3-254-121-126.eu-west-1.compute.amazonaws.com'),  # Your actual RDS endpoint
         'PORT': os.getenv('DB_PORT', '5432'),
-        'CONN_MAX_AGE': 600,
     }
 }
 
