@@ -1,23 +1,33 @@
 from transformers import pipeline
+import re
 
-# Language detection model (supports English, French, and many others)
-lang_detector = pipeline(
-    "text-classification",
-    model="papluca/xlm-roberta-base-language-detection",
-    return_all_scores=False
-)
+# Simple language detection function (avoids problematic model)
+def detect_language_simple(text):
+    """Simple language detection based on character patterns and common words"""
+    text_lower = text.lower()[:512]  # First 512 chars for speed
+    
+    # Common French words
+    french_words = ['le', 'la', 'les', 'des', 'du', 'de', 'et', 'est', 'que', 'qui', 'ce', 'se', 'ne', 'pas', 'dans', 'pour', 'avec', 'sur', 'par']
+    french_count = sum(1 for word in french_words if f' {word} ' in f' {text_lower} ')
+    
+    # If more than 3 French indicators, assume French
+    if french_count > 3:
+        return 'fr'
+    
+    # Otherwise assume English (or other languages)
+    return 'en'
 
-# English summarizer (high quality) - using legacy format
+# English summarizer - using 'text2text-generation' (available task)
 summarizer_en = pipeline(
-    "summarization",
+    "text2text-generation",
     model="facebook/bart-large-cnn",
     tokenizer="facebook/bart-large-cnn",
     device=-1  # CPU
 )
 
-# French summarizer (excellent for French text) - using legacy format
+# French summarizer - using 'text2text-generation' (available task)
 summarizer_fr = pipeline(
-    "summarization",
+    "text2text-generation",
     model="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
     tokenizer="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
     device=-1
@@ -32,18 +42,17 @@ def get_summary(text):
         return "Summary not available (article too short)."
 
     try:
-        # Detect language using first 512 characters (fast & accurate)
-        lang_result = lang_detector(text[:512])[0]
-        detected_lang = lang_result['label'].lower()
-
+        # Simple language detection (avoids problematic papluca model)
+        detected_lang = detect_language_simple(text)
+        
         # Choose summarizer based on language
-        if 'fr' in detected_lang:
+        if detected_lang == 'fr':
             summary_text = summarizer_fr(
                 text,
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['summary_text']
+            )[0]['generated_text']  # Use 'generated_text' for text2text-generation
         else:
             # Default to English for 'en' or any other language
             summary_text = summarizer_en(
@@ -51,7 +60,7 @@ def get_summary(text):
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['summary_text']
+            )[0]['generated_text']  # Use 'generated_text' for text2text-generation
 
         return summary_text.strip()
 
