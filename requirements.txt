@@ -1,5 +1,6 @@
 pandas
 sqlalchemy
+xhtml2pdf==0.2.11
 fpdf2
 plotly
 groq
