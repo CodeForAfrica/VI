@@ -6,7 +6,7 @@ from datetime import datetime
 from django.conf import settings
 from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import MLInferenceService
-from dashboard.services.text_summarization_service import get_summary  # Add this import
+from .summarizer import get_summary
 
 logger = logging.getLogger(__name__)
 
