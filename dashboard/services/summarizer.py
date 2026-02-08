@@ -9,14 +9,14 @@ lang_detector = pipeline(
 
 # English summarizer (high quality)
 summarizer_en = pipeline(
-    "summarization",
+    "text2text-generation",  # Changed from "summarization"
     model="facebook/bart-large-cnn",
     device=-1  # CPU
 )
 
 # French summarizer (excellent for French text)
 summarizer_fr = pipeline(
-    "summarization",
+    "text2text-generation",  # Changed from "summarization"
     model="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
     device=-1
 )
@@ -41,7 +41,7 @@ def get_summary(text):
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['summary_text']
+            )[0]['generated_text']  # Changed from 'summary_text' to 'generated_text'
         else:
             # Default to English for 'en' or any other language
             summary_text = summarizer_en(
@@ -49,7 +49,7 @@ def get_summary(text):
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['summary_text']
+            )[0]['generated_text']  # Changed from 'summary_text' to 'generated_text'
 
         return summary_text.strip()
 
