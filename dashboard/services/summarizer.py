@@ -7,17 +7,19 @@ lang_detector = pipeline(
     return_all_scores=False
 )
 
-# English summarizer (high quality)
+# English summarizer (high quality) - using legacy format
 summarizer_en = pipeline(
-    "text2text-generation",  # Changed from "summarization"
+    "summarization",
     model="facebook/bart-large-cnn",
+    tokenizer="facebook/bart-large-cnn",
     device=-1  # CPU
 )
 
-# French summarizer (excellent for French text)
+# French summarizer (excellent for French text) - using legacy format
 summarizer_fr = pipeline(
-    "text2text-generation",  # Changed from "summarization"
+    "summarization",
     model="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
+    tokenizer="mrm8488/camembert2camembert_shared-finetuned-french-summarization",
     device=-1
 )
 
@@ -41,7 +43,7 @@ def get_summary(text):
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['generated_text']  # Changed from 'summary_text' to 'generated_text'
+            )[0]['summary_text']
         else:
             # Default to English for 'en' or any other language
             summary_text = summarizer_en(
@@ -49,9 +51,15 @@ def get_summary(text):
                 max_length=150,
                 min_length=50,
                 do_sample=False
-            )[0]['generated_text']  # Changed from 'summary_text' to 'generated_text'
+            )[0]['summary_text']
 
         return summary_text.strip()
 
     except Exception as e:
         return f"Summary generation failed: {str(e)}"
+
+# Test the module
+if __name__ == "__main__":
+    sample = "This is a test."
+    result = get_summary(sample)
+    print(f"Test result: {result}")
