@@ -69,7 +69,7 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME', 'postgres'),
         'USER': os.getenv('DB_USER', 'postgres'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'ec2-3-254-121-126.eu-west-1.compute.amazonaws.com'),  # Your actual RDS endpoint
+        'HOST': os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com'),  # Your actual RDS endpoint
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
