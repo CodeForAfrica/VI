@@ -508,21 +508,21 @@ def overview(request):
     unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
 
     # Average vulnerability index and confidence
-    from django.db.models import Avg
+    from django.db.models import Avg  # Move this import inside function if needed
 
-# Handle the case where all values are NULL
-try:
-    stats = full_stats_qs.aggregate(
-        avg_vulnerability=Avg('vulnerability_index'),
-        avg_confidence=Avg('confidence')
-    )
-    # Convert None to appropriate default values
-    avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
-    avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
-except Exception as e:
-    # Fallback if anything goes wrong
-    avg_vulnerability = 0.0
-    avg_confidence = 0.0
+    # Handle the case where all values are NULL
+    try:
+        stats = full_stats_qs.aggregate(
+            avg_vulnerability=Avg('vulnerability_index'),
+            avg_confidence=Avg('confidence')
+        )
+        # Convert None to appropriate default values
+        avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
+        avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
+    except Exception as e:
+        # Fallback if anything goes wrong
+        avg_vulnerability = 0.0
+        avg_confidence = 0.0
 
     # Chart: Full narrative volume over time
     chart_qs = MediaNarrative.objects.all()
@@ -585,8 +585,7 @@ except Exception as e:
         'selected_tone': tone,
         'search_query': search_query,
     }
-return render(request, 'overview.html', context)
-
+    return render(request, 'overview.html', context)
 # =========================
 # COUNTRIES PAGE
 # =========================
