@@ -72,7 +72,7 @@ class MediaNarrative(Model):
 
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
-
+    vulnerability_index = FloatField(null=True, blank=True)
     class Meta:
         ordering = ['-posting_time']
         verbose_name = "Media Narrative"
