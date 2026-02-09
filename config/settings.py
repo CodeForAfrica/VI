@@ -20,7 +20,7 @@ except:
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Security: Allow specific hosts only
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'ec2-3-254-121-126.eu-west-1.compute.amazonaws.com').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS = ['0.0.0.0', '127.0.0.1', '*', '3.254.121.126']').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
