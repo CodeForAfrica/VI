@@ -585,7 +585,7 @@ except Exception as e:
         'selected_tone': tone,
         'search_query': search_query,
     }
-    return render(request, 'overview.html', context)
+return render(request, 'overview.html', context)
 
 # =========================
 # COUNTRIES PAGE
