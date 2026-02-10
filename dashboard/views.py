@@ -21,6 +21,7 @@ from collections import defaultdict
 from django.db.models.functions import TruncMonth, TruncYear
 from django.db.models import DateTimeField
 from django.views.decorators.http import require_http_methods
+from groq import Groq
 
 # =========================
 # CII CONSTANTS & HELPERS
