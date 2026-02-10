@@ -8,8 +8,6 @@ import torch.nn.functional as F
 from django.conf import settings
 import logging
 from sklearn.preprocessing import LabelEncoder
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from peft import PeftModel
 import joblib
 import json
 import importlib.util
@@ -21,12 +19,14 @@ logger = logging.getLogger(__name__)
 class MLInferenceService:
     def __init__(self):
         # Only initialize S3 client if AWS credentials are available
-        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY and settings.S3_MODELS_BUCKET:
+        if hasattr(settings, 'AWS_ACCESS_KEY_ID') and settings.AWS_ACCESS_KEY_ID and \
+           hasattr(settings, 'AWS_SECRET_ACCESS_KEY') and settings.AWS_SECRET_ACCESS_KEY and \
+           hasattr(settings, 'S3_MODELS_BUCKET') and settings.S3_MODELS_BUCKET:
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                 aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_S3_REGION_NAME
+                region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'eu-west-1')
             )
             self.bucket_name = settings.S3_MODELS_BUCKET
         else:
@@ -385,118 +385,4 @@ class MLInferenceService:
                         # Get the contextual risk value
                         if formatted_country in CA[intent_category] and formatted_actor:
                             if formatted_actor in CA[intent_category][formatted_country]:
-                                contextual_risk = CA[intent_category][formatted_country][formatted_actor]
-                
-                # Calculate composite risk using PPI approach (from your notebook)
-                strategic_weight = 0.35
-                tone_weight = 0.25
-                confidence_weight = 0.2
-                contextual_weight = 0.2  # Contextual risk from geopolitical model
-                
-                # Map intent and tone to risk scores (from your notebook logic)
-                intent_risk = self._map_intent_to_risk(strategic_intent, CA)
-                tone_risk = self._map_tone_to_risk(tone)
-                
-                # Normalize scores
-                normalized_intent = min(max(intent_risk, 0), 1)
-                normalized_tone = min(max(tone_risk, 0), 1)
-                normalized_confidence = min(max(confidence, 0), 1)
-                normalized_contextual = min(max(contextual_risk, 0), 1)
-                
-                vulnerability_index = (
-                    (normalized_intent * strategic_weight) +
-                    (normalized_tone * tone_weight) +
-                    (normalized_confidence * confidence_weight) +
-                    (normalized_contextual * contextual_weight)
-                )
-                
-                return min(vulnerability_index, 1.0)
-                
-            except Exception as e:
-                logger.error(f"Error in contextual vulnerability calculation: {e}")
-                # Fallback to simple calculation
-                intent_scores = {
-                    'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                    'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                    'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                    'positive': 0.1, 'supportive': 0.0
-                }
-                
-                tone_scores = {
-                    'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                    'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                    'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-                }
-                
-                intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
-                tone_score = tone_scores.get(tone.lower(), 0.3)
-                
-                return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
-            
-        except Exception as e:
-            logger.error(f"Error calculating vulnerability index: {e}")
-            # Return simple fallback
-            intent_scores = {
-                'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                'positive': 0.1, 'supportive': 0.0
-            }
-            
-            tone_scores = {
-                'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-            }
-            
-            intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
-            tone_score = tone_scores.get(tone.lower(), 0.3)
-            
-            return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
-    
-    def _map_intent_to_risk(self, intent, CA):
-        """Map strategic intent to risk score using contextual analysis (from your notebook)"""
-        if not CA:
-            # Simple mapping if contextual analysis unavailable
-            intent_scores = {
-                'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                'positive': 0.1, 'supportive': 0.0
-            }
-            return intent_scores.get(intent.lower(), 0.3)
-        
-        # Use contextual risk assessment if available (from your notebook)
-        # This would typically involve matching intent to CA keys
-        for ca_intent, risk_dict in CA.items():
-            if intent.lower() in ca_intent.lower() or ca_intent.lower() in intent.lower():
-                # Return the average risk across all countries and actors
-                total_risk = 0.0
-                count = 0
-                for country_risks in risk_dict.values():
-                    for risk_value in country_risks.values():
-                        total_risk += risk_value
-                        count += 1
-                if count > 0:
-                    return min(total_risk / count, 1.0)
-        
-        return 0.3  # Default neutral risk
-    
-    def _map_tone_to_risk(self, tone):
-        """Map tone to risk score (from your notebook)"""
-        tone_scores = {
-            'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-            'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-            'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-        }
-        return tone_scores.get(tone.lower(), 0.3)
-    
-    def cleanup(self):
-        """Clean up temporary directories"""
-        import shutil
-        for temp_dir in self._temp_dirs:
-            try:
-                shutil.rmtree(temp_dir, ignore_errors=True)
-            except:
-                pass
-        self._temp_dirs.clear()
+                                contextual_risk = CA[intent_category][formatted_country][formatted
