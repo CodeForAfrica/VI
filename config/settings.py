@@ -17,8 +17,8 @@ except:
     SECRET_KEY = "(@lhxdh^3z1aea9xjny21q^0crno_h48*3!y7en!g#x(5^*zad"
 
 # SECURITY WARNING: Don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-
+#DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+ DEBUG = True
 # Security: Allow specific hosts only
 
 # Get ALLOWED_HOSTS from environment variable, with fallback to specific IPs
