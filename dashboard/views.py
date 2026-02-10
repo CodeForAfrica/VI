@@ -235,30 +235,29 @@ class DisinfoAnalysisChatbot:
         self.model = "llama-3.1-8b-instant"
 
     def get_insights_from_ai(self, query, context):
-    """Pure AI Logic using Groq"""
-    system_prompt = """
-    You are an expert analyst for the 'Africa Influence Monitor'. 
-    Analyze the provided database context to answer the user query.
-
-    STRICT FORMATING RULES:
-    1. Use **bold headers** for different sections of your analysis.
-    2. Use bullet points (•) or numbered lists for lists of facts or steps.
-    3. Keep your language precise, professional, and concise.
-    4. Avoid long paragraphs; use line breaks between distinct points.
-    5. Cite sources if they are in the context. If not in context, clarify.
-    """
-    try:
-        chat_completion = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuery: {query}"}
-            ],
-            model=self.model,
-            temperature=0.2, # Lowering this slightly (from 0.3) makes the AI more focused and less "wordy"
-        )
-        return chat_completion.choices[0].message.content
-    except Exception as e:
-        return f"AI Error: {str(e)}"
+        """Pure AI Logic using Groq"""
+        system_prompt = """
+        You are an expert analyst for the 'Africa Influence Monitor'. 
+        Analyze the provided database context to answer the user query.
+    
+        STRICT FORMATTING RULES:
+        1. Use **bold headers** for different sections.
+        2. Use bullet points (•) or numbered lists.
+        3. Keep responses concise and professional.
+        4. Use line breaks between distinct points.
+        """
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: {query}"}
+                ],
+                model=self.model,
+                temperature=0.2,
+            )
+            return chat_completion.choices[0].message.content
+        except Exception as e:
+            return f"AI Error: {str(e)}"
         
     def process_query(self, query):
         query_l = query.lower()
