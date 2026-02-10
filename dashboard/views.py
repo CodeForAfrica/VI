@@ -258,22 +258,34 @@ class DisinfoAnalysisChatbot:
         """Process user query and return relevant response"""
         query_lower = query.lower()
         
-        # Analyze the query type
+        # 1. Detection of specific entities (e.g., "France", "Ivory Coast", "Russia")
+        # This ensures that even if keywords like 'count' are missing, we still route to the entity handler.
+        has_actor = any(actor.lower() in query_lower for actor in FOREIGN_ACTORS)
+        has_country = any(country.lower() in query_lower.replace(' ', '') for country in COUNTRIES)
+    
+        # 2. Analyze the query type
         if any(word in query_lower for word in ['count', 'number', 'how many', 'total']):
             return self._handle_count_query(query_lower)
+        
         elif any(word in query_lower for word in ['trend', 'change', 'over time', 'monthly', 'yearly']):
             return self._handle_trend_query(query_lower)
+        
         elif any(word in query_lower for word in ['average', 'mean', 'typical', 'usual']):
             return self._handle_average_query(query_lower)
+        
         elif any(word in query_lower for word in ['compare', 'comparison', 'vs', 'versus']):
             return self._handle_comparison_query(query_lower)
+        
         elif any(word in query_lower for word in ['cii', 'index', 'risk', 'vulnerability']):
             return self._handle_cii_query(query_lower)
-        elif any(word in query_lower for word in ['actor', 'country', 'media']):
+    
+        # UPDATED: Triggers if keywords 'actor'/'country' are used OR if a specific name is mentioned
+        elif any(word in query_lower for word in ['actor', 'country', 'media']) or has_actor or has_country:
             return self._handle_specific_entity_query(query_lower)
+        
         else:
             return self._handle_general_query(query_lower)
-    
+        
     def _handle_count_query(self, query):
         """Handle queries about counts and numbers"""
         if 'articles' in query or 'narratives' in query:
