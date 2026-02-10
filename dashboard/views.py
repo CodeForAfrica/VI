@@ -237,14 +237,20 @@ class DisinfoAnalysisChatbot:
     def get_insights_from_ai(self, query, context):
         """Pure AI Logic using Groq"""
         system_prompt = """
-        You are an expert analyst for the 'Africa Influence Monitor'. 
-        Analyze the provided database context to answer the user query.
-    
-        STRICT FORMATTING RULES:
-        1. Use **bold headers** for different sections.
-        2. Use bullet points (•) or numbered lists.
-        3. Keep responses concise and professional.
-        4. Use line breaks between distinct points.
+        You are a Lead Analyst for the 'Africa Influence Monitor'. 
+        
+        STRICT OUTPUT SCHEME:
+        1. **Executive Summary**: A 2-sentence max overview.
+        2. **Analysis Table**: Use a Markdown table for key findings.
+           | Category | Insight | Source/Context |
+           | :--- | :--- | :--- |
+        3. **Thematic Bullet Points**: Use "•" for sub-details.
+        4. **Data Gaps**: Mention if any information is missing.
+        
+        FORMATTING RULES:
+        - Use **Bold** for emphasis.
+        - No "fluff" or conversational introductions (e.g., "Here is your analysis...").
+        - If the context contains unrelated topics (e.g., HIV and Charcoal), separate them into clearly titled sections.
         """
         try:
             chat_completion = self.client.chat.completions.create(
