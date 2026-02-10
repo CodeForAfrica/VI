@@ -379,7 +379,7 @@
                 typingIndicator.style.display = 'block';
 
                 // Send to backend
-                fetch('{% url "chatbot_response" %}', {
+                fetch('#', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
