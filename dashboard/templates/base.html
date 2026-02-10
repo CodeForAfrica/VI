@@ -370,23 +370,16 @@
             function sendMessage() {
                 const message = chatbotInput.value.trim();
                 if (!message) return;
-
-                // Add user message
+            
+                // Add user message to UI
                 addMessage(message, 'user');
                 chatbotInput.value = '';
-
+            
                 // Show typing indicator
                 typingIndicator.style.display = 'block';
-
+            
                 // Send to backend
                 fetch('{% url "chatbot_response" %}', {  
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({message: message})
-                })
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -400,12 +393,13 @@
                     if (data.success && data.response) {
                         addMessage(data.response, 'bot');
                     } else {
-                        addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+                        addMessage('Sorry, I encountered an error: ' + (data.response || 'Unknown error'), 'bot');
                     }
                 })
                 .catch(error => {
                     typingIndicator.style.display = 'none';
-                    addMessage('Connection error. Please check your internet connection.', 'bot');
+                    addMessage('Connection error. Please check your server.', 'bot');
+                    console.error('Error:', error);
                 });
             }
 
