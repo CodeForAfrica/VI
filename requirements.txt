@@ -1,4 +1,4 @@
-pandas
+pandas>=2.2.3
 sqlalchemy
 xhtml2pdf==0.2.11
 fpdf2
