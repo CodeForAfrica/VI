@@ -20,6 +20,7 @@ except:
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Security: Allow specific hosts only
+<<<<<<< HEAD
 # Get ALLOWED_HOSTS from environment variable, with fallback to specific IPs
 import os
 allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
@@ -28,6 +29,9 @@ if allowed_hosts_env:
 else:
     ALLOWED_HOSTS = ['0.0.0.0', '127.0.0.1', '*', '3.254.121.126'] 
 
+=======
+ALLOWED_HOSTS = ['0.0.0.0', '127.0.0.1', '3.254.121.126', 'localhost']
+>>>>>>> 947b7d2c08cd28aca007c772b5f83a70481644c7
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
