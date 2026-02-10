@@ -66,3 +66,30 @@ dashboard/templatetags/__pycache__/
 config/__pycache__/
 dashboard/management/commands/__pycache__/
 *.out
+# Python / Byte-code
+__pycache__/
+*.py[cod]
+*.class
+*.out
+
+# Environments
+.env
+venv/
+env/
+ENV/
+.venv/
+
+# Django specific
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Other
+node_modules/
