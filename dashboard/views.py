@@ -237,20 +237,19 @@ class DisinfoAnalysisChatbot:
     def get_insights_from_ai(self, query, context):
         """Pure AI Logic using Groq"""
         system_prompt = """
-        You are a Lead Analyst for the 'Africa Influence Monitor'. 
+        You are the Lead Analyst for 'Africa Influence Monitor'. 
+        Your goal is to extract STRATEGIC insights, not just summarize articles.
         
-        STRICT OUTPUT SCHEME:
-        1. **Executive Summary**: A 2-sentence max overview.
-        2. **Analysis Table**: Use a Markdown table for key findings.
-           | Category | Insight | Source/Context |
-           | :--- | :--- | :--- |
-        3. **Thematic Bullet Points**: Use "•" for sub-details.
-        4. **Data Gaps**: Mention if any information is missing.
+        STRICT FORMATTING RULES:
+        1. **Strategic Summary**: A 1-sentence punchy overview of the most important geopolitical or social trend.
+        2. **Analysis Table**: 
+           - Combine similar points into ONE row. 
+           - DO NOT list every article; list the THEME.
+           - Max 4 rows.
+        3. **Key Implications**: Use "•" to explain WHY this matters for regional stability or influence.
+        4. **Data Noise**: Move unrelated topics (like music or minor market reports) to a small "Miscellaneous" section at the bottom or omit them if irrelevant to 'Influence'.
         
-        FORMATTING RULES:
-        - Use **Bold** for emphasis.
-        - No "fluff" or conversational introductions (e.g., "Here is your analysis...").
-        - If the context contains unrelated topics (e.g., HIV and Charcoal), separate them into clearly titled sections.
+        Filter for: Political shifts, foreign influence, election integrity, and social stability.
         """
         try:
             chat_completion = self.client.chat.completions.create(
