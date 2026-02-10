@@ -228,63 +228,65 @@ def compute_finalrisk(CA, avg_base=0.4):
 # =========================
 
 class DisinfoAnalysisChatbot:
-    """AI-powered chatbot for answering questions about disinformation analysis"""
-    
     def __init__(self):
-        self.knowledge_base = {
-            'database_structure': {
-                'tables': ['MediaNarrative', 'Journalist', 'MediaOutlet'],
-                'fields': {
-                    'MediaNarrative': [
-                        'article_text', 'posting_time', 'media_outlet', 'inferred_actor',
-                        'strategic_intent', 'sector', 'tone', 'target_country', 'url',
-                        'confidence', 'lang_detect', 'use_afrolm', 'vulnerability_index'
-                    ],
-                    'Journalist': ['name', 'city', 'country_based', 'nationality', 'profiles'],
-                    'MediaOutlet': ['name', 'parent_organisation', 'website', 'country', 'city']
-                }
-            },
-            'analytics': {
-                'vulnerability_index': 'Composite risk score combining ML predictions with geopolitical factors',
-                'strategic_intent': 'Predicted intent behind the narrative (Economic, Sovereignty, etc.)',
-                'tone': 'Sentiment analysis of the article content',
-                'confidence': 'Confidence score of ML predictions',
-                'cii': 'Country Influence Index - measures foreign influence impact'
-            },
-            'data_sources': 'MediaCloud API for news articles, ML models for analysis, Geopolitical data for CII'
-        }
-    
+        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        self.model = "llama-3.1-8b-instant"
+
+    def get_insights_from_ai(self, query, context):
+        """Pure AI Logic using Groq"""
+        system_prompt = """
+        You are an expert analyst for the 'Africa Influence Monitor'. 
+        Analyze the provided database context to answer the user query.
+        Cite sources if they are in the context. If the context doesn't have the answer, 
+        use your general knowledge but clarify it's not in our current specific database.
+        """
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: {query}"}
+                ],
+                model=self.model,
+                temperature=0.3,
+            )
+            return chat_completion.choices[0].message.content
+        except Exception as e:
+            return f"AI Error: {str(e)}"
+
     def process_query(self, query):
-        """Process user query and return relevant response"""
-        query_lower = query.lower()
+        query_l = query.lower()
+
+        # 1. ROUTING: Check for hardcoded "Exact Data" queries first
+        if any(word in query_l for word in ['how many', 'count', 'total', 'amount']):
+            return self._handle_count_query(query_l)
         
-        # 1. Detection of specific entities (e.g., "France", "Ivory Coast", "Russia")
-        # This ensures that even if keywords like 'count' are missing, we still route to the entity handler.
-        has_actor = any(actor.lower() in query_lower for actor in FOREIGN_ACTORS)
-        has_country = any(country.lower() in query_lower.replace(' ', '') for country in COUNTRIES)
-    
-        # 2. Analyze the query type
-        if any(word in query_lower for word in ['count', 'number', 'how many', 'total']):
-            return self._handle_count_query(query_lower)
+        if any(word in query_l for word in ['trend', 'recent', 'latest']):
+            # We can combine! Get recent titles AND ask AI to summarize them
+            recent_data = self._handle_trend_query(query_l)
+            return self.get_insights_from_ai(query, recent_data)
+
+        # 2. FALLBACK: Use Groq for everything else (insights/narratives)
+        context = self.get_context_from_db(query)
+        return self.get_insights_from_ai(query, context)
+
+    def get_context_from_db(self, query):
+        # Improved: Filter context by keywords in the query
+        # This makes the AI much smarter about specific countries
+        keywords = query.split()
+        filter_query = Q()
+        for word in keywords:
+            if len(word) > 3: # Ignore small words like 'the', 'is'
+                filter_query |= Q(article_text__icontains=word) | Q(target_country__icontains=word)
         
-        elif any(word in query_lower for word in ['trend', 'change', 'over time', 'monthly', 'yearly']):
-            return self._handle_trend_query(query_lower)
+        articles = MediaNarrative.objects.filter(filter_query).order_by('-posting_time')[:5]
         
-        elif any(word in query_lower for word in ['average', 'mean', 'typical', 'usual']):
-            return self._handle_average_query(query_lower)
-        
-        elif any(word in query_lower for word in ['compare', 'comparison', 'vs', 'versus']):
-            return self._handle_comparison_query(query_lower)
-        
-        elif any(word in query_lower for word in ['cii', 'index', 'risk', 'vulnerability']):
-            return self._handle_cii_query(query_lower)
-    
-        # UPDATED: Triggers if keywords 'actor'/'country' are used OR if a specific name is mentioned
-        elif any(word in query_lower for word in ['actor', 'country', 'media']) or has_actor or has_country:
-            return self._handle_specific_entity_query(query_lower)
-        
-        else:
-            return self._handle_general_query(query_lower)
+        if not articles.exists():
+            articles = MediaNarrative.objects.all().order_by('-posting_time')[:5]
+
+        context = ""
+        for art in articles:
+            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Text: {art.article_text[:300]}...\n\n"
+        return context
         
     def _handle_count_query(self, query):
         """Handle queries about counts and numbers"""
