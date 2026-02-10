@@ -24,14 +24,14 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 # Get ALLOWED_HOSTS from environment variable, with fallback to specific IPs
 import os
 
-allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
+ALLOWED_HOSTS = ['*']
 
-if allowed_hosts_env:
-    # This reads from your .env file
-    ALLOWED_HOSTS = allowed_hosts_env.split(',')
-else:
-    # This is your fallback if the .env is missing
-    ALLOWED_HOSTS = ['3.254.121.126', 'localhost', '127.0.0.1', '0.0.0.0']
+# CSRF_TRUSTED_ORIGINS MUST have the scheme (http://)
+CSRF_TRUSTED_ORIGINS = [
+    'http://3.254.121.126', 
+    'http://localhost',
+    'http://*.compute-1.amazonaws.com'  # This handles the internal AWS address
+]
     
 INSTALLED_APPS = [
     'django.contrib.admin',
