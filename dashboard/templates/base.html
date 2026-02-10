@@ -379,7 +379,14 @@
                 typingIndicator.style.display = 'block';
 
                 // Send to backend
-                fetch('#', {
+                fetch('{% url "chatbot_response" %}', {  
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({message: message})
+                })
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
