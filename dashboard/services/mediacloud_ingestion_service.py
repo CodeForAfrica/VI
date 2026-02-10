@@ -22,10 +22,11 @@ if not settings.configured:
                 'NAME': os.getenv('DB_NAME', 'postgres'),
                 'USER': os.getenv('DB_USER', 'postgres'),
                 'PASSWORD': os.getenv('DB_PASSWORD'),
-                'HOST': os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com'),  # RDS endpoint
+                'HOST': DB_HOST,
                 'PORT': os.getenv('DB_PORT', '5432'),
             }
         },
+        INSTALLED_APPS=['dashboard'], # Add your app name here
         USE_TZ=True,
     )
     django.setup()
@@ -35,7 +36,7 @@ from django.db import connection
 # Database configuration using Django settings
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com')
+DB_HOST = os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com').strip()
 DB_PORT = os.getenv('DB_PORT', '5432')
 DB_NAME = os.getenv('DB_NAME', 'postgres')
 
@@ -135,8 +136,28 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
     except Exception as e:
         logging.error(f"MediaCloud API Error: {e}")
         return [], 0
+def verify_dns(host):
+    """Checks if the RDS endpoint is reachable before trying to connect."""
+    try:
+        socket.gethostbyname(host)
+        return True
+    except socket.gaierror:
+        print(f"❌ DNS Error: Cannot resolve {host}")
+        print("Check if your RDS instance is 'Publicly Accessible' or if you are on the correct VPN/Network.")
+        return False
 
 def main():
+    if not verify_dns(DB_HOST):
+        return
+    try:
+        engine = create_engine(
+            f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', 
+            future=True
+        )
+        print("✅ Database connection initialized.")
+    except Exception as e:
+        print(f"❌ Database engine creation failed: {e}")
+        return
     all_records = []
     print("🛰 Querying MediaCloud API...")
     
