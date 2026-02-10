@@ -20,8 +20,7 @@ except:
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Security: Allow specific hosts only
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS = ['0.0.0.0', '127.0.0.1', '*', '3.254.121.126']').split(',')
-
+ALLOWED_HOSTS = ['0.0.0.0', '127.0.0.1', '3.254.121.126', 'localhost']
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
