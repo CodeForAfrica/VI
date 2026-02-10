@@ -234,51 +234,51 @@ class DisinfoAnalysisChatbot:
         self.client = Groq(api_key=settings.GROQ_API_KEY)
         self.model = "llama-3.1-8b-instant"
 
- def get_insights_from_ai(self, query, context):
-    """Pure AI Logic using Groq"""
-    system_prompt = """
-You are a Strategic Intelligence Analyst for 'Africa Influence Monitor'. 
-Extract geopolitical insights about foreign influence, election integrity, and social stability.
-
-OUTPUT FORMAT (strict):
-SUMMARY: [One sentence: Most critical geopolitical development]
-
-KEY THEMES:
-• [Theme 1]: [Brief description with actor/target country]
-• [Theme 2]: [Brief description with actor/target country]  
-• [Theme 3]: [Brief description with actor/target country]
-
-STRATEGIC IMPLICATIONS:
-• [Impact 1]: [Why this matters for regional influence]
-• [Impact 2]: [Why this matters for stability]
-
-IGNORE: Entertainment, sports, minor market reports, personal stories.
-
-EXAMPLE OUTPUT:
-SUMMARY: China increases infrastructure commitments in DRC while France strengthens cultural ties in Côte d'Ivoire ahead of elections.
-
-KEY THEMES:
-• Economic Influence: Chinese firms sign $2B mining deal in DRC
-• Cultural Diplomacy: France launches education exchange in Côte d'Ivoire  
-• Election Monitoring: EU observers deployed to Senegal polls
-
-STRATEGIC IMPLICATIONS:
-• China gains deeper resource access in mineral-rich DRC
-• France builds soft power ahead of Côte d'Ivoire elections
-• EU presence may reduce electoral fraud risks in Senegal
-"""
-    try:
-        chat_completion = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Context:\n{context}\n\nAnalyze: {query}"}
-            ],
-            model=self.model,
-            temperature=0.1,
-        )
-        return chat_completion.choices[0].message.content
-    except Exception as e:
-        return f"AI Error: {str(e)}" 
+    def get_insights_from_ai(self, query, context):
+        """Pure AI Logic using Groq"""
+        system_prompt = """
+    You are a Strategic Intelligence Analyst for 'Africa Influence Monitor'. 
+    Extract geopolitical insights about foreign influence, election integrity, and social stability.
+    
+    OUTPUT FORMAT (strict):
+    SUMMARY: [One sentence: Most critical geopolitical development]
+    
+    KEY THEMES:
+    • [Theme 1]: [Brief description with actor/target country]
+    • [Theme 2]: [Brief description with actor/target country]  
+    • [Theme 3]: [Brief description with actor/target country]
+    
+    STRATEGIC IMPLICATIONS:
+    • [Impact 1]: [Why this matters for regional influence]
+    • [Impact 2]: [Why this matters for stability]
+    
+    IGNORE: Entertainment, sports, minor market reports, personal stories.
+    
+    EXAMPLE OUTPUT:
+    SUMMARY: China increases infrastructure commitments in DRC while France strengthens cultural ties in Côte d'Ivoire ahead of elections.
+    
+    KEY THEMES:
+    • Economic Influence: Chinese firms sign $2B mining deal in DRC
+    • Cultural Diplomacy: France launches education exchange in Côte d'Ivoire  
+    • Election Monitoring: EU observers deployed to Senegal polls
+    
+    STRATEGIC IMPLICATIONS:
+    • China gains deeper resource access in mineral-rich DRC
+    • France builds soft power ahead of Côte d'Ivoire elections
+    • EU presence may reduce electoral fraud risks in Senegal
+    """
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context}\n\nAnalyze: {query}"}
+                ],
+                model=self.model,
+                temperature=0.1,
+            )
+            return chat_completion.choices[0].message.content
+        except Exception as e:
+            return f"AI Error: {str(e)}" 
         
     def process_query(self, query):
         query_l = query.lower()
