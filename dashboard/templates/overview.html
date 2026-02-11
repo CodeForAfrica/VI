@@ -1,689 +1,297 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vulnerability Index Tool - Code for Africa</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    {% load static %}
-    
-    <style>
-        /* === PROFESSIONAL COLOR SCHEME === */
-        :root {
-            --primary-navy: #1a3a5f;        /* Deep navy blue - professional */
-            --primary-accent: #2c7be5;      /* Bright blue accent */
-            --secondary-teal: #00897b;      /* Teal - complementary */
-            --light-bg: #f5f7fa;            /* Soft light gray */
-            --dark-text: #2d3748;           /* Dark gray text */
-            --medium-gray: #718096;         /* Medium gray */
-            --light-gray: #e2e8f0;          /* Light gray borders */
-        }
+{% extends "base.html" %}
 
-        body { 
-            background-color: var(--light-bg); 
-            color: var(--dark-text);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        .cfa-navy { 
-            background-color: var(--primary-navy) !important; 
-            color: white !important; 
-        }
-        
-        .cfa-navy-text { 
-            color: var(--primary-navy); 
-        }
-        
-        .cfa-accent { 
-            color: var(--primary-accent); 
-            font-weight: 600;
-        }
-        
-        .main-title { 
-            font-size: 3rem; 
-            font-weight: bold; 
-            color: var(--primary-navy);
-        }
-        
-        .chart-container { 
-            height: 500px; 
-            width: 100%; 
-        }
-        
-        .nav-tabs .nav-link.active { 
-            background-color: var(--primary-navy); 
-            border-color: var(--primary-navy); 
-            color: white; 
-            font-weight: 600;
-        }
-        
-        .nav-tabs .nav-link { 
-            border: 1px solid var(--light-gray); 
-            color: var(--medium-gray);
-            font-weight: 500;
-        }
-        
-        .nav-tabs .nav-link:hover { 
-            color: var(--primary-navy); 
-            border-color: var(--light-gray);
-        }
+{% block content %}
 
-        .stats-card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            padding: 20px;
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        
-        .stats-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stats-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        
-        .stats-title {
-            color: var(--medium-gray);
-            font-size: 1.1rem;
-        }
-        
-        .article-card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-            overflow: hidden;
-            transition: transform 0.3s;
-        }
-        
-        .article-card:hover {
-            transform: translateY(-3px);
-        }
-        
-        .article-image {
-            height: 200px;
-            background-color: #f0f4f8;
-            background-image: url('https://via.placeholder.com/800x200/e0e0e0/ffffff?text=Article+Image');
-            background-size: cover;
-            background-position: center;
-        }
-        
-        .article-content {
-            padding: 20px;
-        }
-        
-        .article-title {
-            font-size: 1.4rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: var(--primary-navy);
-        }
-        
-        .article-meta {
-            display: flex;
-            justify-content: space-between;
-            color: var(--medium-gray);
-            font-size: 0.9rem;
-            margin-bottom: 15px;
-        }
-        
-        .article-tags {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-        
-        .tag {
-            background-color: #f0f4f8;
-            color: var(--primary-navy);
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.85rem;
-        }
-        
-        .article-excerpt {
-            color: var(--dark-text);
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-        
-        .read-more {
-            color: var(--primary-accent);
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-        }
-        
-        .read-more:hover {
-            text-decoration: underline;
-        }
-        
-        .read-more i {
-            margin-left: 5px;
-            font-size: 0.9rem;
-        }
-        
-        .filters {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .filters-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .filter-group {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        .filter-group label {
-            font-weight: 600;
-            color: var(--dark-text);
-            margin-bottom: 8px;
-            display: block;
-        }
-        
-        .filter-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--light-gray);
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-        
-        .filter-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--light-gray);
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-        
-        .filter-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        
-        .btn-filter {
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-filter:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn-apply {
-            background-color: var(--primary-navy);
-            color: white;
-            border: none;
-        }
-        
-        .btn-reset {
-            background-color: white;
-            color: var(--primary-navy);
-            border: 1px solid var(--light-gray);
-        }
-        
-        .chart-container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .chart-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--primary-navy);
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        
-        .chart-subtitle {
-            color: var(--medium-gray);
-            font-size: 0.9rem;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        .chart-placeholder {
-            height: 400px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px dashed var(--light-gray);
-        }
-        
-        .chart-placeholder p {
-            color: var(--medium-gray);
-            font-size: 1.2rem;
-        }
-        
-        .section-title {
-            font-size: 1.8rem;
-            font-weight: 600;
-            color: var(--primary-navy);
-            margin: 30px 0 20px;
-        }
-    </style>
-</head>
-<body>
-    <!-- Header with Logo + Centered Title -->
-    <header class="bg-white shadow-sm py-4 mb-4">
-        <div class="container">
-            <div class="row align-items-center">
-                <!-- Left: Africa Logo -->
-                <div class="col-md-3 col-12 text-md-start text-center mb-md-0 mb-3">
-                    <img src="{% static 'dashboard/images/Africa logo.png' %}" 
-                         alt="Code for Africa" 
-                         height="45" 
-                         width="auto"
-                         class="img-fluid rounded shadow-sm"
-                         style="max-height: 45px; object-fit: contain;">
-                </div>
-
-                <!-- Center: Title & Subtitle -->
-                <div class="col-md-6 col-12 text-center">
-                    <h1 class="display-5 fw-bold cfa-navy-text mb-2">
-                        Vulnerability Index Tool
-                    </h1>
-                    <p class="lead text-muted mb-0">
-                        Monitoring Media Narratives Across Africa
-                    </p>
-                </div>
-
-                <!-- Right: Balance -->
-                <div class="col-md-3 col-12 text-md-end text-center">
-                    <small class="text-muted d-block mt-2">
-                        Last updated: January 2026
-                    </small>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Tabs -->
-    <div class="container mt-4">
-        <ul class="nav nav-tabs justify-content-center">
-            <li class="nav-item">
-                <a class="nav-link active" href="/">Home</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/authors/">Authors</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/actors/">Actors</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'cii' %}">CII</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if request.path == '/countries/' %}active{% endif %}" href="/countries/">Countries</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/media/">Media</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'generate_report' %}">Report</a>
-            </li>
-        </ul>
-
-        <!-- Main Content -->
-        <div class="my-5">
-            <!-- Stats Cards -->
-            <div class="row mb-4">
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="stats-card">
-                        <div class="stats-title">Total Articles</div>
-                        <div class="stats-number" style="color: #2c7be5;">{{ total_articles }}</div>
-                        <div class="stats-subtitle">In our database</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="stats-card">
-                        <div class="stats-title">Media Outlets</div>
-                        <div class="stats-number" style="color: #00897b;">{{ unique_outlets }}</div>
-                        <div class="stats-subtitle">Tracked sources</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="stats-card">
-                        <div class="stats-title">Narratives Identified</div>
-                        <div class="stats-number" style="color: #ff9800;">{{ unique_intents }}</div>
-                        <div class="stats-subtitle">Strategic intents</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="stats-card">
-                        <div class="stats-title">Actors Detected</div>
-                        <div class="stats-number" style="color: #4fc3f7;">{{ unique_actors }}</div>
-                        <div class="stats-subtitle">Foreign actors</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Filters -->
-            <div class="filters">
-                <div class="filters-row">
-                    <div class="filter-group">
-                        <label for="media-outlet">Media Outlet</label>
-                        <select id="media-outlet" name="media_outlet" class="form-control">
-                            <option value="">All Outlets</option>
-                            {% for outlet in outlet_choices %}
-                                <option value="{{ outlet.media_outlet }}" {% if outlet.media_outlet == selected_outlet %}selected{% endif %}>
-                                    {{ outlet.media_outlet }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="target-country">Target Country</label>
-                        <select id="target-country" name="target_country" class="form-control">
-                            <option value="">All Countries</option>
-                            {% for country in country_choices %}
-                                <option value="{{ country.target_country }}" {% if country.target_country == selected_country %}selected{% endif %}>
-                                    {{ country.target_country }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="foreign-actor">Foreign Actor</label>
-                        <select id="foreign-actor" name="foreign_actor" class="form-control">
-                            <option value="">All Actors</option>
-                            {% for actor in foreign_actors %}
-                                <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>
-                                    {{ actor }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="intent">Strategic Intent</label>
-                        <select id="intent" name="intent" class="form-control">
-                            <option value="">All Intents</option>
-                            {% for intent in intent_choices %}
-                                <option value="{{ intent.strategic_intent }}" {% if intent.strategic_intent == selected_intent %}selected{% endif %}>
-                                    {{ intent.strategic_intent }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="tone">Tone</label>
-                        <select id="tone" name="tone" class="form-control">
-                            <option value="">All Tones</option>
-                            {% for tone in tone_choices %}
-                                <option value="{{ tone.tone }}" {% if tone.tone == selected_tone %}selected{% endif %}>
-                                    {{ tone.tone }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="filters-row">
-                    <div class="filter-group" style="flex: 2;">
-                        <label for="search">Search Articles</label>
-                        <div class="input-group">
-                            <input type="text" id="search" name="q" class="form-control" 
-                                   placeholder="Search articles..." 
-                                   value="{{ search_query }}">
-                            <button class="btn btn-primary" type="submit">Search</button>
-                        </div>
-                    </div>
-                    <div class="filter-buttons">
-                        <button class="btn btn-filter btn-reset">Reset</button>
-                        <button class="btn btn-filter btn-apply">Apply</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chart Section -->
-            <div class="chart-container">
-                <h2 class="chart-title">Narrative Volume Over Time</h2>
-                <p class="chart-subtitle">Total articles: {{ total_articles }} • Full dataset shown by default</p>
-                <div class="chart-placeholder">
-                    <!-- Chart will be rendered here -->
-                    {{ chart|safe }}
-                </div>
-            </div>
-
-            <!-- Recent Articles Section -->
-            <div class="section-title">Recent Articles</div>
-            {% for article in page_obj %}
-            <div class="article-card">
-                <div class="row g-0">
-                    <div class="col-md-3">
-                        <div class="article-image" 
-                             style="background-image: url('{{ article.image_url|default:'https://via.placeholder.com/300x200/e0e0e0/ffffff?text=Article+Image' }}')">
-                        </div>
-                    </div>
-                    <div class="col-md-9">
-                        <div class="article-content">
-                            <h2 class="article-title">
-                                <a href="#" style="text-decoration: none; color: inherit;">
-                                    {{ article.title|default:'Untitled Article' }}
-                                </a>
-                            </h2>
-                            <div class="article-meta">
-                                <span>{{ article.media_outlet|default:'Unknown Source' }} • {{ article.posting_time|date:"M d, Y" }}</span>
-                                <span><i class="fas fa-clock"></i> {{ article.read_time|default:'5' }} min read</span>
-                            </div>
-                            <p class="article-excerpt">{{ article.excerpt|default:'No excerpt available' }}</p>
-                            <div class="article-tags">
-                                <span class="tag">Tone: {{ article.tone|default:'Factual' }}</span>
-                                <span class="tag">Intent: {{ article.strategic_intent|default:'Cultural Hegemony' }}</span>
-                            </div>
-                            <a href="#" class="read-more">Read full article →</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <div class="text-center py-5">
-                <p class="text-muted fs-4">No articles found matching your criteria.</p>
-                <p class="text-muted">Try adjusting your filters or search terms.</p>
-            </div>
-            {% endfor %}
-
-            <!-- Pagination -->
-            {% if page_obj.has_other_pages %}
-            <nav aria-label="Page navigation">
-                <ul class="pagination justify-content-center mt-4">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1&{{ request.GET.urlencode }}" aria-label="First">
-                            <span aria-hidden="true">«</span>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode }}" aria-label="Previous">
-                            <span aria-hidden="true">‹</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
-                    <li class="page-item active" aria-current="page">
-                        <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
-                    </li>
-                    {% elif num == page_obj.paginator.page_range|first or num == page_obj.paginator.page_range|last or num|add:'-2' == page_obj.number or num|add:'2' == page_obj.number %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
-                    </li>
-                    {% elif num|add:'-3' == page_obj.number or num|add:'3' == page_obj.number %}
-                    <li class="page-item disabled">
-                        <a class="page-link" href="#">...</a>
-                    </li>
-                    {% endif %}
+<!-- Filters -->
+<div class="row mb-5">
+    <div class="col-12">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Media Outlet</label>
+                <select name="media_outlet" class="form-select">
+                    <option value="">All Outlets</option>
+                    {% for choice in outlet_choices %}
+                    <option value="{{ choice.media_outlet }}" {% if selected_outlet == choice.media_outlet %}selected{% endif %}>{{ choice.media_outlet }}</option>
                     {% endfor %}
-                    
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode }}" aria-label="Next">
-                            <span aria-hidden="true">›</span>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ request.GET.urlencode }}" aria-label="Last">
-                            <span aria-hidden="true">»</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            {% endif %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Target Country</label>
+                <select name="target_country" class="form-select">
+                    <option value="">All Countries</option>
+                    {% for choice in country_choices %}
+                    <option value="{{ choice.target_country }}" {% if selected_country == choice.target_country %}selected{% endif %}>{{ choice.target_country }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Foreign Actor</label>
+                <select name="foreign_actor" class="form-select">
+                    <option value="">All Actors</option>
+                    {% for actor in foreign_actors %}
+                    <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Strategic Intent</label>
+                <select name="intent" class="form-select">
+                    <option value="">All Intents</option>
+                    {% for choice in intent_choices %}
+                    <option value="{{ choice.strategic_intent }}" {% if selected_intent == choice.strategic_intent %}selected{% endif %}>{{ choice.strategic_intent }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Tone</label>
+                <select name="tone" class="form-select">
+                    <option value="">All Tones</option>
+                    {% for choice in tone_choices %}
+                    <option value="{{ choice.tone }}" {% if selected_tone == choice.tone %}selected{% endif %}>{{ choice.tone }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
+                <a href="/" class="btn btn-outline-secondary w-100">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Main Narrative Volume Chart -->
+<div class="card shadow-sm border-0 mb-5">
+    <div class="card-header bg-light text-center py-3">
+        <h3 class="mb-0 text-primary fw-bold">Narrative Volume Over Time</h3>
+        <small class="text-muted">Full dataset - unaffected by filters</small>
+    </div>
+    <div class="card-body p-4">
+        {{ chart|safe }}
+    </div>
+</div>
+
+<!-- Stats Cards Row -->
+<div class="row mb-5 g-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center bg-primary text-white">
+            <div class="card-body py-4">
+                <h5 class="mb-0">Total Articles</h5>
+                <h2 class="fw-bold mt-2">{{ total_articles }}</h2>
+            </div>
         </div>
     </div>
-
-    <!-- Footer -->
-    <footer class="cfa-navy text-white text-center py-4 mt-5">
-        <div class="container">
-            <p class="mb-0">© 2025 Code for Africa • Vulnerability Index Tool</p>
-            <small>Powered by Django, PostgreSQL & Plotly • Data from MediaCloud</small>
-        </div>
-    </footer>
-
-    <!-- Floating Chat Widget -->
-    <div class="chatbot-container">
-        <button class="chatbot-button" id="chatbotToggle">
-            💬
-        </button>
-        <div class="chatbot-window" id="chatbotWindow">
-            <div class="chatbot-header">
-                <span>Disinfo Assistant</span>
-                <button class="chatbot-close" id="chatbotClose">×</button>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center bg-success text-white">
+            <div class="card-body py-4">
+                <h5 class="mb-0">Media Outlets</h5>
+                <h2 class="fw-bold mt-2">{{ unique_outlets }}</h2>
             </div>
-            <div class="chatbot-messages" id="chatbotMessages">
-                <div class="message bot-message">
-                    Hello! I'm your disinformation analysis assistant. Ask me about articles, trends, actors, or anything else in our database!
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center bg-warning text-dark">
+            <div class="card-body py-4">
+                <h5 class="mb-0">Narratives Identified</h5>
+                <h2 class="fw-bold mt-2">{{ unique_intents }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 text-center bg-info text-white">
+            <div class="card-body py-4">
+                <h5 class="mb-0">Actors Detected</h5>
+                <h2 class="fw-bold mt-2">{{ unique_actors }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- CVI Section (After Stats, Before Search & Articles) -->
+<div class="card shadow-sm border-0 mb-5 bg-light">
+    <div class="card-header bg-light text-center py-3">
+        <h4 class="mb-0 text-primary fw-bold">Contextual Vulnerability Index (CVI)</h4>
+    </div>
+    <div class="card-body p-4">
+        <p class="text-center mb-3">
+            Combines structural vulnerability (debt, military presence, resource dependency) with narrative activity (media volume and tone).
+        </p>
+
+        <div class="row text-center mb-4 g-3">
+            <div class="col-md-4">
+                <strong>🔹 Structural Vulnerability</strong>
+                <p class="small text-muted">Based on debt levels, military ties, resource contracts, and geopolitical exposure.</p>
+            </div>
+            <div class="col-md-4">
+                <strong>🔹 Media Volume</strong>
+                <p class="small text-muted">Number of articles mentioning the actor in the country (normalized).</p>
+            </div>
+            <div class="col-md-4">
+                <strong>🔹 Tone Score</strong>
+                <p class="small text-muted">Ranges from -1.0 (alarmist/negative) to +1.0 (positive/supportive).</p>
+            </div>
+        </div>
+
+        <div class="alert alert-info text-center mb-4">
+            <strong>CVI Formula</strong><br>
+            CVI = Structural_Vulnerability × min(Volume/100, 1) × (1 - Tone/2)<br>
+            <small>Result: 0 (no vulnerability) to 1 (maximum vulnerability)</small>
+        </div>
+
+        <!-- CVI Form + Result + Factor Chart (Side-by-Side Layout) -->
+        <div class="row">
+            <!-- Left: Form & Result -->
+            <div class="col-lg-6">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold"> Target Country</label>
+                        <select name="african_country" class="form-select">
+                            <option value="">-- Choose Country --</option>
+                            {% for country in african_countries %}
+                            <option value="{{ country }}" {% if selected_african_country == country %}selected{% endif %}>
+                                {{ country }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Inferred Actor</label>
+                        <select name="foreign_actor" class="form-select">
+                            <option value="">-- Choose Actor --</option>
+                            {% for actor in foreign_actors %}
+                            <option value="{{ actor }}" {% if selected_foreign_actor == actor %}selected{% endif %}>
+                                {{ actor }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">Calculate</button>
+                    </div>
+                </form>
+
+                <!-- CVI Result -->
+                {% if cii_result is not None %}
+                <div class="text-center mt-4 p-3 border rounded bg-white">
+                    <h5 class="text-primary fw-bold mb-2">CVI Score</h5>
+                    <h2 class="fw-bold mb-2" style="color: {% if cii_result > 0.7 %}#dc3545{% elif cii_result > 0.4 %}#fd7e14{% else %}#28a745{% endif %}">
+                        {{ cii_result }}
+                    </h2>
+                    <p class="text-muted mb-1">
+                        Influence of <strong>{{ selected_foreign_actor|default:"—" }}</strong> on <strong>{{ selected_african_country|default:"—" }}</strong>
+                    </p>
+                    <small class="text-muted">(0.0 = No vulnerability • 1.0 = Maximum vulnerability)</small>
+                </div>
+                {% else %}
+                <div class="text-center mt-4 text-muted">
+                    <p>Select a country and actor above to calculate CVI</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Right: Factor Contribution Bar Chart -->
+            <div class="col-lg-6 mt-4 mt-lg-0">
+                <h5 class="text-center text-primary fw-bold mb-3">Factor Contribution to CVI</h5>
+                {% if factor_chart_base64 %}
+                <div class="text-center">
+                    <img src="data:image/png;base64,{{ factor_chart_base64 }}" 
+                         style="width: 100%; max-width: 450px; height: auto;" 
+                         alt="CVI Factor Contribution Chart">
+                </div>
+                {% else %}
+                <p class="text-center text-muted">Factor breakdown will appear after calculation</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Filters Button -->
+<div class="text-center mb-5">
+    <a href="/" class="btn btn-outline-secondary btn-lg px-5">
+        <i class="fas fa-sync-alt me-2"></i> Reset Filters & View Default Chart
+    </a>
+</div>
+
+
+<!-- Search Bar -->
+<div class="row mb-5">
+    <div class="col-lg-8 mx-auto">
+        <form class="d-flex" method="get">
+            <input class="form-control me-2" type="search" name="q" placeholder="Search articles..." value="{{ search_query }}" aria-label="Search">
+            <button class="btn btn-primary" type="submit">Search</button>
+        </form>
+        {% if search_query %}
+        <p class="text-center mt-3 text-muted">
+            Results for "<strong>{{ search_query }}</strong>" • {{ total_articles }} found
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Articles -->
+<h4 class="mb-4 text-center text-primary fw-bold">Recent Articles</h4>
+
+<div class="row g-4">
+    {% for article in page_obj %}
+    <div class="col-12">
+        <div class="card shadow-sm border-0" style="max-height: 180px; overflow: hidden;">
+            <div class="row g-0 h-100">
+                <div class="col-md-3">
+                    {% if article.get_article_image %}
+                    <img src="{{ article.get_article_image }}" 
+                         class="img-fluid rounded-start w-100 h-100" 
+                         style="object-fit: cover;" 
+                         alt="Article image">
+                    {% else %}
+                    <div class="bg-light d-flex align-items-center justify-content-center h-100 rounded-start border-end">
+                        <span class="text-muted small">No image</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-9">
+                    <div class="card-body py-2 px-3 d-flex flex-column h-100">
+                        <h6 class="card-title fw-bold text-primary mb-1" style="font-size: 1rem;">
+                            {{ article.article_text|truncatewords:12|default:"Untitled Article" }}
+                        </h6>
+                        <small class="text-muted mb-1">
+                            <strong>{{ article.media_outlet_fk.name|default:article.media_outlet|default:"Unknown" }}</strong>
+                            • {{ article.posting_time|date:"M j, Y" }}
+                        </small>
+                        <p class="card-text text-muted small mb-2 flex-grow-1" style="font-size: 0.85rem;">
+                            {{ article.article_text|truncatewords:40 }}
+                        </p>
+                        <div class="mt-auto d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-success small me-1">Tone: {{ article.tone|default:"—" }}</span>
+                                <span class="badge bg-warning text-dark small">Intent: {{ article.strategic_intent|default:"—" }}</span>
+                            </div>
+                            {% if article.url %}
+                            <a href="{{ article.url }}" target="_blank" class="small text-primary fw-bold">
+                                Read full article →
+                            </a>
+                            {% else %}
+                            <span class="small text-muted">No link available</span>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="typing-indicator" id="typingIndicator">
-                Assistant is typing...
-            </div>
-            <div class="chatbot-input">
-                <input type="text" id="chatbotInput" placeholder="Ask about articles, trends, actors...">
-                <button id="chatbotSend">Send</button>
-            </div>
         </div>
     </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <p class="text-muted fs-4">No articles available.</p>
+    </div>
+    {% endfor %}
+</div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
-    
-    <!-- Chatbot JavaScript -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const chatbotToggle = document.getElementById('chatbotToggle');
-            const chatbotWindow = document.getElementById('chatbotWindow');
-            const chatbotClose = document.getElementById('chatbotClose');
-            const chatbotMessages = document.getElementById('chatbotMessages');
-            const chatbotInput = document.getElementById('chatbotInput');
-            const chatbotSend = document.getElementById('chatbotSend');
-            const typingIndicator = document.getElementById('typingIndicator');
+<!-- View All Articles -->
+<div class="text-center mt-4">
+    <a href="{% url 'all_articles' %}" class="btn btn-outline-primary btn-sm">
+        View All {{ total_articles }} Articles →
+    </a>
+</div>
 
-            // Toggle chat window
-            chatbotToggle.addEventListener('click', () => {
-                chatbotWindow.style.display = chatbotWindow.style.display === 'flex' ? 'none' : 'flex';
-            });
-
-            // Close chat window
-            chatbotClose.addEventListener('click', () => {
-                chatbotWindow.style.display = 'none';
-            });
-
-            // Send message
-            chatbotSend.addEventListener('click', sendMessage);
-            chatbotInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-
-            function sendMessage() {
-                const message = chatbotInput.value.trim();
-                if (!message) return;
-
-                // Add user message
-                addMessage(message, 'user');
-                chatbotInput.value = '';
-
-                // Show typing indicator
-                typingIndicator.style.display = 'block';
-
-                // Send to backend
-                fetch('{% url "chatbot_response" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({message: message})
-                })
-                .then(response => response.json())
-                .then(data => {
-                    typingIndicator.style.display = 'none';
-                    if (data.success && data.response) {
-                        addMessage(data.response, 'bot');
-                    } else {
-                        addMessage('Sorry, I encountered an error. Please try again.', 'bot');
-                    }
-                })
-                .catch(error => {
-                    typingIndicator.style.display = 'none';
-                    addMessage('Connection error. Please check your internet connection.', 'bot');
-                });
-            }
-
-            function addMessage(text, sender) {
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('message', `${sender}-message`);
-                messageDiv.textContent = text;
-                chatbotMessages.appendChild(messageDiv);
-                
-                // Scroll to bottom
-                chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-            }
-
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
-                }
-                return cookieValue;
-            }
-        });
-    </script>
-</body>
-</html>
+{% endblock %}
