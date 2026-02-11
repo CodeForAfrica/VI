@@ -71,19 +71,28 @@
     </div>
 </div>
 
-<div class="card shadow-sm border-0 mb-5">
-    <div class="card-header bg-white text-center py-3 border-bottom">
-        <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h4>
+<div class="row g-4 mb-5">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
+            </div>
+        </div>
     </div>
-    <div class="card-body p-0">
-        {% if chart %}
-            {{ chart|safe }}
-        {% else %}
-            <div class="p-5 text-center text-muted">No chart data available.</div>
-        {% endif %}
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top African Countries Publishing</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if country_chart %}{{ country_chart|safe }}{% else %}<div class="p-5 text-center text-muted">No country data available.</div>{% endif %}
+            </div>
+        </div>
     </div>
 </div>
-
 
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Contextual Vulnerability Index (CVI)</h4>
 <div class="cvi-panel shadow-sm">
@@ -125,7 +134,6 @@
 </div>
 
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
-
 <div class="row g-4">
     {% for article in page_obj %}
     <div class="col-12">
@@ -165,12 +173,9 @@
                                 <span class="badge badge-tone small me-1">Tone: {{ article.tone|default:"—" }}</span>
                                 <span class="badge badge-intent small">Intent: {{ article.strategic_intent|default:"—" }}</span>
                             </div>
-
-                            {% if article.url %}
                             <a href="{{ article.url }}" target="_blank" class="small fw-bold" style="color: var(--action-blue); text-decoration: none;">
                                 Read full article →
                             </a>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
