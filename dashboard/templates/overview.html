@@ -236,47 +236,51 @@
 
     // FIXED: Chatbot Send Logic
     document.getElementById('send-btn').addEventListener('click', function() {
-        const input = document.getElementById('chat-input');
-        const box = document.getElementById('chat-box');
-        const userText = input.value.trim();
+    const input = document.getElementById('chat-input');
+    const box = document.getElementById('chat-box');
+    const userText = input.value.trim();
+    
+    if (userText !== "") {
+        // 1. Add User Bubble
+        box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
+        input.value = "";
         
-        if (userText !== "") {
-            // 1. Add User Bubble
-            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
-            input.value = "";
-            
-            // 2. Add Loading Indicator
-            const loadingId = "loading-" + Date.now();
-            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
+        // 2. Add Loading Indicator
+        const loadingId = "loading-" + Date.now();
+        box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
+        box.scrollTop = box.scrollHeight;
+
+        // 3. Fetch from Django (UPDATED URL)
+        fetch('/chatbot-response/', {  // <--- CHANGED THIS LINE
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ message: userText })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network error');
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById(loadingId).remove();
+            box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
             box.scrollTop = box.scrollHeight;
+        })
+        .catch(error => {
+            const loader = document.getElementById(loadingId);
+            if(loader) loader.innerHTML = `<span class="text-danger small">Connection error.</span>`;
+        });
+    }
+});
 
-            // 3. Fetch from Django
-            fetch('/chatbot-api/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ message: userText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById(loadingId).remove();
-                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
-                box.scrollTop = box.scrollHeight;
-            })
-            .catch(error => {
-                document.getElementById(loadingId).innerHTML = `<span class="text-danger small">Connection error.</span>`;
-            });
-        }
-    });
-
-    // Allow "Enter" key to send message
-    document.getElementById('chat-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            document.getElementById('send-btn').click();
-        }
-    });
+// Allow "Enter" key to send message
+document.getElementById('chat-input').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        document.getElementById('send-btn').click();
+    }
+});
 </script>
 
 {% endblock %}
