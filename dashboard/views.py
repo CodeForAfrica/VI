@@ -123,10 +123,9 @@ def overview(request):
     cvi_score = None
     
     # 2. Capture Inputs
-    # We now check BOTH the sidebar filter and the calculator inputs
     media_outlet = request.GET.get('media_outlet', '').strip()
     
-    # Check if user used the main filter OR the calculator to pick a country
+    # Unified variable: checks both main filter and calculator inputs
     target_country = request.GET.get('target_country', '').strip() or request.GET.get('calc_target_country', '').strip()
     foreign_actor = request.GET.get('foreign_actor', '').strip() or request.GET.get('calc_foreign_actor', '').strip()
     
@@ -137,24 +136,40 @@ def overview(request):
     # 3. Build Queryset & APPLY RELEVANCE FILTER
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
-    # Exclude non-relevant topics (Football, Entertainment, etc.)
+    # Exclude non-relevant topics
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     for word in irrelevant_keywords:
         qs = qs.exclude(article_text__icontains=word)
 
-    # 4. Apply User Filters
-    if media_outlet: qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
-    if target_country: qs = qs.filter(target_country__iexact=target_country)
-    if foreign_actor: qs = qs.filter(inferred_actor__iexact=foreign_actor)
-    if intent: qs = qs.filter(strategic_intent__iexact=intent)
-    if tone: qs = qs.filter(tone__iexact=tone)
-    if search_query: qs = qs.filter(Q(article_text__icontains=search_query))
+    # 4. Apply User Filters (Robust for Côte d'Ivoire / Ivory Coast)
+    if media_outlet: 
+        qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
+    
+    if target_country:
+        # Check for any variation of Ivory Coast/Côte d'Ivoire
+        if any(term in target_country.lower() for term in ["ivoire", "ivory", "cote"]):
+             qs = qs.filter(
+                 Q(target_country__icontains="Ivoire") | 
+                 Q(target_country__icontains="Cote") | 
+                 Q(target_country__icontains="Ivory")
+             )
+        else:
+             # Standard exact filter for all other countries
+             qs = qs.filter(target_country__iexact=target_country)
+
+    if foreign_actor: 
+        qs = qs.filter(inferred_actor__iexact=foreign_actor)
+    if intent: 
+        qs = qs.filter(strategic_intent__iexact=intent)
+    if tone: 
+        qs = qs.filter(tone__iexact=tone)
+    if search_query: 
+        qs = qs.filter(Q(article_text__icontains=search_query))
 
     total_articles = qs.count()
 
     # 5. Global Stats (using the filtered queryset to keep dashboard in sync)
     full_stats_qs = MediaNarrative.objects.all()
-    # Apply relevance to stats too so counts are accurate
     for word in irrelevant_keywords:
         full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
 
@@ -209,7 +224,8 @@ def overview(request):
     page_obj.object_list = articles_with_vi
 
     # 11. Calculator Score Result
-    if target_country_raw and foreign_actor:
+    if target_country and foreign_actor:
+        # Calculate based on the current filtered results
         latest = qs.first() 
         if latest:
             cvi_score = ml_service.calculate_vulnerability_index(
@@ -220,18 +236,19 @@ def overview(request):
                 latest.confidence or 0.5
             )
         else:
-            # Fallback for name mismatches like Côte d'Ivoire
-            fallback_art = MediaNarrative.objects.filter(
-                target_country__icontains="Ivoire", 
-                inferred_actor__iexact=foreign_actor
-            ).first()
-            
-            if fallback_art:
-                cvi_score = ml_service.calculate_vulnerability_index(
-                    fallback_art.strategic_intent, fallback_art.tone, 
-                    fallback_art.target_country, fallback_art.inferred_actor, 0.5
-                )
+            # Fallback for the Ivory Coast variations specifically
+            if any(term in target_country.lower() for term in ["ivoire", "ivory", "cote"]):
+                fallback_art = MediaNarrative.objects.filter(
+                    Q(target_country__icontains="Ivoire") | Q(target_country__icontains="Cote") | Q(target_country__icontains="Ivory"),
+                    inferred_actor__iexact=foreign_actor
+                ).first()
+                if fallback_art:
+                    cvi_score = ml_service.calculate_vulnerability_index(
+                        fallback_art.strategic_intent, fallback_art.tone, 
+                        fallback_art.target_country, fallback_art.inferred_actor, 0.5
+                    )
 
+    # 12. Context
     context = {
         'chart': chart,
         'page_obj': page_obj,
