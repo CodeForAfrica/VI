@@ -234,6 +234,35 @@ def intents(request):
         'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
     }
     return render(request, 'dashboard/intents.html', context)
+    
+def all_articles(request):
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+
+    # Date range filter
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    if start_date:
+        parsed_start = parse_date(start_date)
+        if parsed_start:
+            qs = qs.filter(posting_time__date__gte=parsed_start)
+
+    if end_date:
+        parsed_end = parse_date(end_date)
+        if parsed_end:
+            qs = qs.filter(posting_time__date__lte=parsed_end)
+
+    # Pagination
+    paginator = Paginator(qs, 10)  # 10 articles per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'page_obj': page_obj,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
+    return render(request, 'dashboard/all_articles.html', context)
 
 def generate_pdf(request):
     qs = MediaNarrative.objects.all()[:50]
