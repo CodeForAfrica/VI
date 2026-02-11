@@ -5,207 +5,145 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vulnerability Index Tool - Code for Africa</title>
-    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
-        /* UI THEME CUSTOMIZATION */
-        :root { --cfa-red: #EB4D4B; --bg-gray: #f8f9fa; }
-        body { background-color: var(--bg-gray); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        /* GLOBAL STYLES */
+        body { background-color: #f8f9fa; font-family: 'Helvetica Neue', Arial, sans-serif; color: #333; }
         
-        .cfa-red { background-color: var(--cfa-red) !important; color: white !important; }
-        .cfa-red-text { color: #EB4D4B; }
-        
-        /* NAVIGATION */
-        .nav-tabs { border-bottom: 2px solid #dee2e6; }
-        .nav-tabs .nav-link { color: #495057; font-weight: 500; border: none; padding: 10px 20px; }
-        .nav-tabs .nav-link.active { 
-            background-color: var(--cfa-red); 
-            color: white !important; 
-            border-radius: 5px 5px 0 0; 
+        /* HEADER & NAV */
+        header { background: #fff; border-bottom: 1px solid #eee; padding: 20px 0; }
+        .nav-tabs { border: none; gap: 5px; }
+        .nav-tabs .nav-link { 
+            background: #e9ecef; border: none; color: #6c757d; border-radius: 4px; padding: 8px 16px; 
         }
+        .nav-tabs .nav-link.active { background: #1a2a40; color: #fff !important; }
 
-        /* DASHBOARD COMPONENTS (Required for overview.html) */
-        .stats-card { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
-            text-align: center; 
-            border-bottom: 4px solid var(--cfa-red);
-            height: 100%;
+        /* DASHBOARD CARDS (Based on your Screenshot 1) */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 30px; }
+        .stat-card { 
+            background: white; border-radius: 4px; padding: 15px; text-align: center; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #dee2e6;
         }
-        .stats-number { font-size: 2.2rem; font-weight: bold; color: #2d3436; }
-        .stats-title { font-size: 0.9rem; text-transform: uppercase; color: #636e72; letter-spacing: 1px; }
+        .stat-card.blue { border-bottom: 3px solid #007bff; }
+        .stat-card.green { border-bottom: 3px solid #28a745; }
+        .stat-card.yellow { border-bottom: 3px solid #ffc107; }
+        .stat-card.cyan { border-bottom: 3px solid #17a2b8; }
         
-        .filters-row { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin-bottom: 30px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
+        .stat-card h3 { font-size: 0.9rem; margin-bottom: 10px; font-weight: 600; }
+        .stat-card .value { font-size: 2rem; font-weight: 800; }
+        .stat-card.blue .value { color: #007bff; }
+        .stat-card.green .value { color: #28a745; }
+        .stat-card.yellow .value { color: #ffc107; }
+        .stat-card.cyan .value { color: #17a2b8; }
 
-        /* CHATBOT WIDGET STYLES */
-        .chatbot-container { position: fixed; bottom: 20px; right: 20px; z-index: 10000; font-family: Arial, sans-serif; }
+        /* ARTICLE LIST (Based on your Screenshot 2) */
+        .article-item { 
+            display: flex; background: white; margin-bottom: 15px; border-radius: 4px; 
+            overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eee;
+        }
+        .article-img { width: 250px; min-width: 250px; height: 150px; background: #eee; object-fit: cover; }
+        .article-body { padding: 15px; flex-grow: 1; }
+        .article-title { color: #007bff; font-weight: bold; font-size: 1.1rem; text-decoration: none; }
+        .article-meta { font-size: 0.85rem; color: #666; margin: 5px 0; }
+        .badge-tone { background: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; }
+        .badge-intent { background: #ffc107; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; }
+
+        /* CHATBOT (The Green Style) */
+        .chatbot-container { position: fixed; bottom: 25px; right: 25px; z-index: 9999; }
         .chatbot-button { 
-            background-color: #4CAF50; color: white; border: none; border-radius: 50%; 
-            width: 60px; height: 60px; font-size: 24px; cursor: pointer; 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; 
-            transition: transform 0.3s;
+            background: #4CAF50; color: white; border: none; border-radius: 50%; width: 60px; height: 60px; 
+            font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer;
         }
-        .chatbot-button:hover { transform: scale(1.1); background-color: #45a049; }
         .chatbot-window { 
-            width: 350px; height: 450px; background-color: white; border-radius: 10px; 
-            box-shadow: 0 8px 16px rgba(0,0,0,0.3); display: none; flex-direction: column; 
-            overflow: hidden; position: absolute; bottom: 75px; right: 0; 
+            width: 350px; height: 480px; background: white; border-radius: 12px; display: none;
+            flex-direction: column; position: absolute; bottom: 75px; right: 0; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 1px solid #ddd; overflow: hidden;
         }
-        .chatbot-header { background-color: #4CAF50; color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .chatbot-messages { flex: 1; padding: 15px; overflow-y: auto; background-color: #f9f9f9; }
-        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; max-width: 80%; font-size: 14px; line-height: 1.4; }
-        .user-message { background-color: #dcf8c6; margin-left: auto; }
-        .bot-message { background-color: #ffffff; border: 1px solid #e0e0e0; }
-        .chatbot-input { display: flex; padding: 10px; background-color: white; border-top: 1px solid #e0e0e0; }
-        .chatbot-input input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
-        .chatbot-input button { margin-left: 10px; padding: 5px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer; }
-        .typing-indicator { display: none; padding: 5px 15px; color: #666; font-style: italic; font-size: 12px; }
+        .chatbot-header { background: #4CAF50; color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        .chatbot-messages { flex: 1; padding: 15px; overflow-y: auto; background: #fdfdfd; font-size: 0.9rem; }
+        .chatbot-input { display: flex; padding: 10px; border-top: 1px solid #eee; }
+        .chatbot-input input { flex: 1; border: 1px solid #ddd; padding: 8px; border-radius: 20px; outline: none; }
+        .chatbot-input button { background: #4CAF50; color: white; border: none; margin-left: 8px; border-radius: 20px; padding: 5px 15px; }
     </style>
-    {% block extra_css %}{% endblock %}
 </head>
 <body>
 
-<header class="bg-white shadow-sm py-3 mb-4">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-3 text-center text-md-start">
-                <img src="{% static 'dashboard/images/Africa logo.png' %}" alt="Code for Africa" height="45">
+<header>
+    <div class="container text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <img src="{% static 'dashboard/images/Africa logo.png' %}" alt="Logo" height="40">
+            <div>
+                <h1 class="h3 fw-bold mb-0">Vulnerability Index Tool</h1>
+                <p class="small text-muted mb-0">Monitoring Media Narratives Across Africa</p>
             </div>
-            <div class="col-md-6 text-center">
-                <h2 class="fw-bold mb-0" style="color: #2d3436;">Vulnerability Index Tool</h2>
-                <p class="text-muted small mb-0">Monitoring Media Narratives Across Africa</p>
-            </div>
-            <div class="col-md-3 text-center text-md-end">
-                <span class="badge bg-light text-dark border">Updated: Feb 2026</span>
-            </div>
+            <small class="text-muted">Last updated: January 2026</small>
         </div>
+
+        <ul class="nav nav-tabs justify-content-center">
+            <li class="nav-item"><a class="nav-link active" href="/">Home</a></li>
+            <li class="nav-item"><a class="nav-link" href="/authors/">Authors</a></li>
+            <li class="nav-item"><a class="nav-link" href="/countries/">Countries</a></li>
+            <li class="nav-item"><a class="nav-link" href="/media/">Media</a></li>
+            <li class="nav-item"><a class="nav-link" href="{% url 'generate_report' %}">Report</a></li>
+        </ul>
     </div>
 </header>
 
-<div class="container">
-    <ul class="nav nav-tabs justify-content-center mb-5">
-        <li class="nav-item">
-            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Home</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if '/authors/' in request.path %}active{% endif %}" href="/authors/">Authors</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if '/countries/' in request.path %}active{% endif %}" href="/countries/">Countries</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if '/media/' in request.path %}active{% endif %}" href="/media/">Media</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link" href="{% url 'generate_report' %}">Report</a>
-        </li>
-    </ul>
-
-    <div class="content-wrapper">
-        {% block content %}{% endblock %}
-    </div>
-</div>
+<main class="container py-4">
+    {% block content %}{% endblock %}
+</main>
 
 <div class="chatbot-container">
-    <button class="chatbot-button" id="chatbotToggle" title="Open Assistant">💬</button>
-    <div class="chatbot-window" id="chatbotWindow">
+    <button class="chatbot-button" id="chatToggle">💬</button>
+    <div class="chatbot-window" id="chatWindow">
         <div class="chatbot-header">
             <span>Disinfo Assistant</span>
-            <button class="btn-close btn-close-white" id="chatbotClose" aria-label="Close"></button>
+            <button class="btn-close btn-close-white" id="chatClose" style="font-size: 0.7rem;"></button>
         </div>
-        <div class="chatbot-messages" id="chatbotMessages">
-            <div class="message bot-message">
-                Hello! I'm your disinformation analysis assistant. Ask me about articles or trends!
+        <div class="chatbot-messages" id="chatMsgs">
+            <div class="p-2 bg-light rounded mb-2" style="max-width: 85%;">
+                Hello! I'm your assistant. How can I help with your data today?
             </div>
         </div>
-        <div class="typing-indicator" id="typingIndicator">Assistant is typing...</div>
         <div class="chatbot-input">
-            <input type="text" id="chatbotInput" placeholder="Ask a question...">
-            <button id="chatbotSend">Send</button>
+            <input type="text" id="chatIn" placeholder="Type a message...">
+            <button id="chatSend">Send</button>
         </div>
     </div>
 </div>
 
-<footer class="cfa-red text-white text-center py-4 mt-5">
-    <div class="container">
-        <p class="mb-1">© 2026 Code for Africa • Vulnerability Index Tool</p>
-        <small class="opacity-75">Data Visualization Dashboard • Built with Django & Plotly</small>
-    </div>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const chatbotToggle = document.getElementById('chatbotToggle');
-        const chatbotWindow = document.getElementById('chatbotWindow');
-        const chatbotClose = document.getElementById('chatbotClose');
-        const chatbotInput = document.getElementById('chatbotInput');
-        const chatbotSend = document.getElementById('chatbotSend');
-        const chatbotMessages = document.getElementById('chatbotMessages');
-        const typingIndicator = document.getElementById('typingIndicator');
+    const btn = document.getElementById('chatToggle');
+    const win = document.getElementById('chatWindow');
+    const close = document.getElementById('chatClose');
+    
+    btn.onclick = () => win.style.display = win.style.display === 'flex' ? 'none' : 'flex';
+    close.onclick = () => win.style.display = 'none';
 
-        // Toggle Visibility
-        chatbotToggle.addEventListener('click', () => {
-            const isVisible = chatbotWindow.style.display === 'flex';
-            chatbotWindow.style.display = isVisible ? 'none' : 'flex';
+    document.getElementById('chatSend').onclick = function() {
+        const input = document.getElementById('chatIn');
+        const msgs = document.getElementById('chatMsgs');
+        if(!input.value) return;
+
+        // User Message
+        msgs.innerHTML += `<div class="p-2 text-end"><span class="bg-success text-white p-2 rounded d-inline-block">${input.value}</span></div>`;
+        
+        const userText = input.value;
+        input.value = '';
+
+        fetch('{% url "chatbot_response" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({message: userText})
+        })
+        .then(res => res.json())
+        .then(data => {
+            msgs.innerHTML += `<div class="p-2"><span class="bg-light p-2 rounded d-inline-block border">${data.response}</span></div>`;
+            msgs.scrollTop = msgs.scrollHeight;
         });
-
-        chatbotClose.addEventListener('click', () => {
-            chatbotWindow.style.display = 'none';
-        });
-
-        // Communication Logic
-        function addMessage(text, sender) {
-            const div = document.createElement('div');
-            div.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
-            div.textContent = text;
-            chatbotMessages.appendChild(div);
-            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-        }
-
-        function handleSend() {
-            const message = chatbotInput.value.trim();
-            if (!message) return;
-
-            addMessage(message, 'user');
-            chatbotInput.value = '';
-            typingIndicator.style.display = 'block';
-
-            fetch('{% url "chatbot_response" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({message: message})
-            })
-            .then(res => res.json())
-            .then(data => {
-                typingIndicator.style.display = 'none';
-                addMessage(data.response || "I couldn't process that.", 'bot');
-            })
-            .catch(() => {
-                typingIndicator.style.display = 'none';
-                addMessage("Connection error.", 'bot');
-            });
-        }
-
-        chatbotSend.addEventListener('click', handleSend);
-        chatbotInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleSend(); });
-    });
+    };
 </script>
 
-{% block extra_js %}{% endblock %}
 </body>
 </html>
