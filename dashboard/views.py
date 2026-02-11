@@ -521,15 +521,19 @@ def overview(request):
     foreign_actor = request.GET.get('foreign_actor', '').strip()
     search_query = request.GET.get('q', '').strip()
 
-    # 2. Article Feed Logic
+    # 2. Start with all articles
     qs = MediaNarrative.objects.all().order_by('-posting_time')
+
+    # 3. Apply Filters if they exist
     if target_country:
         qs = qs.filter(target_country__iexact=target_country)
     if foreign_actor:
         qs = qs.filter(inferred_actor__iexact=foreign_actor)
     if search_query:
-        qs = qs.filter(Q(article_text__icontains=search_query) | Q(title__icontains=search_query))
-
+        qs = qs.filter(
+            Q(article_text__icontains=search_query) | 
+            Q(title__icontains=search_query)
+        )
     # Pagination (10 per page)
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
