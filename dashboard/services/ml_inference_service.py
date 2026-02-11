@@ -149,7 +149,7 @@ class MLInferenceService:
             # Download contextual module from S3 - THIS IS THE ORIGINAL contextual_all_intents_v2.py FILE
             response = self.s3_client.get_object(
                 Bucket=self.bucket_name,
-                Key='models/contextual_all_intents_v2.py'
+                Key='models/contextual_all_intents_v2 (1).py'
             )
             
             # Save temporarily and import - WE'RE LOADING THE EXISTING PYTHON FILE
