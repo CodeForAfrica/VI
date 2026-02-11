@@ -646,7 +646,9 @@ def countries(request):
     publisher_chart = "<p class='text-center py-5 text-muted fs-3'>No publishing data</p>"
     if top_publishers:
         df = pd.DataFrame(top_publishers)
+        df['target_country'] = df['target_country'].astype(str) # Force string type
         df = df.sort_values('article_count')
+        
         fig = px.bar(
             df,
             x='article_count',
@@ -654,10 +656,10 @@ def countries(request):
             orientation='h',
             title='Top African Countries by Articles Published',
             text='article_count',
-            color='target_country',
-            color_discrete_sequence=px.colors.qualitative.Bold
+            template="plotly_white" # Removed color='target_country' to prevent KeyError
         )
-        fig.update_traces(textposition='outside')
+        # Apply colors safely via traces
+        fig.update_traces(marker_color=px.colors.qualitative.Bold, textposition='outside')
         fig.update_layout(height=500, showlegend=False, template="plotly_white")
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
@@ -669,7 +671,9 @@ def countries(request):
     subject_chart = "<p class='text-center py-5 text-muted fs-3'>No subject data</p>"
     if top_subjects:
         df = pd.DataFrame(top_subjects)
+        df['inferred_actor'] = df['inferred_actor'].astype(str) # Force string type
         df = df.sort_values('mention_count')
+        
         fig = px.bar(
             df,
             x='mention_count',
@@ -677,10 +681,10 @@ def countries(request):
             orientation='h',
             title='Top Subjects Mentioned in Articles',
             text='mention_count',
-            color='inferred_actor',
-            color_discrete_sequence=px.colors.qualitative.Set3
+            template="plotly_white" # Removed color='inferred_actor'
         )
-        fig.update_traces(textposition='outside')
+        # Apply colors safely via traces
+        fig.update_traces(marker_color=px.colors.qualitative.Set3, textposition='outside')
         fig.update_layout(height=500, showlegend=False, template="plotly_white")
         subject_chart = fig.to_html(full_html=False, include_plotlyjs=False)
 
