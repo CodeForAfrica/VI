@@ -1,297 +1,208 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
-
-<!-- Filters -->
-<div class="row mb-5">
-    <div class="col-12">
-        <form method="get" class="row g-3">
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Media Outlet</label>
-                <select name="media_outlet" class="form-select">
-                    <option value="">All Outlets</option>
-                    {% for choice in outlet_choices %}
-                    <option value="{{ choice.media_outlet }}" {% if selected_outlet == choice.media_outlet %}selected{% endif %}>{{ choice.media_outlet }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Target Country</label>
-                <select name="target_country" class="form-select">
-                    <option value="">All Countries</option>
-                    {% for choice in country_choices %}
-                    <option value="{{ choice.target_country }}" {% if selected_country == choice.target_country %}selected{% endif %}>{{ choice.target_country }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Foreign Actor</label>
-                <select name="foreign_actor" class="form-select">
-                    <option value="">All Actors</option>
-                    {% for actor in foreign_actors %}
-                    <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Strategic Intent</label>
-                <select name="intent" class="form-select">
-                    <option value="">All Intents</option>
-                    {% for choice in intent_choices %}
-                    <option value="{{ choice.strategic_intent }}" {% if selected_intent == choice.strategic_intent %}selected{% endif %}>{{ choice.strategic_intent }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Tone</label>
-                <select name="tone" class="form-select">
-                    <option value="">All Tones</option>
-                    {% for choice in tone_choices %}
-                    <option value="{{ choice.tone }}" {% if selected_tone == choice.tone %}selected{% endif %}>{{ choice.tone }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary w-100">Apply</button>
-                <a href="/" class="btn btn-outline-secondary w-100">Reset</a>
-            </div>
-        </form>
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-title">Total Articles</div>
+            <div class="stats-number" style="color: #2c7be5;">{{ total_articles }}</div>
+            <div class="stats-subtitle">In our database</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-title">Media Outlets</div>
+            <div class="stats-number" style="color: #00897b;">{{ unique_outlets }}</div>
+            <div class="stats-subtitle">Tracked sources</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-title">Narratives Identified</div>
+            <div class="stats-number" style="color: #ff9800;">{{ unique_intents }}</div>
+            <div class="stats-subtitle">Strategic intents</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stats-card">
+            <div class="stats-title">Vulnerability Index</div>
+            <div class="stats-number" style="color: #e53935;">{{ avg_vulnerability_index|floatformat:2 }}</div>
+            <div class="stats-subtitle">Contextual risk score</div>
+        </div>
     </div>
 </div>
 
-<!-- Main Narrative Volume Chart -->
-<div class="card shadow-sm border-0 mb-5">
-    <div class="card-header bg-light text-center py-3">
-        <h3 class="mb-0 text-primary fw-bold">Narrative Volume Over Time</h3>
-        <small class="text-muted">Full dataset - unaffected by filters</small>
+<!-- Filters -->
+<div class="filters">
+    <div class="filters-row">
+        <div class="filter-group">
+            <label for="media-outlet">Media Outlet</label>
+            <select id="media-outlet" name="media_outlet" class="form-control">
+                <option value="">All Outlets</option>
+                {% for outlet in outlet_choices %}
+                    <option value="{{ outlet.media_outlet }}" {% if outlet.media_outlet == selected_outlet %}selected{% endif %}>
+                        {{ outlet.media_outlet }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="target-country">Target Country</label>
+            <select id="target-country" name="target_country" class="form-control">
+                <option value="">All Countries</option>
+                {% for country in country_choices %}
+                    <option value="{{ country.target_country }}" {% if country.target_country == selected_country %}selected{% endif %}>
+                        {{ country.target_country }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="foreign-actor">Foreign Actor</label>
+            <select id="foreign-actor" name="foreign_actor" class="form-control">
+                <option value="">All Actors</option>
+                {% for actor in foreign_actors %}
+                    <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>
+                        {{ actor }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="intent">Strategic Intent</label>
+            <select id="intent" name="intent" class="form-control">
+                <option value="">All Intents</option>
+                {% for intent in intent_choices %}
+                    <option value="{{ intent.strategic_intent }}" {% if intent.strategic_intent == selected_intent %}selected{% endif %}>
+                        {{ intent.strategic_intent }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="tone">Tone</label>
+            <select id="tone" name="tone" class="form-control">
+                <option value="">All Tones</option>
+                {% for tone in tone_choices %}
+                    <option value="{{ tone.tone }}" {% if tone.tone == selected_tone %}selected{% endif %}>
+                        {{ tone.tone }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
-    <div class="card-body p-4">
+    <div class="filters-row mt-3">
+        <div class="filter-group" style="flex: 2;">
+            <label for="search">Search Articles</label>
+            <div class="input-group">
+                <input type="text" id="search" name="q" class="form-control" 
+                       placeholder="Search articles..." 
+                       value="{{ search_query }}">
+                <button class="btn btn-primary" type="submit">Search</button>
+            </div>
+        </div>
+        <div class="filter-buttons">
+            <button class="btn btn-filter btn-reset">Reset</button>
+            <button class="btn btn-filter btn-apply">Apply</button>
+        </div>
+    </div>
+</div>
+
+<!-- Chart Section -->
+<div class="chart-container">
+    <h2 class="chart-title">Narrative Volume Over Time</h2>
+    <p class="chart-subtitle">Total articles: {{ total_articles }} • Full dataset shown by default</p>
+    <div class="chart-placeholder">
         {{ chart|safe }}
     </div>
 </div>
 
-<!-- Stats Cards Row -->
-<div class="row mb-5 g-4">
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0 text-center bg-primary text-white">
-            <div class="card-body py-4">
-                <h5 class="mb-0">Total Articles</h5>
-                <h2 class="fw-bold mt-2">{{ total_articles }}</h2>
+<!-- Recent Articles Section -->
+<div class="section-title">Recent Articles</div>
+{% for article in page_obj %}
+<div class="article-card">
+    <div class="row g-0">
+        <div class="col-md-3">
+            <div class="article-image" 
+                 style="background-image: url('{{ article.image_url|default:'https://via.placeholder.com/300x200/e0e0e0/ffffff?text=Article+Image' }}')">
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0 text-center bg-success text-white">
-            <div class="card-body py-4">
-                <h5 class="mb-0">Media Outlets</h5>
-                <h2 class="fw-bold mt-2">{{ unique_outlets }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0 text-center bg-warning text-dark">
-            <div class="card-body py-4">
-                <h5 class="mb-0">Narratives Identified</h5>
-                <h2 class="fw-bold mt-2">{{ unique_intents }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0 text-center bg-info text-white">
-            <div class="card-body py-4">
-                <h5 class="mb-0">Actors Detected</h5>
-                <h2 class="fw-bold mt-2">{{ unique_actors }}</h2>
+        <div class="col-md-9">
+            <div class="article-content">
+                <h2 class="article-title">
+                    <a href="#" style="text-decoration: none; color: inherit;">
+                        {{ article.title|default:'Untitled Article' }}
+                    </a>
+                </h2>
+                <div class="article-meta">
+                    <span>{{ article.media_outlet|default:'Unknown Source' }} • {{ article.posting_time|date:"M d, Y" }}</span>
+                    <span><i class="fas fa-clock"></i> {{ article.read_time|default:'5' }} min read</span>
+                </div>
+                <p class="article-excerpt">{{ article.excerpt|default:'No excerpt available' }}</p>
+                <div class="article-tags">
+                    <span class="tag">Tone: {{ article.tone|default:'Factual' }}</span>
+                    <span class="tag">Intent: {{ article.strategic_intent|default:'Cultural Hegemony' }}</span>
+                    <span class="tag" style="background-color: #ffebee; color: #c62828;">Vulnerability: {{ article.vulnerability_index|floatformat:2 }}</span>
+                </div>
+                <a href="#" class="read-more">Read full article →</a>
             </div>
         </div>
     </div>
 </div>
-
-
-<!-- CVI Section (After Stats, Before Search & Articles) -->
-<div class="card shadow-sm border-0 mb-5 bg-light">
-    <div class="card-header bg-light text-center py-3">
-        <h4 class="mb-0 text-primary fw-bold">Contextual Vulnerability Index (CVI)</h4>
-    </div>
-    <div class="card-body p-4">
-        <p class="text-center mb-3">
-            Combines structural vulnerability (debt, military presence, resource dependency) with narrative activity (media volume and tone).
-        </p>
-
-        <div class="row text-center mb-4 g-3">
-            <div class="col-md-4">
-                <strong>🔹 Structural Vulnerability</strong>
-                <p class="small text-muted">Based on debt levels, military ties, resource contracts, and geopolitical exposure.</p>
-            </div>
-            <div class="col-md-4">
-                <strong>🔹 Media Volume</strong>
-                <p class="small text-muted">Number of articles mentioning the actor in the country (normalized).</p>
-            </div>
-            <div class="col-md-4">
-                <strong>🔹 Tone Score</strong>
-                <p class="small text-muted">Ranges from -1.0 (alarmist/negative) to +1.0 (positive/supportive).</p>
-            </div>
-        </div>
-
-        <div class="alert alert-info text-center mb-4">
-            <strong>CVI Formula</strong><br>
-            CVI = Structural_Vulnerability × min(Volume/100, 1) × (1 - Tone/2)<br>
-            <small>Result: 0 (no vulnerability) to 1 (maximum vulnerability)</small>
-        </div>
-
-        <!-- CVI Form + Result + Factor Chart (Side-by-Side Layout) -->
-        <div class="row">
-            <!-- Left: Form & Result -->
-            <div class="col-lg-6">
-                <form method="get" class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold"> Target Country</label>
-                        <select name="african_country" class="form-select">
-                            <option value="">-- Choose Country --</option>
-                            {% for country in african_countries %}
-                            <option value="{{ country }}" {% if selected_african_country == country %}selected{% endif %}>
-                                {{ country }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold">Inferred Actor</label>
-                        <select name="foreign_actor" class="form-select">
-                            <option value="">-- Choose Actor --</option>
-                            {% for actor in foreign_actors %}
-                            <option value="{{ actor }}" {% if selected_foreign_actor == actor %}selected{% endif %}>
-                                {{ actor }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">Calculate</button>
-                    </div>
-                </form>
-
-                <!-- CVI Result -->
-                {% if cii_result is not None %}
-                <div class="text-center mt-4 p-3 border rounded bg-white">
-                    <h5 class="text-primary fw-bold mb-2">CVI Score</h5>
-                    <h2 class="fw-bold mb-2" style="color: {% if cii_result > 0.7 %}#dc3545{% elif cii_result > 0.4 %}#fd7e14{% else %}#28a745{% endif %}">
-                        {{ cii_result }}
-                    </h2>
-                    <p class="text-muted mb-1">
-                        Influence of <strong>{{ selected_foreign_actor|default:"—" }}</strong> on <strong>{{ selected_african_country|default:"—" }}</strong>
-                    </p>
-                    <small class="text-muted">(0.0 = No vulnerability • 1.0 = Maximum vulnerability)</small>
-                </div>
-                {% else %}
-                <div class="text-center mt-4 text-muted">
-                    <p>Select a country and actor above to calculate CVI</p>
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Right: Factor Contribution Bar Chart -->
-            <div class="col-lg-6 mt-4 mt-lg-0">
-                <h5 class="text-center text-primary fw-bold mb-3">Factor Contribution to CVI</h5>
-                {% if factor_chart_base64 %}
-                <div class="text-center">
-                    <img src="data:image/png;base64,{{ factor_chart_base64 }}" 
-                         style="width: 100%; max-width: 450px; height: auto;" 
-                         alt="CVI Factor Contribution Chart">
-                </div>
-                {% else %}
-                <p class="text-center text-muted">Factor breakdown will appear after calculation</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+{% empty %}
+<div class="text-center py-5">
+    <p class="text-muted fs-4">No articles found matching your criteria.</p>
+    <p class="text-muted">Try adjusting your filters or search terms.</p>
 </div>
+{% endfor %}
 
-<!-- Reset Filters Button -->
-<div class="text-center mb-5">
-    <a href="/" class="btn btn-outline-secondary btn-lg px-5">
-        <i class="fas fa-sync-alt me-2"></i> Reset Filters & View Default Chart
-    </a>
-</div>
-
-
-<!-- Search Bar -->
-<div class="row mb-5">
-    <div class="col-lg-8 mx-auto">
-        <form class="d-flex" method="get">
-            <input class="form-control me-2" type="search" name="q" placeholder="Search articles..." value="{{ search_query }}" aria-label="Search">
-            <button class="btn btn-primary" type="submit">Search</button>
-        </form>
-        {% if search_query %}
-        <p class="text-center mt-3 text-muted">
-            Results for "<strong>{{ search_query }}</strong>" • {{ total_articles }} found
-        </p>
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center mt-4">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page=1&{{ request.GET.urlencode }}" aria-label="First">
+                <span aria-hidden="true">«</span>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode }}" aria-label="Previous">
+                <span aria-hidden="true">‹</span>
+            </a>
+        </li>
         {% endif %}
-    </div>
-</div>
-
-<!-- Recent Articles -->
-<h4 class="mb-4 text-center text-primary fw-bold">Recent Articles</h4>
-
-<div class="row g-4">
-    {% for article in page_obj %}
-    <div class="col-12">
-        <div class="card shadow-sm border-0" style="max-height: 180px; overflow: hidden;">
-            <div class="row g-0 h-100">
-                <div class="col-md-3">
-                    {% if article.get_article_image %}
-                    <img src="{{ article.get_article_image }}" 
-                         class="img-fluid rounded-start w-100 h-100" 
-                         style="object-fit: cover;" 
-                         alt="Article image">
-                    {% else %}
-                    <div class="bg-light d-flex align-items-center justify-content-center h-100 rounded-start border-end">
-                        <span class="text-muted small">No image</span>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <div class="col-md-9">
-                    <div class="card-body py-2 px-3 d-flex flex-column h-100">
-                        <h6 class="card-title fw-bold text-primary mb-1" style="font-size: 1rem;">
-                            {{ article.article_text|truncatewords:12|default:"Untitled Article" }}
-                        </h6>
-                        <small class="text-muted mb-1">
-                            <strong>{{ article.media_outlet_fk.name|default:article.media_outlet|default:"Unknown" }}</strong>
-                            • {{ article.posting_time|date:"M j, Y" }}
-                        </small>
-                        <p class="card-text text-muted small mb-2 flex-grow-1" style="font-size: 0.85rem;">
-                            {{ article.article_text|truncatewords:40 }}
-                        </p>
-                        <div class="mt-auto d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="badge bg-success small me-1">Tone: {{ article.tone|default:"—" }}</span>
-                                <span class="badge bg-warning text-dark small">Intent: {{ article.strategic_intent|default:"—" }}</span>
-                            </div>
-                            {% if article.url %}
-                            <a href="{{ article.url }}" target="_blank" class="small text-primary fw-bold">
-                                Read full article →
-                            </a>
-                            {% else %}
-                            <span class="small text-muted">No link available</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <p class="text-muted fs-4">No articles available.</p>
-    </div>
-    {% endfor %}
-</div>
-
-<!-- View All Articles -->
-<div class="text-center mt-4">
-    <a href="{% url 'all_articles' %}" class="btn btn-outline-primary btn-sm">
-        View All {{ total_articles }} Articles →
-    </a>
-</div>
-
+        
+        {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+        <li class="page-item active" aria-current="page">
+            <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
+        </li>
+        {% elif num == page_obj.paginator.page_range|first or num == page_obj.paginator.page_range|last or num|add:'-2' == page_obj.number or num|add:'2' == page_obj.number %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
+        </li>
+        {% elif num|add:'-3' == page_obj.number or num|add:'3' == page_obj.number %}
+        <li class="page-item disabled">
+            <a class="page-link" href="#">...</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode }}" aria-label="Next">
+                <span aria-hidden="true">›</span>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ request.GET.urlencode }}" aria-label="Last">
+                <span aria-hidden="true">»</span>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
 {% endblock %}
