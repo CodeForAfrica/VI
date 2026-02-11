@@ -1,193 +1,121 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="p-3 bg-white rounded shadow-sm border">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md">
-                    <label class="form-label small fw-bold text-muted">Media Outlet</label>
-                    <select name="media_outlet" class="form-select form-select-sm">
-                        <option value="">All Outlets</option>
-                        {% for choice in outlet_choices %}
-                        <option value="{{ choice.media_outlet }}" {% if selected_outlet == choice.media_outlet %}selected{% endif %}>{{ choice.media_outlet }}</option>
-                        {% endfor %}
+<style>
+    /* Stats Row Styling */
+    .stat-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-5px); }
+    .stat-label { font-size: 0.85rem; color: var(--slate); font-weight: 600; text-transform: uppercase; }
+    .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--navy-dark); margin: 10px 0; }
+
+    /* CVI Split Container */
+    .cvi-container {
+        display: flex;
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        min-height: 350px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .cvi-left {
+        flex: 1;
+        padding: 40px;
+        border-right: 1px solid #e2e8f0;
+    }
+    .cvi-right {
+        flex: 1.2;
+        padding: 40px;
+        background-color: #fafafa;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .btn-navy {
+        background-color: var(--navy-dark);
+        color: white;
+        padding: 12px;
+        font-weight: 600;
+        border: none;
+    }
+    .btn-navy:hover { background-color: #0d1521; color: white; }
+</style>
+
+<div class="text-center mb-5">
+    <h1 class="fw-extrabold" style="color: var(--navy-dark);">Vulnerability Index Tool</h1>
+    <p class="text-muted">Monitoring Media Narratives Across Africa</p>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-md-3">
+        <div class="stat-card" style="border-top: 5px solid #3b82f6;">
+            <div class="stat-label">Total Articles</div>
+            <div class="stat-value">{{ total_articles|default:"15,166" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-top: 5px solid #10b981;">
+            <div class="stat-label">Media Outlets</div>
+            <div class="stat-value">{{ unique_outlets|default:"1,233" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-top: 5px solid #f59e0b;">
+            <div class="stat-label">Narratives Identified</div>
+            <div class="stat-value">{{ unique_intents|default:"46" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-top: 5px solid #06b6d4;">
+            <div class="stat-label">Actors Detected</div>
+            <div class="stat-value">{{ unique_actors|default:"10" }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-4">
+    <h3 class="text-center fw-bold mb-4">Contextual Vulnerability Index (CVI)</h3>
+    <div class="cvi-container">
+        <div class="cvi-left">
+            <form action="/report/" method="get">
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-muted">Target African Country</label>
+                    <select name="country" class="form-select form-select-lg">
+                        <option value="">-- Select Country --</option>
+                        {% for c in african_countries %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md">
-                    <label class="form-label small fw-bold text-muted">Target Country</label>
-                    <select name="target_country" class="form-select form-select-sm">
-                        <option value="">All Countries</option>
-                        {% for choice in country_choices %}
-                        <option value="{{ choice.target_country }}" {% if selected_country == choice.target_country %}selected{% endif %}>{{ choice.target_country }}</option>
-                        {% endfor %}
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-muted">Foreign Inferred Actor</label>
+                    <select name="actor" class="form-select form-select-lg">
+                        <option value="">-- Select Actor --</option>
+                        {% for a in foreign_actors %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md">
-                    <label class="form-label small fw-bold text-muted">Foreign Actor</label>
-                    <select name="foreign_actor" class="form-select form-select-sm">
-                        <option value="">All Actors</option>
-                        {% for actor in foreign_actors %}
-                        <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md">
-                    <label class="form-label small fw-bold text-muted">Strategic Intent</label>
-                    <select name="intent" class="form-select form-select-sm">
-                        <option value="">All Intents</option>
-                        {% for choice in intent_choices %}
-                        <option value="{{ choice.strategic_intent }}" {% if selected_intent == choice.strategic_intent %}selected{% endif %}>{{ choice.strategic_intent }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-auto d-flex gap-1">
-                    <button type="submit" class="btn btn-dark btn-sm px-3">Apply Filters</button>
-                    <a href="/" class="btn btn-outline-secondary btn-sm">Reset</a>
-                </div>
+                <button type="submit" class="btn btn-navy w-100 btn-lg shadow-sm">
+                    Generate Vulnerability Report
+                </button>
             </form>
         </div>
-    </div>
-</div>
 
-<div class="card shadow-sm border-0 mb-5">
-    <div class="card-header bg-white text-center py-3 border-bottom">
-        <h3 class="mb-0 fw-bold" style="color: #1a2a40;">Narrative Volume Over Time</h3>
-        <small class="text-muted">Analyzing historical disinformation trends across the continent</small>
-    </div>
-    <div class="card-body p-4">
-        {{ chart|safe }}
-    </div>
-</div>
-
-<div class="stats-grid mb-5">
-    <div class="stat-card blue">
-        <h3>Total Articles</h3>
-        <div class="value">{{ total_articles }}</div>
-    </div>
-    <div class="stat-card cyan">
-        <h3>Media Outlets</h3>
-        <div class="value">{{ unique_outlets }}</div>
-    </div>
-    <div class="stat-card yellow"> <h3>Narratives Identified</h3>
-        <div class="value">{{ unique_intents }}</div>
-    </div>
-    <div class="stat-card green">
-        <h3>Actors Detected</h3>
-        <div class="value">{{ unique_actors }}</div>
-    </div>
-</div>
-
-<div class="card shadow-sm border-0 mb-5" style="background-color: #fcfcfc; border: 1px solid #eef0f2 !important;">
-    <div class="card-header bg-white text-center py-3 border-bottom">
-        <h4 class="mb-0 fw-bold" style="color: #1a2a40;">Contextual Vulnerability Index (CVI)</h4>
-    </div>
-    <div class="card-body p-4">
-        <div class="row align-items-center">
-            <div class="col-lg-5 border-end">
-                <form method="get" class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label small fw-bold">Target African Country</label>
-                        <select name="african_country" class="form-select">
-                            <option value="">-- Select Country --</option>
-                            {% for country in african_countries %}
-                            <option value="{{ country }}" {% if selected_african_country == country %}selected{% endif %}>{{ country }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label small fw-bold">Foreign Inferred Actor</label>
-                        <select name="foreign_actor" class="form-select">
-                            <option value="">-- Select Actor --</option>
-                            {% for actor in foreign_actors %}
-                            <option value="{{ actor }}" {% if selected_foreign_actor == actor %}selected{% endif %}>{{ actor }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary w-100 fw-bold">Generate Vulnerability Report</button>
-                    </div>
-                </form>
-
-                {% if cii_result is not None %}
-                <div class="mt-4 p-3 rounded text-center" style="background: #fff; border: 1px solid #dee2e6;">
-                    <span class="text-uppercase small fw-bold text-muted">Index Score</span>
-                    <h2 class="display-5 fw-bold mb-0" style="color: #1a2a40;">{{ cii_result }}</h2>
-                    <p class="small text-muted mt-2 mb-0">High risk threshold > 0.7</p>
+        <div class="cvi-right text-center">
+            {% if chart_data %}
+                <img src="data:image/png;base64,{{ chart_data }}" class="img-fluid">
+            {% else %}
+                <div class="opacity-50">
+                    <i class="fas fa-chart-pie fa-4x mb-3 text-muted"></i>
+                    <p class="mb-0">Select parameters on the left to view <br>the factor contribution chart.</p>
                 </div>
-                {% endif %}
-            </div>
-
-            <div class="col-lg-7 px-lg-5">
-                {% if factor_chart_base64 %}
-                <h6 class="text-center fw-bold text-muted mb-3">Factor Contribution Breakdown</h6>
-                <div class="text-center">
-                    <img src="data:image/png;base64,{{ factor_chart_base64 }}" class="img-fluid rounded" style="max-height: 250px;">
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-chart-pie fa-3x text-light mb-3"></i>
-                    <p class="text-muted">Select parameters to view factor contribution</p>
-                </div>
-                {% endif %}
-            </div>
+            {% endif %}
         </div>
     </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-6 offset-md-3">
-        <form class="input-group" method="get">
-            <input class="form-control" type="search" name="q" placeholder="Keyword search..." value="{{ search_query }}">
-            <button class="btn btn-dark" type="submit">Search</button>
-        </form>
-    </div>
-</div>
-
-<h4 class="mb-4 fw-bold" style="color: #1a2a40; border-left: 5px solid #1a2a40; padding-left: 15px;">Recent Articles</h4>
-
-<div class="article-list">
-    {% for article in page_obj %}
-    <div class="article-item mb-3">
-        <div class="row g-0">
-            <div class="col-md-3 article-img-container">
-                {% if article.get_article_image %}
-                <img src="{{ article.get_article_image }}" class="img-fluid h-100 w-100" style="object-fit: cover;" alt="Analysis Image">
-                {% else %}
-                <div class="bg-light d-flex align-items-center justify-content-center h-100 border-end">
-                    <span class="text-muted small italic">Visual N/A</span>
-                </div>
-                {% endif %}
-            </div>
-            <div class="col-md-9 p-3">
-                <a href="{{ article.url|default:'#' }}" target="_blank" class="article-title h5 d-block text-decoration-none" style="color: #1a2a40;">
-                    {{ article.article_text|truncatewords:14 }}
-                </a>
-                <div class="article-meta mb-2">
-                    <span class="badge bg-light text-dark border">{{ article.media_outlet }}</span>
-                    <span class="ms-2 text-muted small">{{ article.posting_time|date:"d M Y" }}</span>
-                </div>
-                <p class="text-muted small">
-                    {{ article.article_text|truncatewords:30 }}
-                </p>
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <div>
-                        <span class="badge rounded-pill px-3 py-2 me-1" style="background: #e9ecef; color: #495057;">Tone: {{ article.tone|default:"Neutral" }}</span>
-                        <span class="badge rounded-pill px-3 py-2" style="background: #1a2a40; color: #fff;">Intent: {{ article.strategic_intent|default:"Inferred" }}</span>
-                    </div>
-                    {% if article.url %}
-                    <a href="{{ article.url }}" target="_blank" class="small fw-bold text-primary">Full Report →</a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-
-<div class="text-center mt-5 mb-5">
-    <a href="{% url 'all_articles' %}" class="btn btn-outline-dark px-5">View Full Archive</a>
 </div>
 
 {% endblock %}
