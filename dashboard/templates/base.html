@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+{% load static %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vulnerability Index Tool</title>
+    <title>Vulnerability Index Tool - Code for Africa</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
@@ -22,12 +23,16 @@
             color: var(--navy-dark);
         }
 
-        /* Navbar Styling */
-        .navbar { background-color: white; border-bottom: 1px solid #e2e8f0; }
-        .nav-link { color: var(--slate); font-weight: 500; }
-        .nav-link.active { color: var(--navy-dark); border-bottom: 2px solid var(--navy-dark); }
+        /* Header Styling */
+        header { background-color: white; border-bottom: 1px solid #e2e8f0; }
 
-        /* Footer Styling - Replaces the red bar */
+        /* Navbar Styling */
+        .navbar { background-color: white; border-bottom: 1px solid #e2e8f0; padding: 0.5rem 0; }
+        .nav-link { color: var(--slate); font-weight: 500; margin: 0 10px; }
+        .nav-link.active { color: var(--navy-dark); border-bottom: 2px solid var(--navy-dark); }
+        .nav-link:hover { color: var(--action-blue); }
+
+        /* Footer Styling */
         .footer-navy {
             background-color: var(--navy-dark);
             color: white;
@@ -38,32 +43,56 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg mb-4">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="#" style="color: var(--navy-dark);">
-                Vulnerability Index Tool
-            </a>
-            <div class="navbar-nav mx-auto">
-                <a class="nav-link active" href="/">Home</a>
-                <a class="nav-link" href="/authors/">Authors</a>
-                <a class="nav-link" href="/countries/">Countries</a>
-                <a class="nav-link" href="/media/">Media</a>
-                <a class="nav-link" href="/report/">Report</a>
+
+<header class="py-4">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-3 col-12 text-md-start text-center mb-md-0 mb-3">
+                <img src="{% static 'dashboard/images/Africa logo.png' %}" 
+                     alt="Code for Africa" 
+                     height="45" 
+                     style="max-height: 45px; width: auto; object-fit: contain;">
+            </div>
+
+            <div class="col-md-6 col-12 text-center">
+                <h1 class="h3 fw-bold mb-1" style="color: var(--navy-dark);">
+                    Vulnerability Index Tool
+                </h1>
+                <p class="small text-muted mb-0 text-uppercase tracking-wider">
+                    Monitoring Media Narratives Across Africa
+                </p>
+            </div>
+
+            <div class="col-md-3 col-12 text-md-end text-center">
+                <small class="text-muted">Last updated: February 2026</small>
             </div>
         </div>
-    </nav>
-
-    <div class="container">
-        {% block content %}{% endblock %}
     </div>
+</header>
 
-    <footer class="footer-navy">
-        <div class="container">
-            <p class="mb-1">© 2026 Code for Africa • Vulnerability Index Tool</p>
-            <p class="small opacity-75">Data Visualization Dashboard • Built with Django & Plotly</p>
+<nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container">
+        <div class="navbar-nav mx-auto">
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Home</a>
+            <a class="nav-link {% if '/authors/' in request.path %}active{% endif %}" href="/authors/">Authors</a>
+            <a class="nav-link {% if '/countries/' in request.path %}active{% endif %}" href="/countries/">Countries</a>
+            <a class="nav-link {% if '/media/' in request.path %}active{% endif %}" href="/media/">Media</a>
+            <a class="nav-link {% if '/report/' in request.path %}active{% endif %}" href="/report/">Report</a>
         </div>
-    </footer>
+    </div>
+</nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<div class="container mt-5">
+    {% block content %}{% endblock %}
+</div>
+
+<footer class="footer-navy">
+    <div class="container">
+        <p class="mb-1">© 2026 Code for Africa • Vulnerability Index Tool</p>
+        <p class="small opacity-75">Data Visualization Dashboard • Built with Django & Plotly</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
