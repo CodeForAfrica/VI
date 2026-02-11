@@ -200,24 +200,40 @@ def overview(request):
 # =========================
 
 def countries(request):
-    selected_country = request.GET.get('country', '').strip()
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if selected_country: qs = qs.filter(target_country__iexact=selected_country)
+    # 1. Data for the table and bar chart
+    top_publishers = MediaNarrative.objects.values('target_country') \
+        .annotate(article_count=Count('id')) \
+        .order_by('-article_count')[:10]
     
-    top_publishers = MediaNarrative.objects.values('target_country').annotate(article_count=Count('target_country')).order_by('-article_count')[:10]
+    # 2. Data for the "Top Subjects" chart
+    top_subjects = MediaNarrative.objects.exclude(strategic_intent__in=['', None]) \
+        .values('strategic_intent') \
+        .annotate(total=Count('id')) \
+        .order_by('-total')[:10]
+
+    # Generate Publisher Chart
     publisher_chart = ""
     if top_publishers:
-        df = pd.DataFrame(top_publishers)
-        fig = px.bar(df, x='article_count', y='target_country', orientation='h', title='Top Publishers')
+        df = pd.DataFrame(list(top_publishers))
+        fig = px.bar(df, x='article_count', y='target_country', orientation='h', 
+                     color_discrete_sequence=['#6366f1'])
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # Generate Subject Chart (The empty box in your screenshot)
+    subject_chart = ""
+    if top_subjects:
+        df_s = pd.DataFrame(list(top_subjects))
+        fig_s = px.pie(df_s, values='total', names='strategic_intent', hole=.3)
+        subject_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')
 
     context = {
         'publisher_chart': publisher_chart,
-        'sample_articles': qs[:5],
-        'selected_country': selected_country or "All Countries",
+        'subject_chart': subject_chart,
+        'coverage_table': top_publishers, # This matches the name in your HTML
+        'sample_articles': MediaNarrative.objects.all()[:5],
     }
-    return render(request, 'countries.html', context)
-
+    return render(request, 'dashboard/countries.html', context)
+    
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
     qs = MediaNarrative.objects.all().order_by('-posting_time')
