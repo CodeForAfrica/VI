@@ -716,8 +716,15 @@ def authors(request):
 
     # Chart: Top Journalists by Articles
     if top_journalists.exists():
+        # Convert to DataFrame
         df = pd.DataFrame(list(top_journalists.values('name', 'article_count')))
+        
+        # 1. CLEAN DATA: Remove any rows with empty names and ensure names are strings
+        df = df.dropna(subset=['name'])
+        df['name'] = df['name'].astype(str)
         df = df.sort_values('article_count')
+
+        # 2. CREATE FIGURE: We remove 'color' from the initial call to avoid the KeyError
         fig = px.bar(
             df,
             x='article_count',
@@ -725,21 +732,26 @@ def authors(request):
             orientation='h',
             title='Top 10 Journalists by Articles Published',
             text='article_count',
-            color='name',
-            color_discrete_sequence=px.colors.qualitative.Bold
+            template="plotly_white"
         )
-        fig.update_traces(textposition='outside')
+        
+        # 3. APPLY STYLING: Add the color sequence safely without grouping by name
+        fig.update_traces(
+            marker_color=px.colors.qualitative.Bold,
+            textposition='outside'
+        )
+        
         fig.update_layout(
             height=500,
             showlegend=False,
-            template="plotly_white",
             xaxis_title="Number of Articles",
-            yaxis_title="Journalist"
+            yaxis_title="Journalist",
+            margin=dict(l=150) # Gives space for longer names like 'Saphiétou Mbengue'
         )
+        
         authors_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
     else:
         authors_chart = "<p class='text-center text-muted py-5'>No journalist data available.</p>"
-
     # Pagination
     paginator = Paginator(qs, 5)
     page_number = request.GET.get('page')
