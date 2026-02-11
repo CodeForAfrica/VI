@@ -183,7 +183,7 @@ def overview(request):
         'cii_result': None,
         'factor_chart_base64': None,
     }
-    return render(request, 'dashboard/overview.html', context)
+    return render(request, 'overview.html', context)
 
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
