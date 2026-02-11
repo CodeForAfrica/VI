@@ -82,13 +82,41 @@
             </div>
         </div>
     </div>
+
     <div class="col-lg-5">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white py-3 border-bottom">
                 <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top African Countries Publishing</h5>
             </div>
             <div class="card-body p-0">
-                {% if country_chart %}{{ country_chart|safe }}{% else %}<div class="p-5 text-center text-muted">No country data available.</div>{% endif %}
+                {% if country_chart %}
+                    <div class="mb-3">{{ country_chart|safe }}</div>
+                {% endif %}
+                
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" style="font-size: 0.9rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Country</th>
+                                <th class="text-end pe-3">Articles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in country_list %}
+                            <tr>
+                                <td class="ps-3 fw-bold">{{ item.target_country }}</td>
+                                <td class="text-end pe-3">
+                                    <span class="badge rounded-pill bg-light text-dark border">{{ item.total }}</span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center py-4 text-muted">No publishing data found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
