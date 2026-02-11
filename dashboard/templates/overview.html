@@ -28,6 +28,9 @@
         box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
     }
     #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
+
+    /* Typing Animation */
+    .typing { font-style: italic; color: #888; font-size: 0.8rem; }
 </style>
 
 <div class="row g-3 mb-5">
@@ -92,11 +95,12 @@
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
 <div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
-        <form method="get">
+        <form method="get" action=".">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
                 <select name="target_country" class="form-select">
                     {% for country in african_countries %}
+                    {# Normalize check for selection state #}
                     <option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>
                     {% endfor %}
                 </select>
@@ -110,7 +114,7 @@
                 </select>
             </div>
             <button type="submit" class="btn w-100 fw-bold text-white" style="background-color: var(--action-blue);">
-                Calculate Score
+                Calculate & Filter
             </button>
         </form>
     </div>
@@ -118,7 +122,7 @@
         {% if cvi_score %}
             <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:2 }}</div>
             <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
-            <p class="small text-muted">Based on real-time narrative analysis</p>
+            <p class="small text-muted">Analysis for {{ selected_country }}</p>
         {% else %}
             <div class="text-muted opacity-50">
                 <i class="fas fa-calculator fa-3x mb-3"></i>
@@ -152,7 +156,7 @@
 </div>
 
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
-<div class="row g-4 mb-5">
+<div class="row g-4 mb-3">
     {% for article in page_obj %}
     <div class="col-12">
         <div class="card shadow-sm border-0">
@@ -182,6 +186,24 @@
     {% endfor %}
 </div>
 
+<nav aria-label="Page navigation" class="mb-5">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}">Previous</a>
+            </li>
+        {% endif %}
+        
+        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}">Next</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+
 <div id="chatbot-bubble">
     <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
         <span style="font-size: 1.5rem;">💬</span>
@@ -195,13 +217,13 @@
     </div>
     <div id="chat-box" class="p-3 flex-grow-1 overflow-auto bg-light" style="font-size: 0.9rem;">
         <div class="p-2 mb-2 bg-white border rounded">
-            Hello! I am your AI analyst. Ask me anything about the current media narratives or vulnerability scores.
+            Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores.
         </div>
     </div>
     <div class="p-2 border-top bg-white rounded-bottom">
         <div class="input-group">
-            <input type="text" id="user-input" class="form-control form-control-sm" placeholder="Ask a question...">
-            <button class="btn btn-primary btn-sm" type="button">Send</button>
+            <input type="text" id="chat-input" class="form-control form-control-sm" placeholder="Ask a question...">
+            <button class="btn btn-primary btn-sm" type="button" id="send-btn">Send</button>
         </div>
     </div>
 </div>
@@ -209,12 +231,52 @@
 <script>
     function toggleChat() {
         const chat = document.getElementById('chat-window');
-        if (chat.style.display === 'flex') {
-            chat.style.display = 'none';
-        } else {
-            chat.style.display = 'flex';
-        }
+        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
     }
+
+    // FIXED: Chatbot Send Logic
+    document.getElementById('send-btn').addEventListener('click', function() {
+        const input = document.getElementById('chat-input');
+        const box = document.getElementById('chat-box');
+        const userText = input.value.trim();
+        
+        if (userText !== "") {
+            // 1. Add User Bubble
+            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
+            input.value = "";
+            
+            // 2. Add Loading Indicator
+            const loadingId = "loading-" + Date.now();
+            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
+            box.scrollTop = box.scrollHeight;
+
+            // 3. Fetch from Django
+            fetch('/chatbot-api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ message: userText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById(loadingId).remove();
+                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
+                box.scrollTop = box.scrollHeight;
+            })
+            .catch(error => {
+                document.getElementById(loadingId).innerHTML = `<span class="text-danger small">Connection error.</span>`;
+            });
+        }
+    });
+
+    // Allow "Enter" key to send message
+    document.getElementById('chat-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            document.getElementById('send-btn').click();
+        }
+    });
 </script>
 
 {% endblock %}
