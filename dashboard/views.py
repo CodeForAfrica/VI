@@ -188,6 +188,8 @@ def overview(request):
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
+        'country_chart': country_chart,
+        'top_subjects': top_subjects,
         'cii_result': None,
         'factor_chart_base64': None,
     }
@@ -214,7 +216,7 @@ def countries(request):
         'sample_articles': qs[:5],
         'selected_country': selected_country or "All Countries",
     }
-    return render(request, 'dashboard/countries.html', context)
+    return render(request, 'countries.html', context)
 
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
