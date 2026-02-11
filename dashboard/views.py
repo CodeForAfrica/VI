@@ -99,6 +99,14 @@ def chatbot_response(request):
 # OVERVIEW PAGE (Updated with ML VI Logic)
 # =========================
 def overview(request):
+    # 1. Initialize all variables with default values to avoid NameErrors
+    chart = "<div>No data available</div>"
+    country_chart = ""
+    country_list = []
+    top_subjects = []
+    cvi_score = None
+    
+    # 2. Capture Filter/Calculator Inputs
     media_outlet = request.GET.get('media_outlet', '').strip()
     target_country = request.GET.get('target_country', '').strip()
     foreign_actor = request.GET.get('foreign_actor', '').strip()
@@ -106,6 +114,7 @@ def overview(request):
     tone = request.GET.get('tone', '').strip()
     search_query = request.GET.get('q', '').strip()
 
+    # 3. Build Queryset for Recent Articles
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
     if media_outlet: qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
@@ -117,35 +126,55 @@ def overview(request):
 
     total_articles = qs.count()
 
-    # Full stats for boxes
+    # 4. Global Stats for Header Boxes
     full_stats_qs = MediaNarrative.objects.all()
     unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
     unique_intents = full_stats_qs.exclude(strategic_intent='').values('strategic_intent').distinct().count()
     unique_actors = full_stats_qs.exclude(inferred_actor='').values('inferred_actor').distinct().count()
 
-    # Narrative Volume Chart
-    chart_qs = MediaNarrative.objects.all()
-    if chart_qs.exists():
-        df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
-        df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
-        daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-        fig = px.line(daily_counts, x='date', y='count', title='Narrative Volume Over Time')
-        chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    else:
-        chart = "<div>No data</div>"
+    # 5. Narrative Volume Line Chart
+    if full_stats_qs.exists():
+        try:
+            df = pd.DataFrame.from_records(full_stats_qs.values('posting_time'))
+            df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
+            daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
+            fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
+            fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
+            chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        except Exception as e:
+            logger.error(f"Volume Chart Error: {e}")
 
-    # Pagination
+    # 6. Top Countries Table and Bar Chart
+    country_list = MediaNarrative.objects.values('target_country') \
+        .annotate(total=Count('id')) \
+        .order_by('-total')[:10]
+
+    if country_list:
+        try:
+            df_c = pd.DataFrame(list(country_list))
+            fig_c = px.bar(df_c, x='total', y='target_country', orientation='h', color_discrete_sequence=['#2563eb'])
+            fig_c.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300, xaxis_title="Articles", yaxis_title="")
+            country_chart = fig_c.to_html(full_html=False, include_plotlyjs='cdn')
+        except Exception as e:
+            logger.error(f"Country Chart Error: {e}")
+
+    # 7. Top Subjects (Strategic Intents)
+    top_subjects = MediaNarrative.objects.exclude(strategic_intent__in=['', None]) \
+        .values('strategic_intent') \
+        .annotate(total=Count('id')) \
+        .order_by('-total')[:5]
+
+    # 8. Pagination for Recent Articles
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ✅ VI Calculation: Use ML Service (Replaces old CII logic)
+    # 9. ML Service for VI Calculation
     ml_service = MLInferenceService()
     articles_with_vi = []
     
     for article in page_obj.object_list:
         try:
-            # Call the service
             vi_score = ml_service.calculate_vulnerability_index(
                 strategic_intent=article.strategic_intent or 'neutral',
                 tone=article.tone or 'neutral',
@@ -153,35 +182,29 @@ def overview(request):
                 inferred_actor=article.inferred_actor or 'NonState',
                 confidence=article.confidence or 0.5
             )
-            
-            # ENSURE it's a number. If service returns None, use 0.0
             article.vulnerability_index = float(vi_score) if vi_score is not None else 0.0
-            
-        except Exception as e:
-            logger.error(f"VI error for article {article.id}: {e}")
-            article.vulnerability_index = 0.0  # Safe default
-            
+        except Exception:
+            article.vulnerability_index = 0.0
         articles_with_vi.append(article)
-
-    # Re-assign back to page_obj
+    
     page_obj.object_list = articles_with_vi
 
-    # Safe math for average
-    if articles_with_vi:
-        total_vi = sum(a.vulnerability_index for a in articles_with_vi)
-        avg_vulnerability = total_vi / len(articles_with_vi)
-    else:
-        avg_vulnerability = 0.0
-    # Aggregate top 10 publishing countries for the table
-    country_list = MediaNarrative.objects.values('target_country') \
-        .annotate(total=Count('id')) \
-        .order_by('-total')[:10]
-    # Tabs set to None to remove from display logic
+    # 10. Calculator Specific Score (Target Country + Foreign Actor)
+    calc_country = request.GET.get('target_country')
+    calc_actor = request.GET.get('foreign_actor')
+    
+    if calc_country and calc_actor:
+        latest = MediaNarrative.objects.filter(target_country=calc_country, inferred_actor=calc_actor).first()
+        if latest:
+            cvi_score = ml_service.calculate_vulnerability_index(
+                latest.strategic_intent, latest.tone, latest.target_country, latest.inferred_actor, latest.confidence or 0.5
+            )
+
+    # 11. Final Context - All variables are guaranteed to exist here
     context = {
         'chart': chart,
         'page_obj': page_obj,
         'total_articles': total_articles,
-        'avg_vulnerability': avg_vulnerability,
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
@@ -190,9 +213,13 @@ def overview(request):
         'country_list': country_list,
         'country_chart': country_chart,
         'top_subjects': top_subjects,
-        'cii_result': None,
+        'cvi_score': cvi_score,
+        'selected_country': calc_country,
+        'selected_actor': calc_actor,
+        'cii_result': None, # Placeholders for legacy compatibility
         'factor_chart_base64': None,
     }
+    
     return render(request, 'overview.html', context)
 
 # =========================
