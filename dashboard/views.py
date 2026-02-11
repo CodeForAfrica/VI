@@ -49,8 +49,7 @@ class DisinfoAnalysisChatbot:
         return self.get_insights_from_ai(query, context)
 
     def get_insights_from_ai(self, query, context):
-        system_prompt = 
-        """
+        system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices related to foreign influence in African countries.
         Your task is to analyze the provided context information and answer the user's query accurately and concisely.
         The context includes retrieved articles and potentially dashboard metrics related to the user's request.
