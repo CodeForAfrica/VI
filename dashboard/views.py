@@ -146,7 +146,6 @@ def overview(request):
         qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
     
     if target_country:
-        # Check for any variation of Ivory Coast/Côte d'Ivoire
         if any(term in target_country.lower() for term in ["ivoire", "ivory", "cote"]):
              qs = qs.filter(
                  Q(target_country__icontains="Ivoire") | 
@@ -154,7 +153,6 @@ def overview(request):
                  Q(target_country__icontains="Ivory")
              )
         else:
-             # Standard exact filter for all other countries
              qs = qs.filter(target_country__iexact=target_country)
 
     if foreign_actor: 
@@ -168,7 +166,7 @@ def overview(request):
 
     total_articles = qs.count()
 
-    # 5. Global Stats (using the filtered queryset to keep dashboard in sync)
+    # 5. Global Stats
     full_stats_qs = MediaNarrative.objects.all()
     for word in irrelevant_keywords:
         full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
@@ -205,48 +203,33 @@ def overview(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 10. ML Service for VI Calculation
+    # 10. ML Service for VI Calculation (FIXED with Mapping)
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
-        try:
-            score = ml_service.calculate_vulnerability_index(
-                article.strategic_intent or 'neutral',
-                article.tone or 'neutral',
-                article.target_country or 'Unknown',
-                article.inferred_actor or 'NonState',
-                article.confidence or 0.5
-            )
-            article.vulnerability_index = float(score) if score else 0.0
-        except:
-            article.vulnerability_index = 0.0
+        # We pass the raw values; the calculate_vulnerability_index mapping handles the spelling
+        score = ml_service.calculate_vulnerability_index(
+            article.strategic_intent or 'neutral',
+            article.tone or 'neutral',
+            article.target_country,
+            article.inferred_actor,
+            article.confidence or 0.5
+        )
+        article.vulnerability_index = float(score) if score else 0.0
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 11. Calculator Score Result
+    # 11. Calculator Score Result (FIXED with Mapping)
     if target_country and foreign_actor:
-        # Calculate based on the current filtered results
+        # We use the selected dropdown values directly
         latest = qs.first() 
-        if latest:
-            cvi_score = ml_service.calculate_vulnerability_index(
-                latest.strategic_intent, 
-                latest.tone, 
-                latest.target_country, 
-                latest.inferred_actor, 
-                latest.confidence or 0.5
-            )
-        else:
-            # Fallback for the Ivory Coast variations specifically
-            if any(term in target_country.lower() for term in ["ivoire", "ivory", "cote"]):
-                fallback_art = MediaNarrative.objects.filter(
-                    Q(target_country__icontains="Ivoire") | Q(target_country__icontains="Cote") | Q(target_country__icontains="Ivory"),
-                    inferred_actor__iexact=foreign_actor
-                ).first()
-                if fallback_art:
-                    cvi_score = ml_service.calculate_vulnerability_index(
-                        fallback_art.strategic_intent, fallback_art.tone, 
-                        fallback_art.target_country, fallback_art.inferred_actor, 0.5
-                    )
+        cvi_score = ml_service.calculate_vulnerability_index(
+            latest.strategic_intent if latest else "neutral", 
+            latest.tone if latest else "neutral", 
+            target_country, # Normalized by the spelling-proof mapping
+            foreign_actor,  # Normalized by the actor mapping
+            latest.confidence if latest else 0.5
+        )
 
     # 12. Context
     context = {
