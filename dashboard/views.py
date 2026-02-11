@@ -58,11 +58,13 @@ class DisinfoAnalysisChatbot:
         Cite relevant articles from the retrieved list if possible.
         """
 
-        # Prepare the messages for the LLM
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context Information:\n{context_from_search}\n\nUser Query: '{prompt}'"}
-        ],
+        try:
+            # Prepare the messages for the LLM
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context Information:\n{context}\n\nUser Query: '{query}'"}
+                ],
                 model=self.model,
                 temperature=0.1,
             )
