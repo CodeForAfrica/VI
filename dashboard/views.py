@@ -99,24 +99,34 @@ def chatbot_response(request):
 # OVERVIEW PAGE (Updated with ML VI Logic)
 # =========================
 def overview(request):
-    # 1. Initialize all variables with default values to avoid NameErrors
+    # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
     country_chart = ""
     country_list = []
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Filter/Calculator Inputs
+    # 2. Capture Inputs
+    # We now check BOTH the sidebar filter and the calculator inputs
     media_outlet = request.GET.get('media_outlet', '').strip()
-    target_country = request.GET.get('target_country', '').strip()
-    foreign_actor = request.GET.get('foreign_actor', '').strip()
+    
+    # Check if user used the main filter OR the calculator to pick a country
+    target_country = request.GET.get('target_country', '').strip() or request.GET.get('calc_target_country', '').strip()
+    foreign_actor = request.GET.get('foreign_actor', '').strip() or request.GET.get('calc_foreign_actor', '').strip()
+    
     intent = request.GET.get('intent', '').strip()
     tone = request.GET.get('tone', '').strip()
     search_query = request.GET.get('q', '').strip()
 
-    # 3. Build Queryset for Recent Articles
+    # 3. Build Queryset & APPLY RELEVANCE FILTER
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
+    # Exclude non-relevant topics (Football, Entertainment, etc.)
+    irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
+    for word in irrelevant_keywords:
+        qs = qs.exclude(article_text__icontains=word)
+
+    # 4. Apply User Filters
     if media_outlet: qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
     if target_country: qs = qs.filter(target_country__iexact=target_country)
     if foreign_actor: qs = qs.filter(inferred_actor__iexact=foreign_actor)
@@ -126,13 +136,17 @@ def overview(request):
 
     total_articles = qs.count()
 
-    # 4. Global Stats for Header Boxes
+    # 5. Global Stats (using the filtered queryset to keep dashboard in sync)
     full_stats_qs = MediaNarrative.objects.all()
+    # Apply relevance to stats too so counts are accurate
+    for word in irrelevant_keywords:
+        full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
+
     unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
     unique_intents = full_stats_qs.exclude(strategic_intent='').values('strategic_intent').distinct().count()
     unique_actors = full_stats_qs.exclude(inferred_actor='').values('inferred_actor').distinct().count()
 
-    # 5. Narrative Volume Line Chart
+    # 6. Volume Line Chart
     if full_stats_qs.exists():
         try:
             df = pd.DataFrame.from_records(full_stats_qs.values('posting_time'))
@@ -144,63 +158,50 @@ def overview(request):
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
 
-    # 6. Top Countries Table and Bar Chart
-    country_list = MediaNarrative.objects.values('target_country') \
+    # 7. Top Countries Table
+    country_list = full_stats_qs.values('target_country') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:10]
 
-    if country_list:
-        try:
-            df_c = pd.DataFrame(list(country_list))
-            fig_c = px.bar(df_c, x='total', y='target_country', orientation='h', color_discrete_sequence=['#2563eb'])
-            fig_c.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300, xaxis_title="Articles", yaxis_title="")
-            country_chart = fig_c.to_html(full_html=False, include_plotlyjs='cdn')
-        except Exception as e:
-            logger.error(f"Country Chart Error: {e}")
-
-    # 7. Top Subjects (Strategic Intents)
-    top_subjects = MediaNarrative.objects.exclude(strategic_intent__in=['', None]) \
+    # 8. Top Subjects
+    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]) \
         .values('strategic_intent') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:5]
 
-    # 8. Pagination for Recent Articles
+    # 9. Pagination
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 9. ML Service for VI Calculation
+    # 10. ML Service for VI Calculation
     ml_service = MLInferenceService()
     articles_with_vi = []
-    
     for article in page_obj.object_list:
         try:
-            vi_score = ml_service.calculate_vulnerability_index(
-                strategic_intent=article.strategic_intent or 'neutral',
-                tone=article.tone or 'neutral',
-                target_country=article.target_country or 'Unknown',
-                inferred_actor=article.inferred_actor or 'NonState',
-                confidence=article.confidence or 0.5
+            score = ml_service.calculate_vulnerability_index(
+                article.strategic_intent or 'neutral',
+                article.tone or 'neutral',
+                article.target_country or 'Unknown',
+                article.inferred_actor or 'NonState',
+                article.confidence or 0.5
             )
-            article.vulnerability_index = float(vi_score) if vi_score is not None else 0.0
-        except Exception:
+            article.vulnerability_index = float(score) if score else 0.0
+        except:
             article.vulnerability_index = 0.0
         articles_with_vi.append(article)
-    
     page_obj.object_list = articles_with_vi
 
-    # 10. Calculator Specific Score (Target Country + Foreign Actor)
-    calc_country = request.GET.get('target_country')
-    calc_actor = request.GET.get('foreign_actor')
-    
-    if calc_country and calc_actor:
-        latest = MediaNarrative.objects.filter(target_country=calc_country, inferred_actor=calc_actor).first()
+    # 11. Calculator Score Result
+    # Because target_country and foreign_actor are now synced from the inputs, 
+    # we just calculate based on the first article in our filtered results.
+    if target_country and foreign_actor:
+        latest = qs.first() 
         if latest:
             cvi_score = ml_service.calculate_vulnerability_index(
                 latest.strategic_intent, latest.tone, latest.target_country, latest.inferred_actor, latest.confidence or 0.5
             )
 
-    # 11. Final Context - All variables are guaranteed to exist here
     context = {
         'chart': chart,
         'page_obj': page_obj,
@@ -211,17 +212,12 @@ def overview(request):
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
-        'country_chart': country_chart,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': calc_country,
-        'selected_actor': calc_actor,
-        'cii_result': None, # Placeholders for legacy compatibility
-        'factor_chart_base64': None,
+        'selected_country': target_country,
+        'selected_actor': foreign_actor,
     }
-    
     return render(request, 'overview.html', context)
-
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
