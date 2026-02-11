@@ -1,9 +1,9 @@
 from django.shortcuts import render
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
 from dashboard.services.summarizer import get_summary
-from dashboard.services.ml_inference_service import MLInferenceService
+from dashboard.services.ml_inference_service import get_ml_service  # Changed to lazy loading
 import pandas as pd
 import plotly.express as px
 from math import isfinite
@@ -23,6 +23,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from groq import Groq
 from django.conf import settings
+from django.db.models.functions import TruncMonth
+from django.utils.dateparse import parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ FOREIGN_ACTORS = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Ara
 TARGET_COUNTRIES = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Arabia', 'Israel', 'Iran']
 
 # =========================
-# CHATBOT ASSISTANCE SYSTEM
+# CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
 class DisinfoAnalysisChatbot:
     def __init__(self):
@@ -50,12 +52,28 @@ class DisinfoAnalysisChatbot:
         if any(word in query_l for word in irrelevant):
             return "I specialize in geopolitical narratives and vulnerability indices. I don't track sports or entertainment data."
 
-        # 2. Database Stats Logic
+        # 2. Database Stats Logic (enhanced)
         if any(word in query_l for word in ['how many', 'count', 'total']):
             total = MediaNarrative.objects.exclude(article_text__icontains='football').count()
             return f"The database currently contains {total:,} relevant analyzed articles (excluding non-strategic content like sports)."
         
-        # 3. Geopolitical AI analysis
+        # 3. Vulnerability Index Info (consistent with overview)
+        if any(word in query_l for word in ['vulnerability', 'index', 'score', 'risk']):
+            # Same calculation as overview function
+            from django.db.models import Avg
+            full_stats_qs = MediaNarrative.objects.all()
+            filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
+            
+            if filtered_qs.exists():
+                stats = filtered_qs.aggregate(avg_vulnerability=Avg('vulnerability_index'))
+                avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
+                avg_str = f"{avg_vulnerability:.3f}"
+            else:
+                avg_str = "0.000 (scores not yet calculated)"
+            
+            return f"Vulnerability index: 0-1 scale. Current average: {avg_str}. Scores calculated using ML and geopolitical factors."
+
+        # 4. Geopolitical AI analysis
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
 
@@ -66,7 +84,7 @@ class DisinfoAnalysisChatbot:
         for art in articles:
             # Safety check for empty text fields
             text_snippet = (art.article_text[:200] + "...") if art.article_text else "No text content."
-            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Text: {text_snippet}\n\n"
+            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Intent: {art.strategic_intent} | Text: {text_snippet}\n\n"
         return context
 
     def get_insights_from_ai(self, query, context):
@@ -148,7 +166,7 @@ def overview(request):
         
         # Calculate score for calculator
         if calc_article:
-            ml_service = MLInferenceService()
+            ml_service = get_ml_service()  # Use lazy loading
             cvi_score = ml_service.calculate_vulnerability_index(
                 calc_article.strategic_intent or "neutral", 
                 calc_article.tone or "neutral", 
@@ -226,7 +244,7 @@ def overview(request):
     page_obj = paginator.get_page(page_number)
 
     # 11. Add vulnerability index to articles (calculate if needed)
-    ml_service = MLInferenceService()
+    ml_service = get_ml_service()  # Use lazy loading
     articles_with_vi = []
     for article in page_obj.object_list:
         # Calculate vulnerability index if it's NULL in the database
@@ -263,6 +281,7 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)    
+
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
@@ -318,7 +337,7 @@ def authors(request):
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
-    articles = Article.objects.all().order_by("-posting_time")
+    articles = MediaNarrative.objects.all().order_by("-posting_time")  # Fixed: was Article.objects
 
     if search_query:
         articles = articles.filter(article_text__icontains=search_query)
@@ -434,7 +453,7 @@ def generate_report(request):
         .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
-    if volume_data:
+    if volume_
         df = pd.DataFrame(list(volume_data))
         df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
         df = df.dropna(subset=['date']).sort_values('date')
