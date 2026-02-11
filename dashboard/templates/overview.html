@@ -39,6 +39,7 @@
         color: var(--action-blue);
         text-decoration: none;
         transition: color 0.2s;
+        font-weight: bold;
     }
     .article-title-link:hover { color: var(--navy-dark); }
 </style>
@@ -47,25 +48,25 @@
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #3b82f6;">
             <div class="stat-label">Total Articles</div>
-            <div class="stat-value">{{ total_articles|default:"15,166" }}</div>
+            <div class="stat-value">{{ total_articles|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #10b981;">
             <div class="stat-label">Media Outlets</div>
-            <div class="stat-value">{{ unique_outlets|default:"1,233" }}</div>
+            <div class="stat-value">{{ unique_outlets|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
             <div class="stat-label">Narratives Identified</div>
-            <div class="stat-value">{{ unique_intents|default:"46" }}</div>
+            <div class="stat-value">{{ unique_intents|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #06b6d4;">
-            <div class="stat-label">Actors Detected</div>
-            <div class="stat-value">{{ unique_actors|default:"10" }}</div>
+            <div class="stat-label">Foreign Actors</div>
+            <div class="stat-value">{{ unique_actors|default:"0" }}</div>
         </div>
     </div>
 </div>
@@ -73,21 +74,16 @@
 <div class="card shadow-sm border-0 mb-5">
     <div class="card-header bg-white text-center py-3 border-bottom">
         <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h4>
-        <small class="text-muted">Total articles: {{ total_articles|default:"15,166" }} • Dataset trend</small>
     </div>
-    <div class="card-body p-4 text-center">
-        {% if volume_chart_plotly %}
-            {{ volume_chart_plotly|safe }}
-        {% elif volume_chart_base64 %}
-            <img src="data:image/png;base64,{{ volume_chart_base64 }}" class="img-fluid w-100">
+    <div class="card-body p-0">
+        {% if chart %}
+            {{ chart|safe }}
         {% else %}
-            <div class="py-5 bg-light rounded">
-                <i class="fas fa-chart-line fa-3x mb-3 opacity-25"></i>
-                <p class="text-muted small">Trend visualization data is loading...</p>
-            </div>
+            <div class="p-5 text-center text-muted">No chart data available.</div>
         {% endif %}
     </div>
 </div>
+
 
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Contextual Vulnerability Index (CVI)</h4>
 <div class="cvi-panel shadow-sm">
@@ -95,7 +91,7 @@
         <form method="get">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
-                <select name="african_country" class="form-select">
+                <select name="target_country" class="form-select">
                     <option value="">-- Select Country --</option>
                     {% for country in african_countries %}
                     <option value="{{ country }}">{{ country }}</option>
@@ -117,8 +113,8 @@
         </form>
     </div>
     <div class="cvi-right text-center">
-        {% if chart_data %}
-            <img src="data:image/png;base64,{{ chart_data }}" class="img-fluid">
+        {% if factor_chart_base64 %}
+            <img src="data:image/png;base64,{{ factor_chart_base64 }}" class="img-fluid">
         {% else %}
             <div class="text-muted">
                 <i class="fas fa-chart-pie fa-3x mb-3 opacity-25"></i>
@@ -128,7 +124,7 @@
     </div>
 </div>
 
-<h4 class="mb-4 text-center fw-bold" style="color: var(--action-blue);">Recent Articles</h4>
+<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
 
 <div class="row g-4">
     {% for article in page_obj %}
