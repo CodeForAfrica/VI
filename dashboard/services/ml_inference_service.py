@@ -88,7 +88,7 @@ class MLInferenceService:
         self._temp_dirs.add(temp_dir)
         
         # Download the entire strategic model directory (from your notebook)
-        if not self._download_directory_from_s3('models/calibrated_contrastive_peft/', temp_dir):
+        if not self._download_directory_from_s3('calibrated_contrastive_peft/', temp_dir):
             raise Exception("Failed to download strategic classifier from S3")
         
         # Load the calibrated classifier (using your notebook's class)
@@ -116,7 +116,7 @@ class MLInferenceService:
         self._temp_dirs.add(temp_dir)
         
         # Download the entire tone model directory (from your notebook)
-        if not self._download_directory_from_s3('models/calibrated_stacked_ensemble/', temp_dir):
+        if not self._download_directory_from_s3('calibrated_stacked_ensemble/', temp_dir):
             raise Exception("Failed to download tone classifier from S3")
         
         # Load the calibrated classifier (using your notebook's class)
@@ -150,7 +150,7 @@ class MLInferenceService:
             # Note: If this still fails, try 'models/contextual_all_intents_v2%20(1).py'
             response = self.s3_client.get_object(
                 Bucket=self.bucket_name,
-                Key='models/contextual_all_intents_v2.py'
+                Key='contextual_all_intents_v2.py'
             )
             
             file_content = response['Body'].read().decode('utf-8')
