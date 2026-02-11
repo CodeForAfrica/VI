@@ -587,80 +587,35 @@ def overview(request):
     tone_choices = MediaNarrative.objects.values('tone').distinct().order_by('tone')
 
     # CVI Calculation + Factor Bar Chart (matplotlib - forced 0-100% scale)
+        # ==========================================================
+    # ✅ VI Calculation: Use ML Service for Vulnerability Index
+    # ==========================================================
+    ml_service = MLInferenceService()
+    articles_with_vi = []
+    for article in page_obj.object_list:
+        try:
+            vi_score = ml_service.calculate_vulnerability_index(
+                strategic_intent=article.strategic_intent or 'neutral',
+                tone=article.tone or 'neutral',
+                target_country=article.target_country or 'Unknown',
+                inferred_actor=article.inferred_actor or 'NonState',
+                confidence=article.confidence or 0.5
+            )
+            article.vulnerability_index = vi_score
+            articles_with_vi.append(article)
+        except Exception as e:
+            logger.error(f"VI calculation error for article {article.id}: {e}")
+            article.vulnerability_index = 0.0
+            articles_with_vi.append(article)
+    
+    page_obj.object_list = articles_with_vi
+    avg_vulnerability = sum(a.vulnerability_index for a in articles_with_vi) / len(articles_with_vi) if articles_with_vi else 0.0
+    
+    # Keep CVI variables as None (not used)
     cii_result = None
-    selected_african_country = request.GET.get('african_country')
-    selected_foreign_actor = request.GET.get('foreign_actor')
+    selected_african_country = None
+    selected_foreign_actor = None
     factor_chart_base64 = None
-
-    if selected_african_country and selected_foreign_actor:
-        actor_map = {"US": "UnitedStates", "USA": "UnitedStates"}
-        norm_actor = actor_map.get(selected_foreign_actor, selected_foreign_actor)
-
-        if selected_african_country in COUNTRIES and norm_actor in ACTORS:
-            try:
-                g = compute_gs()
-                R = compute_R(g)
-                CA = compute_CAs(g, R)
-                final = compute_finalrisk(CA)
-
-                # Safe access to CVI score
-                economic_data = final.get("Economic", {})
-                actor_data = economic_data.get(norm_actor, {})
-                score = actor_data.get(selected_african_country, 0.0)
-                cii_result = round(score, 3) if score else "N/A"
-
-                # Real factor scores (from your debug structure)
-                factors_raw = {}
-                for factor_key in ['Economic', 'Sovereignty', 'LGBTQ', 'Religious', 'ElectionInfluence', 'MilitaryPresence', 'ResourceDependency', 'SocialFragility']:
-                    factor_data = final.get(factor_key, {})
-                    actor_factor_data = factor_data.get(norm_actor, {})
-                    factors_raw[factor_key] = actor_factor_data.get(selected_african_country, 0.0)
-
-                # Remove zero factors
-                factors_raw = {k: v for k, v in factors_raw.items() if v > 0}
-
-                # Normalize to 100%
-                total_raw = sum(factors_raw.values())
-                percentages = {}
-                if total_raw > 0:
-                    percentages = {k: round(v / total_raw * 100, 1) for k, v in factors_raw.items()}
-
-                # Generate bar chart with matplotlib - forced 0-100% scale
-                if percentages:
-                    import matplotlib.pyplot as plt
-
-                    df = pd.DataFrame({
-                        'Factor': list(percentages.keys()),
-                        'Percentage': list(percentages.values())
-                    }).sort_values('Percentage', ascending=True)
-
-                    fig, ax = plt.subplots(figsize=(6, 5))
-                    bars = ax.barh(df['Factor'], df['Percentage'], color='skyblue')
-                    ax.set_xlabel('Contribution (%)')
-                    ax.set_title('CVI Factor Contributions (100% Total)')
-                    ax.invert_yaxis()
-                    ax.grid(axis='x', linestyle='--', alpha=0.7)
-
-                    # Force x-axis to always go from 0 to 100%
-                    ax.set_xlim(0, 100)
-
-                    # Add percentage labels on bars
-                    for bar in bars:
-                        width = bar.get_width()
-                        ax.text(width + 1, bar.get_y() + bar.get_height()/2,
-                                f'{width}%', va='center', fontsize=10)
-
-                    img_buffer = BytesIO()
-                    plt.savefig(img_buffer, format='png', bbox_inches='tight')
-                    img_buffer.seek(0)
-                    factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-                    plt.close(fig)
-                else:
-                    factor_chart_base64 = None
-
-            except Exception as e:
-                cii_result = f"Calculation error: {str(e)}"
-                print(f"CVI calculation failed: {e}")
 
     context = {
         'chart': chart,
