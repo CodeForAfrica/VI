@@ -138,8 +138,10 @@ def overview(request):
     # ✅ VI Calculation: Use ML Service (Replaces old CII logic)
     ml_service = MLInferenceService()
     articles_with_vi = []
+    
     for article in page_obj.object_list:
         try:
+            # Call the service
             vi_score = ml_service.calculate_vulnerability_index(
                 strategic_intent=article.strategic_intent or 'neutral',
                 tone=article.tone or 'neutral',
@@ -147,15 +149,25 @@ def overview(request):
                 inferred_actor=article.inferred_actor or 'NonState',
                 confidence=article.confidence or 0.5
             )
-            article.vulnerability_index = vi_score
-            articles_with_vi.append(article)
+            
+            # ENSURE it's a number. If service returns None, use 0.0
+            article.vulnerability_index = float(vi_score) if vi_score is not None else 0.0
+            
         except Exception as e:
-            logger.error(f"VI error: {e}")
-            article.vulnerability_index = 0.0
-            articles_with_vi.append(article)
+            logger.error(f"VI error for article {article.id}: {e}")
+            article.vulnerability_index = 0.0  # Safe default
+            
+        articles_with_vi.append(article)
 
+    # Re-assign back to page_obj
     page_obj.object_list = articles_with_vi
-    avg_vulnerability = sum(a.vulnerability_index for a in articles_with_vi) / len(articles_with_vi) if articles_with_vi else 0.0
+
+    # Safe math for average
+    if articles_with_vi:
+        total_vi = sum(a.vulnerability_index for a in articles_with_vi)
+        avg_vulnerability = total_vi / len(articles_with_vi)
+    else:
+        avg_vulnerability = 0.0
 
     # Tabs set to None to remove from display logic
     context = {
