@@ -172,7 +172,10 @@ def overview(request):
         avg_vulnerability = total_vi / len(articles_with_vi)
     else:
         avg_vulnerability = 0.0
-
+    # Aggregate top 10 publishing countries for the table
+    country_list = MediaNarrative.objects.values('target_country') \
+        .annotate(total=Count('id')) \
+        .order_by('-total')[:10]
     # Tabs set to None to remove from display logic
     context = {
         'chart': chart,
@@ -184,6 +187,7 @@ def overview(request):
         'unique_actors': unique_actors,
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
+        'country_list': country_list,
         'cii_result': None,
         'factor_chart_base64': None,
     }
