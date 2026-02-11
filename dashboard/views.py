@@ -453,7 +453,7 @@ def generate_report(request):
         .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
-    if volume_
+    if volume_data.exists():  # Fixed: was "if volume_" 
         df = pd.DataFrame(list(volume_data))
         df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
         df = df.dropna(subset=['date']).sort_values('date')
