@@ -15,6 +15,7 @@ from datetime import datetime
 import base64
 import json
 import logging
+import urllib3
 import matplotlib
 matplotlib.use('Agg')  # Required for Django to prevent "main thread" GUI errors
 import matplotlib.pyplot as plt
