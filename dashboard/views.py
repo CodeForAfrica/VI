@@ -516,178 +516,96 @@ def chatbot_response(request):
 # OVERVIEW PAGE
 # =========================
 def overview(request):
-    # Get filter parameters
-    media_outlet = request.GET.get('media_outlet', '').strip()
+    # 1. Capture Filters
     target_country = request.GET.get('target_country', '').strip()
     foreign_actor = request.GET.get('foreign_actor', '').strip()
-    intent = request.GET.get('intent', '').strip()
-    tone = request.GET.get('tone', '').strip()
     search_query = request.GET.get('q', '').strip()
 
-    # Base queryset for filtered articles
+    # 2. Article Feed Logic
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-
-    # Apply filters to articles list only
-    if media_outlet:
-        qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
     if target_country:
         qs = qs.filter(target_country__iexact=target_country)
     if foreign_actor:
         qs = qs.filter(inferred_actor__iexact=foreign_actor)
-    if intent:
-        qs = qs.filter(strategic_intent__iexact=intent)
-    if tone:
-        qs = qs.filter(tone__iexact=tone)
     if search_query:
-        qs = qs.filter(Q(article_text__icontains=search_query))
+        qs = qs.filter(Q(article_text__icontains=search_query) | Q(title__icontains=search_query))
 
-    total_articles = qs.count()
-
-    # Key Stats (always from full dataset)
-    full_stats_qs = MediaNarrative.objects.all()
-    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent__exact='').values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__exact='').values('inferred_actor').distinct().count()
-
-    # Chart: ALWAYS full narrative volume over time (unaffected by filters)
-    chart_qs = MediaNarrative.objects.all()
-    if chart_qs.exists():
-        df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
-        df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
-        daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-
-        if not daily_counts.empty:
-            fig = px.line(
-                daily_counts,
-                x='date',
-                y='count',
-                title='Narrative Volume Over Time',
-                labels={'date': 'Date', 'count': 'Number of Articles'}
-            )
-            fig.update_layout(height=500, template="plotly_white")
-            chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        else:
-            chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No date data available for chart.</p></div>"
-    else:
-        chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No articles in database.</p></div>"
-
-    # Pagination for filtered articles
+    # Pagination (10 per page)
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Filter choices for dropdowns
-    outlet_choices = MediaNarrative.objects.values('media_outlet').distinct().order_by('media_outlet')
-    country_choices = MediaNarrative.objects.values('target_country').distinct().order_by('target_country')
-    intent_choices = MediaNarrative.objects.values('strategic_intent').distinct().order_by('strategic_intent')
-    tone_choices = MediaNarrative.objects.values('tone').distinct().order_by('tone')
+    # 3. UI Data Prep (Matching your screengrab)
+    for article in page_obj:
+        # Check for image existence
+        article.display_image = article.image_url if hasattr(article, 'image_url') and article.image_url else None
+        # Ensure full link
+        article.full_link = article.url if hasattr(article, 'url') and article.url else "#"
+        # Summary
+        article.summary = article.article_text[:200] + "..." # Or your get_summary(text)
 
-    # CVI Calculation + Factor Bar Chart (matplotlib - forced 0-100% scale)
+    # 4. CORRECT CVI Calculation (Using MLInferenceService)
     cii_result = None
-    selected_african_country = request.GET.get('african_country')
-    selected_foreign_actor = request.GET.get('foreign_actor')
     factor_chart_base64 = None
+    cvi_country = request.GET.get('african_country')
+    cvi_actor = request.GET.get('foreign_actor_cvi')
 
-    if selected_african_country and selected_foreign_actor:
-        actor_map = {"US": "UnitedStates", "USA": "UnitedStates"}
-        norm_actor = actor_map.get(selected_foreign_actor, selected_foreign_actor)
+    if cvi_country and cvi_actor:
+        service = MLInferenceService()
+        try:
+            # We use a sample article's data or dummy confidence to trigger the math
+            # because your MLInferenceService needs these parameters
+            # but the core logic comes from compute_gs(), compute_R(), etc.
+            
+            # This calls the logic you provided in the MLInferenceService class
+            cii_result = service.calculate_vulnerability_index(
+                strategic_intent="hostile", # placeholder for global score lookup
+                tone="negative", 
+                target_country=cvi_country,
+                inferred_actor=cvi_actor,
+                confidence=0.9
+            )
 
-        if selected_african_country in COUNTRIES and norm_actor in ACTORS:
-            try:
-                g = compute_gs()
-                R = compute_R(g)
-                CA = compute_CAs(g, R)
-                final = compute_finalrisk(CA)
+            # Generate the Factor Breakdown Chart using the same S3 module
+            contextual_mod = service._load_contextual_module_from_s3()
+            if contextual_mod:
+                g = contextual_mod.compute_gs()
+                R = contextual_mod.compute_R(g)
+                CA = contextual_mod.compute_CAs(g, R)
+                final = contextual_mod.compute_finalrisk(CA)
 
-                # Safe access to CVI score
-                economic_data = final.get("Economic", {})
-                actor_data = economic_data.get(norm_actor, {})
-                score = actor_data.get(selected_african_country, 0.0)
-                cii_result = round(score, 3) if score else "N/A"
+                # Extract factors to match your notebook's bar chart
+                factors = ['Economic', 'Sovereignty', 'LGBTQ', 'Religious', 'ElectionInfluence', 'MilitaryPresence']
+                # Normalize actor for dictionary lookup (e.g., US -> UnitedStates)
+                actor_map = {"US": "UnitedStates", "USA": "UnitedStates"}
+                norm_actor = actor_map.get(cvi_actor, cvi_actor)
 
-                # Real factor scores (from your debug structure)
-                factors_raw = {}
-                for factor_key in ['Economic', 'Sovereignty', 'LGBTQ', 'Religious', 'ElectionInfluence', 'MilitaryPresence', 'ResourceDependency', 'SocialFragility']:
-                    factor_data = final.get(factor_key, {})
-                    actor_factor_data = factor_data.get(norm_actor, {})
-                    factors_raw[factor_key] = actor_factor_data.get(selected_african_country, 0.0)
+                factor_data = {f: final.get(f, {}).get(norm_actor, {}).get(cvi_country, 0.0) for f in factors}
+                
+                # Plotting (0-100% scale)
+                plt.switch_backend('Agg')
+                fig, ax = plt.subplots(figsize=(6, 4))
+                ax.barh(list(factor_data.keys()), [v * 100 for v in factor_data.values()], color='#2ecc71')
+                ax.set_xlim(0, 100)
+                ax.set_title(f"Risk Profile: {cvi_country}")
+                
+                buf = BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                factor_chart_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)
 
-                # Remove zero factors
-                factors_raw = {k: v for k, v in factors_raw.items() if v > 0}
-
-                # Normalize to 100%
-                total_raw = sum(factors_raw.values())
-                percentages = {}
-                if total_raw > 0:
-                    percentages = {k: round(v / total_raw * 100, 1) for k, v in factors_raw.items()}
-
-                # Generate bar chart with matplotlib - forced 0-100% scale
-                if percentages:
-                    import matplotlib.pyplot as plt
-
-                    df = pd.DataFrame({
-                        'Factor': list(percentages.keys()),
-                        'Percentage': list(percentages.values())
-                    }).sort_values('Percentage', ascending=True)
-
-                    fig, ax = plt.subplots(figsize=(6, 5))
-                    bars = ax.barh(df['Factor'], df['Percentage'], color='skyblue')
-                    ax.set_xlabel('Contribution (%)')
-                    ax.set_title('CVI Factor Contributions (100% Total)')
-                    ax.invert_yaxis()
-                    ax.grid(axis='x', linestyle='--', alpha=0.7)
-
-                    # Force x-axis to always go from 0 to 100%
-                    ax.set_xlim(0, 100)
-
-                    # Add percentage labels on bars
-                    for bar in bars:
-                        width = bar.get_width()
-                        ax.text(width + 1, bar.get_y() + bar.get_height()/2,
-                                f'{width}%', va='center', fontsize=10)
-
-                    img_buffer = BytesIO()
-                    plt.savefig(img_buffer, format='png', bbox_inches='tight')
-                    img_buffer.seek(0)
-                    factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-                    plt.close(fig)
-                else:
-                    factor_chart_base64 = None
-
-            except Exception as e:
-                cii_result = f"Calculation error: {str(e)}"
-                print(f"CVI calculation failed: {e}")
+        except Exception as e:
+            cii_result = f"Error: {str(e)}"
 
     context = {
-        'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,
-        'unique_outlets': unique_outlets,
-        'unique_intents': unique_intents,
-        'unique_actors': unique_actors,
-
-        'outlet_choices': outlet_choices,
-        'country_choices': country_choices,
-        'intent_choices': intent_choices,
-        'tone_choices': tone_choices,
-        'foreign_actors': FOREIGN_ACTORS,
-
-        'selected_outlet': media_outlet,
-        'selected_country': target_country,
-        'selected_actor': foreign_actor,
-        'selected_intent': intent,
-        'selected_tone': tone,
-        'search_query': search_query,
-
-        # CVI variables
-        'african_countries': COUNTRIES,
-        'foreign_actors': FOREIGN_ACTORS,
-        'selected_african_country': selected_african_country,
-        'selected_foreign_actor': selected_foreign_actor,
+        'countries': COUNTRIES,
+        'actors': FOREIGN_ACTORS,
         'cii_result': cii_result,
         'factor_chart_base64': factor_chart_base64,
+        'selected_country': target_country,
+        'selected_actor': foreign_actor,
     }
-
     return render(request, 'overview.html', context)
 # =========================
 # COUNTRIES PAGE
