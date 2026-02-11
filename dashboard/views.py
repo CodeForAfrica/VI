@@ -122,52 +122,49 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs
-    media_outlet = request.GET.get('media_outlet', '').strip()
+    # 2. Capture Inputs (for calculator only, not for initial view)
+    calc_target_country = request.GET.get('calc_target_country', '').strip()
+    calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # Unified variable: checks both main filter and calculator inputs
-    target_country = request.GET.get('target_country', '').strip() or request.GET.get('calc_target_country', '').strip()
-    foreign_actor = request.GET.get('foreign_actor', '').strip() or request.GET.get('calc_foreign_actor', '').strip()
+    # 3. For initial view: SHOW ALL ARTICLES (no filters applied)
+    full_stats_qs = MediaNarrative.objects.all().order_by('-posting_time')
     
-    intent = request.GET.get('intent', '').strip()
-    tone = request.GET.get('tone', '').strip()
-    search_query = request.GET.get('q', '').strip()
-
-    # 3. Build Queryset & APPLY RELEVANCE FILTER
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-
-    # Exclude non-relevant topics
-    irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
-    for word in irrelevant_keywords:
-        qs = qs.exclude(article_text__icontains=word)
-
-    # 4. Apply User Filters (Robust for Côte d'Ivoire / Ivory Coast)
-    if media_outlet: 
-        qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
-    
-    if target_country:
-        if any(term in target_country.lower() for term in ["ivoire", "ivory", "cote"]):
-             qs = qs.filter(
-                 Q(target_country__icontains="Ivoire") | 
-                 Q(target_country__icontains="Cote") | 
-                 Q(target_country__icontains="Ivory")
-             )
+    # 4. For calculator: Apply filters only when both values are provided
+    if calc_target_country and calc_foreign_actor:
+        calc_qs = MediaNarrative.objects.all()
+        
+        # Apply calculator filters
+        if any(term in calc_target_country.lower() for term in ["ivoire", "ivory", "cote"]):
+            calc_qs = calc_qs.filter(
+                Q(target_country__icontains="Ivoire") | 
+                Q(target_country__icontains="Cote") | 
+                Q(target_country__icontains="Ivory")
+            )
         else:
-             qs = qs.filter(target_country__iexact=target_country)
+            calc_qs = calc_qs.filter(target_country__iexact=calc_target_country)
 
-    if foreign_actor: 
-        qs = qs.filter(inferred_actor__iexact=foreign_actor)
-    if intent: 
-        qs = qs.filter(strategic_intent__iexact=intent)
-    if tone: 
-        qs = qs.filter(tone__iexact=tone)
-    if search_query: 
-        qs = qs.filter(Q(article_text__icontains=search_query))
+        calc_qs = calc_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+        calc_article = calc_qs.first()
+        
+        # Calculate score for calculator
+        if calc_article:
+            ml_service = MLInferenceService()
+            cvi_score = ml_service.calculate_vulnerability_index(
+                calc_article.strategic_intent or "neutral", 
+                calc_article.tone or "neutral", 
+                calc_target_country,
+                calc_foreign_actor,
+                calc_article.confidence or 0.5
+            )
+    else:
+        # No calculator filters, show all articles
+        calc_article = None
 
-    total_articles = qs.count()
-
-    # 5. Global Stats (from full dataset)
-    full_stats_qs = MediaNarrative.objects.all()
+    # 5. Global Stats (from full dataset - ALL ARTICLES)
+    total_articles = full_stats_qs.count()
+    
+    # Exclude non-relevant topics for all stats
+    irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     for word in irrelevant_keywords:
         full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
 
@@ -197,7 +194,7 @@ def overview(request):
         avg_vulnerability = 0.0
         avg_confidence = 0.0
 
-    # 7. Volume Line Chart
+    # 7. Volume Line Chart (show all articles)
     if full_stats_qs.exists():
         try:
             df = pd.DataFrame.from_records(full_stats_qs.values('posting_time'))
@@ -212,23 +209,23 @@ def overview(request):
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
 
-    # 8. Top Countries Table
+    # 8. Top Countries Table (show all articles)
     country_list = full_stats_qs.values('target_country') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:10]
 
-    # 9. Top Subjects
+    # 9. Top Subjects (show all articles)
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]) \
         .values('strategic_intent') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:5]
 
-    # 10. Pagination
-    paginator = Paginator(qs, 10)
+    # 10. Pagination (show all articles by default)
+    paginator = Paginator(full_stats_qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 11. ML Service for VI Calculation (FIXED with Mapping)
+    # 11. Add vulnerability index to articles (calculate if needed)
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
@@ -247,19 +244,7 @@ def overview(request):
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 12. Calculator Score Result (FIXED with Mapping)
-    if target_country and foreign_actor:
-        # We use the selected dropdown values directly
-        latest = qs.first() 
-        cvi_score = ml_service.calculate_vulnerability_index(
-            latest.strategic_intent if latest else "neutral", 
-            latest.tone if latest else "neutral", 
-            target_country, # Normalized by the spelling-proof mapping
-            foreign_actor,  # Normalized by the actor mapping
-            latest.confidence if latest else 0.5
-        )
-
-    # 13. Context
+    # 12. Context
     context = {
         'chart': chart,
         'page_obj': page_obj,
@@ -274,11 +259,10 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': target_country,
-        'selected_actor': foreign_actor,
+        'selected_country': calc_target_country,
+        'selected_actor': calc_foreign_actor,
     }
-    return render(request, 'overview.html', context)
-    
+    return render(request, 'overview.html', context)    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
