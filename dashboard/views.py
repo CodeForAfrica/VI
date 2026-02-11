@@ -3,7 +3,7 @@ from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
 from dashboard.services.summarizer import get_summary
-from dashboard.services.ml_inference_service import get_ml_service  # Changed to lazy loading
+from dashboard.services.ml_inference_service import MLInferenceService  # Changed to lazy loading
 import pandas as pd
 import plotly.express as px
 from math import isfinite
@@ -244,7 +244,7 @@ def overview(request):
     page_obj = paginator.get_page(page_number)
 
     # 11. Add vulnerability index to articles (calculate if needed)
-    ml_service = get_ml_service()  # Use lazy loading
+    ml_service = MLInferenceService()   
     articles_with_vi = []
     for article in page_obj.object_list:
         # Calculate vulnerability index if it's NULL in the database
