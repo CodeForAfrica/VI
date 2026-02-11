@@ -1,208 +1,211 @@
+<!-- dashboard/templates/overview.html -->
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Stats Cards -->
-<div class="row mb-4">
+<!-- Your entire page content goes here -->
+<div class="container">
+  <!-- Stats Cards -->
+  <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
-            <div class="stats-title">Total Articles</div>
-            <div class="stats-number" style="color: #2c7be5;">{{ total_articles }}</div>
-            <div class="stats-subtitle">In our database</div>
-        </div>
+      <div class="stats-card">
+        <div class="stats-title">Total Articles</div>
+        <div class="stats-number" style="color: #2c7be5;">{{ total_articles }}</div>
+        <div class="stats-subtitle">In our database</div>
+      </div>
     </div>
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
-            <div class="stats-title">Media Outlets</div>
-            <div class="stats-number" style="color: #00897b;">{{ unique_outlets }}</div>
-            <div class="stats-subtitle">Tracked sources</div>
-        </div>
+      <div class="stats-card">
+        <div class="stats-title">Media Outlets</div>
+        <div class="stats-number" style="color: #00897b;">{{ unique_outlets }}</div>
+        <div class="stats-subtitle">Tracked sources</div>
+      </div>
     </div>
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
-            <div class="stats-title">Narratives Identified</div>
-            <div class="stats-number" style="color: #ff9800;">{{ unique_intents }}</div>
-            <div class="stats-subtitle">Strategic intents</div>
-        </div>
+      <div class="stats-card">
+        <div class="stats-title">Narratives Identified</div>
+        <div class="stats-number" style="color: #ff9800;">{{ unique_intents }}</div>
+        <div class="stats-subtitle">Strategic intents</div>
+      </div>
     </div>
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="stats-card">
-            <div class="stats-title">Vulnerability Index</div>
-            <div class="stats-number" style="color: #e53935;">{{ avg_vulnerability_index|floatformat:2 }}</div>
-            <div class="stats-subtitle">Contextual risk score</div>
-        </div>
+      <div class="stats-card">
+        <div class="stats-title">Actors Detected</div>
+        <div class="stats-number" style="color: #4fc3f7;">{{ unique_actors }}</div>
+        <div class="stats-subtitle">Foreign actors</div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Filters -->
-<div class="filters">
+  <!-- Filters -->
+  <div class="filters">
     <div class="filters-row">
-        <div class="filter-group">
-            <label for="media-outlet">Media Outlet</label>
-            <select id="media-outlet" name="media_outlet" class="form-control">
-                <option value="">All Outlets</option>
-                {% for outlet in outlet_choices %}
-                    <option value="{{ outlet.media_outlet }}" {% if outlet.media_outlet == selected_outlet %}selected{% endif %}>
-                        {{ outlet.media_outlet }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="target-country">Target Country</label>
-            <select id="target-country" name="target_country" class="form-control">
-                <option value="">All Countries</option>
-                {% for country in country_choices %}
-                    <option value="{{ country.target_country }}" {% if country.target_country == selected_country %}selected{% endif %}>
-                        {{ country.target_country }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="foreign-actor">Foreign Actor</label>
-            <select id="foreign-actor" name="foreign_actor" class="form-control">
-                <option value="">All Actors</option>
-                {% for actor in foreign_actors %}
-                    <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>
-                        {{ actor }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="intent">Strategic Intent</label>
-            <select id="intent" name="intent" class="form-control">
-                <option value="">All Intents</option>
-                {% for intent in intent_choices %}
-                    <option value="{{ intent.strategic_intent }}" {% if intent.strategic_intent == selected_intent %}selected{% endif %}>
-                        {{ intent.strategic_intent }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="tone">Tone</label>
-            <select id="tone" name="tone" class="form-control">
-                <option value="">All Tones</option>
-                {% for tone in tone_choices %}
-                    <option value="{{ tone.tone }}" {% if tone.tone == selected_tone %}selected{% endif %}>
-                        {{ tone.tone }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
+      <div class="filter-group">
+        <label for="media-outlet">Media Outlet</label>
+        <select id="media-outlet" name="media_outlet" class="form-control">
+          <option value="">All Outlets</option>
+          {% for outlet in outlet_choices %}
+            <option value="{{ outlet.media_outlet }}" {% if outlet.media_outlet == selected_outlet %}selected{% endif %}>
+              {{ outlet.media_outlet }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="target-country">Target Country</label>
+        <select id="target-country" name="target_country" class="form-control">
+          <option value="">All Countries</option>
+          {% for country in country_choices %}
+            <option value="{{ country.target_country }}" {% if country.target_country == selected_country %}selected{% endif %}>
+              {{ country.target_country }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="foreign-actor">Foreign Actor</label>
+        <select id="foreign-actor" name="foreign_actor" class="form-control">
+          <option value="">All Actors</option>
+          {% for actor in foreign_actors %}
+            <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>
+              {{ actor }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="intent">Strategic Intent</label>
+        <select id="intent" name="intent" class="form-control">
+          <option value="">All Intents</option>
+          {% for intent in intent_choices %}
+            <option value="{{ intent.strategic_intent }}" {% if intent.strategic_intent == selected_intent %}selected{% endif %}>
+              {{ intent.strategic_intent }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="tone">Tone</label>
+        <select id="tone" name="tone" class="form-control">
+          <option value="">All Tones</option>
+          {% for tone in tone_choices %}
+            <option value="{{ tone.tone }}" {% if tone.tone == selected_tone %}selected{% endif %}>
+              {{ tone.tone }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
     <div class="filters-row mt-3">
-        <div class="filter-group" style="flex: 2;">
-            <label for="search">Search Articles</label>
-            <div class="input-group">
-                <input type="text" id="search" name="q" class="form-control" 
-                       placeholder="Search articles..." 
-                       value="{{ search_query }}">
-                <button class="btn btn-primary" type="submit">Search</button>
-            </div>
+      <div class="filter-group" style="flex: 2;">
+        <label for="search">Search Articles</label>
+        <div class="input-group">
+          <input type="text" id="search" name="q" class="form-control" 
+                 placeholder="Search articles..." 
+                 value="{{ search_query }}">
+          <button class="btn btn-primary" type="submit">Search</button>
         </div>
-        <div class="filter-buttons">
-            <button class="btn btn-filter btn-reset">Reset</button>
-            <button class="btn btn-filter btn-apply">Apply</button>
-        </div>
+      </div>
+      <div class="filter-buttons">
+        <button class="btn btn-filter btn-reset">Reset</button>
+        <button class="btn btn-filter btn-apply">Apply</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Chart Section -->
-<div class="chart-container">
+  <!-- Chart Section -->
+  <div class="chart-container">
     <h2 class="chart-title">Narrative Volume Over Time</h2>
     <p class="chart-subtitle">Total articles: {{ total_articles }} • Full dataset shown by default</p>
     <div class="chart-placeholder">
-        {{ chart|safe }}
+      {{ chart|safe }}
     </div>
-</div>
+  </div>
 
-<!-- Recent Articles Section -->
-<div class="section-title">Recent Articles</div>
-{% for article in page_obj %}
-<div class="article-card">
+  <!-- Recent Articles Section -->
+  <div class="section-title">Recent Articles</div>
+  {% for article in page_obj %}
+  <div class="article-card">
     <div class="row g-0">
-        <div class="col-md-3">
-            <div class="article-image" 
-                 style="background-image: url('{{ article.image_url|default:'https://via.placeholder.com/300x200/e0e0e0/ffffff?text=Article+Image' }}')">
-            </div>
+      <div class="col-md-3">
+        <div class="article-image" 
+             style="background-image: url('{{ article.image_url|default:'https://via.placeholder.com/300x200/e0e0e0/ffffff?text=Article+Image' }}'); height: 200px; background-size: cover; background-position: center;">
         </div>
-        <div class="col-md-9">
-            <div class="article-content">
-                <h2 class="article-title">
-                    <a href="#" style="text-decoration: none; color: inherit;">
-                        {{ article.title|default:'Untitled Article' }}
-                    </a>
-                </h2>
-                <div class="article-meta">
-                    <span>{{ article.media_outlet|default:'Unknown Source' }} • {{ article.posting_time|date:"M d, Y" }}</span>
-                    <span><i class="fas fa-clock"></i> {{ article.read_time|default:'5' }} min read</span>
-                </div>
-                <p class="article-excerpt">{{ article.excerpt|default:'No excerpt available' }}</p>
-                <div class="article-tags">
-                    <span class="tag">Tone: {{ article.tone|default:'Factual' }}</span>
-                    <span class="tag">Intent: {{ article.strategic_intent|default:'Cultural Hegemony' }}</span>
-                    <span class="tag" style="background-color: #ffebee; color: #c62828;">Vulnerability: {{ article.vulnerability_index|floatformat:2 }}</span>
-                </div>
-                <a href="#" class="read-more">Read full article →</a>
-            </div>
+      </div>
+      <div class="col-md-9">
+        <div class="article-content">
+          <h2 class="article-title">
+            <a href="#" style="text-decoration: none; color: inherit;">
+              {{ article.title|default:'Untitled Article' }}
+            </a>
+          </h2>
+          <div class="article-meta">
+            <span>{{ article.media_outlet|default:'Unknown Source' }} • {{ article.posting_time|date:"M d, Y" }}</span>
+            <span><i class="fas fa-clock"></i> {{ article.read_time|default:'5' }} min read</span>
+          </div>
+          <p class="article-excerpt">{{ article.excerpt|default:'No excerpt available' }}</p>
+          <div class="article-tags">
+            <span class="tag" style="background-color: #e8f5e9; color: #2e7d32;">Tone: {{ article.tone|default:'Factual' }}</span>
+            <span class="tag" style="background-color: #fff8e1; color: #e65100;">Intent: {{ article.strategic_intent|default:'Cultural Hegemony' }}</span>
+          </div>
+          <a href="#" class="read-more">Read full article →</a>
         </div>
+      </div>
     </div>
-</div>
-{% empty %}
-<div class="text-center py-5">
+  </div>
+  {% empty %}
+  <div class="text-center py-5">
     <p class="text-muted fs-4">No articles found matching your criteria.</p>
     <p class="text-muted">Try adjusting your filters or search terms.</p>
-</div>
-{% endfor %}
+  </div>
+  {% endfor %}
 
-<!-- Pagination -->
-{% if page_obj.has_other_pages %}
-<nav aria-label="Page navigation">
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <nav aria-label="Page navigation">
     <ul class="pagination justify-content-center mt-4">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page=1&{{ request.GET.urlencode }}" aria-label="First">
-                <span aria-hidden="true">«</span>
-            </a>
-        </li>
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode }}" aria-label="Previous">
-                <span aria-hidden="true">‹</span>
-            </a>
-        </li>
-        {% endif %}
-        
-        {% for num in page_obj.paginator.page_range %}
-        {% if page_obj.number == num %}
-        <li class="page-item active" aria-current="page">
-            <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
-        </li>
-        {% elif num == page_obj.paginator.page_range|first or num == page_obj.paginator.page_range|last or num|add:'-2' == page_obj.number or num|add:'2' == page_obj.number %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
-        </li>
-        {% elif num|add:'-3' == page_obj.number or num|add:'3' == page_obj.number %}
-        <li class="page-item disabled">
-            <a class="page-link" href="#">...</a>
-        </li>
-        {% endif %}
-        {% endfor %}
-        
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode }}" aria-label="Next">
-                <span aria-hidden="true">›</span>
-            </a>
-        </li>
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ request.GET.urlencode }}" aria-label="Last">
-                <span aria-hidden="true">»</span>
-            </a>
-        </li>
-        {% endif %}
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page=1&{{ request.GET.urlencode }}" aria-label="First">
+          <span aria-hidden="true">«</span>
+        </a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode }}" aria-label="Previous">
+          <span aria-hidden="true">‹</span>
+        </a>
+      </li>
+      {% endif %}
+      
+      {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+      <li class="page-item active" aria-current="page">
+        <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
+      </li>
+      {% elif num == page_obj.paginator.page_range|first or num == page_obj.paginator.page_range|last or num|add:'-2' == page_obj.number or num|add:'2' == page_obj.number %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a>
+      </li>
+      {% elif num|add:'-3' == page_obj.number or num|add:'3' == page_obj.number %}
+      <li class="page-item disabled">
+        <a class="page-link" href="#">...</a>
+      </li>
+      {% endif %}
+      {% endfor %}
+      
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode }}" aria-label="Next">
+          <span aria-hidden="true">›</span>
+        </a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ request.GET.urlencode }}" aria-label="Last">
+          <span aria-hidden="true">»</span>
+        </a>
+      </li>
+      {% endif %}
     </ul>
-</nav>
-{% endif %}
+  </nav>
+  {% endif %}
+</div>
 {% endblock %}
