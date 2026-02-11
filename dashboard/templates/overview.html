@@ -2,70 +2,56 @@
 {% block content %}
 
 <style>
-    :root {
-        --navy-dark: #1a2a40;
-        --action-blue: #2563eb;
+    :root { 
+        --navy-dark: #1a2a40; 
+        --action-blue: #2563eb; 
+        --soft-bg: #f8fafc;
     }
-
-    /* Stats Grid Cards */
-    .stat-card {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 4px;
-        padding: 15px;
-        text-align: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
-    .stat-label { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
-
-    /* CVI Tool Panel */
-    .cvi-panel {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        display: flex;
-        overflow: hidden;
-        margin-bottom: 50px;
-    }
-    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; }
-    .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; }
-
-    /* Recent Article Badges */
-    .badge-tone { background-color: #10b981 !important; color: white !important; }
-    .badge-intent { background-color: #f59e0b !important; color: white !important; }
     
-    .article-title-link {
-        color: var(--action-blue);
-        text-decoration: none;
-        transition: color 0.2s;
-        font-weight: bold;
+    /* Stats Styling */
+    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; }
+    .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
+    
+    /* Badge Styling */
+    .badge-tone { background-color: #10b981 !important; color: white !important; padding: 5px 10px; }
+    .badge-intent { background-color: #f59e0b !important; color: white !important; padding: 5px 10px; }
+    
+    /* CVI Calculator Panel */
+    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 250px; }
+    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
+    .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    
+    /* Floating Chatbot */
+    #chat-window { 
+        display: none; width: 350px; height: 450px; position: fixed; 
+        bottom: 90px; right: 20px; background: white; z-index: 1000; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
     }
-    .article-title-link:hover { color: var(--navy-dark); }
+    #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
 </style>
 
 <div class="row g-3 mb-5">
     <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #3b82f6;">
-            <div class="stat-label">Total Articles</div>
+        <div class="stat-card" style="border-bottom: 4px solid var(--action-blue);">
+            <div class="stat-label fw-bold text-muted small text-uppercase">Total Articles</div>
             <div class="stat-value">{{ total_articles|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #10b981;">
-            <div class="stat-label">Media Outlets</div>
+            <div class="stat-label fw-bold text-muted small text-uppercase">Media Outlets</div>
             <div class="stat-value">{{ unique_outlets|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
-            <div class="stat-label">Narratives Identified</div>
+            <div class="stat-label fw-bold text-muted small text-uppercase">Narratives</div>
             <div class="stat-value">{{ unique_intents|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-bottom: 4px solid #06b6d4;">
-            <div class="stat-label">Foreign Actors</div>
+            <div class="stat-label fw-bold text-muted small text-uppercase">Foreign Actors</div>
             <div class="stat-value">{{ unique_actors|default:"0" }}</div>
         </div>
     </div>
@@ -82,143 +68,153 @@
             </div>
         </div>
     </div>
-
     <div class="col-lg-5">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top African Countries Publishing</h5>
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Subjects Mentioned</h5>
             </div>
             <div class="card-body p-0">
-                {% if country_chart %}
-                    <div class="mb-3">{{ country_chart|safe }}</div>
-                {% endif %}
-                
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0" style="font-size: 0.9rem;">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Country</th>
-                                <th class="text-end pe-3">Articles</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in country_list %}
-                            <tr>
-                                <td class="ps-3 fw-bold">{{ item.target_country }}</td>
-                                <td class="text-end pe-3">
-                                    <span class="badge rounded-pill bg-light text-dark border">{{ item.total }}</span>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="2" class="text-center py-4 text-muted">No publishing data found.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <ul class="list-group list-group-flush">
+                    {% for sub in top_subjects %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ sub.strategic_intent|title }}
+                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center py-4 text-muted">No subject data found.</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
     </div>
 </div>
 
-<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Contextual Vulnerability Index (CVI)</h4>
-<div class="cvi-panel shadow-sm">
+<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
+<div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
         <form method="get">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
                 <select name="target_country" class="form-select">
-                    <option value="">-- Select Country --</option>
                     {% for country in african_countries %}
-                    <option value="{{ country }}">{{ country }}</option>
+                    <option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
                 <select name="foreign_actor" class="form-select">
-                    <option value="">-- Select Actor --</option>
                     {% for actor in foreign_actors %}
-                    <option value="{{ actor }}">{{ actor }}</option>
+                    <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>
                     {% endfor %}
                 </select>
             </div>
             <button type="submit" class="btn w-100 fw-bold text-white" style="background-color: var(--action-blue);">
-                Generate Vulnerability Report
+                Calculate Score
             </button>
         </form>
     </div>
     <div class="cvi-right text-center">
-        {% if factor_chart_base64 %}
-            <img src="data:image/png;base64,{{ factor_chart_base64 }}" class="img-fluid">
+        {% if cvi_score %}
+            <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:2 }}</div>
+            <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
+            <p class="small text-muted">Based on real-time narrative analysis</p>
         {% else %}
-            <div class="text-muted">
-                <i class="fas fa-chart-pie fa-3x mb-3 opacity-25"></i>
-                <p class="small">Select parameters to view factor contribution</p>
+            <div class="text-muted opacity-50">
+                <i class="fas fa-calculator fa-3x mb-3"></i>
+                <p>Select parameters and click calculate</p>
             </div>
         {% endif %}
     </div>
 </div>
 
+<div class="card shadow-sm border-0 mb-5">
+    <div class="card-header bg-white py-3 text-center border-bottom">
+        <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top African Countries Publishing</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table mb-0 table-hover">
+            <thead class="table-light">
+                <tr><th class="ps-4">Country</th><th class="text-center">Articles Published</th></tr>
+            </thead>
+            <tbody>
+                {% for item in country_list %}
+                <tr>
+                    <td class="ps-4 fw-bold">{{ item.target_country }}</td>
+                    <td class="text-center"><span class="badge bg-secondary px-3">{{ item.total }}</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="2" class="text-center py-4 text-muted">No data available</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
-<div class="row g-4">
+<div class="row g-4 mb-5">
     {% for article in page_obj %}
     <div class="col-12">
-        <div class="card shadow-sm border-0" style="max-height: 180px; overflow: hidden;">
-            <div class="row g-0 h-100">
-                <div class="col-md-3">
-                    {% if article.get_article_image %}
-                    <img src="{{ article.get_article_image }}" 
-                         class="img-fluid rounded-start w-100 h-100" 
-                         style="object-fit: cover;" alt="Article image">
-                    {% else %}
-                    <div class="bg-light d-flex align-items-center justify-content-center h-100 rounded-start border-end">
-                        <span class="text-muted small">No image</span>
-                    </div>
-                    {% endif %}
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h6 class="fw-bold">
+                    <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
+                        {{ article.article_text|truncatewords:15 }}
+                    </a>
+                </h6>
+                <div class="mb-3 mt-2">
+                    <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
+                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
+                    <span class="badge bg-dark text-white">VI Score: {{ article.vulnerability_index|floatformat:2 }}</span>
                 </div>
-
-                <div class="col-md-9">
-                    <div class="card-body py-2 px-3 d-flex flex-column h-100">
-                        <h6 class="card-title fw-bold mb-1" style="font-size: 1.1rem;">
-                            <a href="{{ article.url }}" target="_blank" class="article-title-link">
-                                {{ article.article_text|truncatewords:12|default:"Untitled Article" }}
-                            </a>
-                        </h6>
-
-                        <small class="text-muted mb-1">
-                            <strong>{{ article.media_outlet_fk.name|default:article.media_outlet|default:"Unknown" }}</strong>
-                            • {{ article.posting_time|date:"M j, Y" }}
-                        </small>
-
-                        <p class="card-text text-muted small mb-2 flex-grow-1">
-                            {{ article.article_text|truncatewords:40 }}
-                        </p>
-
-                        <div class="mt-auto d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="badge badge-tone small me-1">Tone: {{ article.tone|default:"—" }}</span>
-                                <span class="badge badge-intent small">Intent: {{ article.strategic_intent|default:"—" }}</span>
-                            </div>
-                            <a href="{{ article.url }}" target="_blank" class="small fw-bold" style="color: var(--action-blue); text-decoration: none;">
-                                Read full article →
-                            </a>
-                        </div>
-                    </div>
+                <p class="small text-muted mb-3">{{ article.article_text|truncatewords:45 }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</span>
+                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">Read Full Article →</a>
                 </div>
             </div>
         </div>
     </div>
     {% empty %}
     <div class="col-12 text-center py-5">
-        <p class="text-muted fs-5">No articles available.</p>
+        <p class="text-muted">No articles found matching your criteria.</p>
     </div>
     {% endfor %}
 </div>
 
-<div class="text-center mt-5 mb-5">
-    <a href="/report/" class="btn btn-outline-dark px-4">View Full Archive →</a>
+<div id="chatbot-bubble">
+    <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
+        <span style="font-size: 1.5rem;">💬</span>
+    </button>
 </div>
+
+<div id="chat-window" class="border">
+    <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center rounded-top">
+        <span class="fw-bold">AI Narrative Analyst</span>
+        <button class="btn-close btn-close-white" onclick="toggleChat()"></button>
+    </div>
+    <div id="chat-box" class="p-3 flex-grow-1 overflow-auto bg-light" style="font-size: 0.9rem;">
+        <div class="p-2 mb-2 bg-white border rounded">
+            Hello! I am your AI analyst. Ask me anything about the current media narratives or vulnerability scores.
+        </div>
+    </div>
+    <div class="p-2 border-top bg-white rounded-bottom">
+        <div class="input-group">
+            <input type="text" id="user-input" class="form-control form-control-sm" placeholder="Ask a question...">
+            <button class="btn btn-primary btn-sm" type="button">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleChat() {
+        const chat = document.getElementById('chat-window');
+        if (chat.style.display === 'flex') {
+            chat.style.display = 'none';
+        } else {
+            chat.style.display = 'flex';
+        }
+    }
+</script>
 
 {% endblock %}
