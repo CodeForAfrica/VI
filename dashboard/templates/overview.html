@@ -1,169 +1,133 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="card shadow-sm border-0 mb-5">
-        <div class="card-header bg-light text-center py-3">
-            <h3 class="mb-0 text-primary fw-bold">Narrative Volume Over Time</h3>
-            <small class="text-muted">Total articles: {{ total_articles }} • Global Trend</small>
-        </div>
-
-        <div class="card-body pb-0">
-            <form method="get" class="row g-3 mb-4 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Media Outlet</label>
-                    <select name="media_outlet" class="form-select">
-                        <option value="">All Outlets</option>
-                        {% for choice in outlet_choices %}
-                        <option value="{{ choice.media_outlet }}" {% if selected_outlet == choice.media_outlet %}selected{% endif %}>{{ choice.media_outlet }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Target Country</label>
-                    <select name="target_country" class="form-select">
-                        <option value="">All Countries</option>
-                        {% for choice in country_choices %}
-                        <option value="{{ choice.target_country }}" {% if selected_country == choice.target_country %}selected{% endif %}>{{ choice.target_country }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Foreign Actor</label>
-                    <select name="foreign_actor" class="form-select">
-                        <option value="">All Actors</option>
-                        {% for actor in foreign_actors %}
-                        <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2 text-end d-flex gap-2">
-                    <button type="submit" class="btn btn-primary w-100">Apply</button>
-                    <a href="/" class="btn btn-outline-secondary">Reset</a>
-                </div>
-            </form>
-        </div>
-
-        <div class="card-body pt-0">
-            {{ chart|safe }}
-        </div>
-    </div>
-
-    <div class="row mb-5 text-center">
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm border-primary h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-primary small">Total Articles</h5>
-                    <h2 class="fw-bold text-primary">{{ total_articles }}</h2>
-                </div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-8 border-end">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold cfa-navy-text">Article Feed</h3>
+                <span class="text-muted">Showing {{ total_articles }} articles</span>
             </div>
-        </div>
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm border-success h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-success small">Media Outlets</h5>
-                    <h2 class="fw-bold text-success">{{ unique_outlets }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm border-warning h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-warning small">Narratives</h5>
-                    <h2 class="fw-bold text-warning">{{ unique_intents }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm border-info h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-info small">Actors Detected</h5>
-                    <h2 class="fw-bold text-info">{{ unique_actors }}</h2>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div class="row mb-5 g-4">
-        <div class="col-lg-6">
-            <div class="card shadow-sm h-100 border-0">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0 py-1">Vulnerability Index (CVI)</h5>
-                </div>
-                <div class="card-body">
-                    <form method="get" class="row g-2 mb-3">
-                        <div class="col-6">
-                            <select name="african_country" class="form-select form-select-sm">
-                                <option>-- Choose Country --</option>
-                                {% for country in african_countries %}
-                                <option value="{{ country }}">{{ country }}</option>
-                                {% endfor %}
-                            </select>
+            {% for article in page_obj %}
+            <div class="row mb-4 pb-4 border-bottom align-items-start">
+                <div class="col-md-3">
+                    {% if article.display_image %}
+                        <img src="{{ article.display_image }}" class="img-fluid rounded shadow-sm border" alt="Article Image" style="width: 100%; height: 140px; object-fit: cover;">
+                    {% else %}
+                        <div class="bg-light d-flex flex-column align-items-center justify-content-center rounded border" style="height: 140px;">
+                            <i class="text-muted small">No Image</i>
                         </div>
-                        <div class="col-6">
-                            <select name="foreign_actor" class="form-select form-select-sm">
-                                <option>-- Choose Actor --</option>
-                                {% for actor in foreign_actors %}
-                                <option value="{{ actor }}">{{ actor }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-sm btn-dark w-100">Calculate</button>
-                    </form>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-9">
+                    <h5 class="fw-bold text-dark mb-1">{{ article.title }}</h5>
+                    <p class="text-muted small mb-2">
+                        <span class="fw-bold">{{ article.media_outlet }}</span> • {{ article.posting_time|date:"M d, Y" }}
+                    </p>
                     
-                    <div class="text-center p-3 bg-light rounded">
+                    <div class="mb-2">
+                        <span class="badge rounded-pill {% if article.tone == 'negative' %}bg-danger{% else %}bg-success{% endif %}">
+                            Tone: {{ article.tone|title }}
+                        </span>
+                        <span class="badge rounded-pill bg-warning text-dark">
+                            Intent: {{ article.strategic_intent|title }}
+                        </span>
+                    </div>
+
+                    <p class="text-secondary small">
+                        {{ article.summary }}
+                    </p>
+                    
+                    <div class="text-end">
+                        <a href="{{ article.full_link }}" target="_blank" class="btn btn-sm btn-outline-primary py-0">
+                            Read full article →
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-5">
+                <p class="text-muted fs-5">No articles found matching your criteria.</p>
+            </div>
+            {% endfor %}
+
+            <nav aria-label="Page navigation" class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">First</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+
+        <div class="col-lg-4 px-4">
+            <div class="sticky-top" style="top: 20px; z-index: 1000;">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header cfa-navy py-3">
+                        <h5 class="mb-0 text-white fw-bold">Vulnerability Index (CVI)</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="GET" class="mb-4">
+                            <div class="mb-3">
+                                <label class="small fw-bold">African Country</label>
+                                <select name="african_country" class="form-select">
+                                    {% for country in countries %}
+                                        <option value="{{ country }}" {% if selected_african_country == country %}selected{% endif %}>{{ country }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="small fw-bold">Foreign Actor</label>
+                                <select name="foreign_actor_cvi" class="form-select">
+                                    {% for actor in actors %}
+                                        <option value="{{ actor }}" {% if selected_foreign_actor_cvi == actor %}selected{% endif %}>{{ actor }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Calculate Risk</button>
+                        </form>
+
+                        <hr>
+
                         {% if cii_result %}
-                        <h2 class="display-6 fw-bold text-danger mb-0">{{ cii_result }}</h2>
-                        <small class="text-muted">Vulnerability Score</small>
+                            <div class="text-center p-3 bg-light rounded border mb-4">
+                                <p class="small text-uppercase mb-1 fw-bold text-muted">Risk Score</p>
+                                <h1 class="display-4 fw-bold {% if cii_result > 0.5 %}text-danger{% else %}text-success{% endif %}">
+                                    {{ cii_result }}
+                                </h1>
+                            </div>
+                            
+                            {% if factor_chart_base64 %}
+                                <div class="mt-3">
+                                    <p class="small fw-bold mb-2 text-center">Factor Breakdown</p>
+                                    <img src="data:image/png;base64,{{ factor_chart_base64 }}" class="img-fluid rounded border shadow-sm">
+                                </div>
+                            {% endif %}
                         {% else %}
-                        <p class="small text-muted mb-0">Select criteria above to generate index.</p>
+                            <div class="text-center py-4 text-muted small">
+                                <p>Select country/actor and click calculate to view the Risk Profile chart.</p>
+                            </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-6">
-            <div class="card shadow-sm h-100 border-0">
-                <div class="card-header bg-white border-bottom">
-                    <h5 class="mb-0 py-1 text-primary">Influential Actors</h5>
-                </div>
-                <div class="card-body p-2">
-                    {% if actor_chart %}
-                        {{ actor_chart|safe }}
-                    {% else %}
-                        <p class="text-center py-5 text-muted">No actor data available.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <h4 class="mb-4 text-center text-primary fw-bold">Recent Intelligence Feed</h4>
-    <div class="row g-4">
-        {% for article in page_obj %}
-        <div class="col-12">
-            <div class="card shadow-sm border-0">
-                <div class="row g-0 align-items-center">
-                    <div class="col-md-10">
-                        <div class="card-body py-2">
-                            <h6 class="fw-bold mb-1">{{ article.article_text|truncatewords:15 }}</h6>
-                            <small class="text-muted">
-                                {{ article.media_outlet_fk.name|default:article.media_outlet }} • {{ article.posting_time|date:"M j, Y" }}
-                            </small>
-                        </div>
-                    </div>
-                    <div class="col-md-2 text-center">
-                        <span class="badge bg-light text-dark">Tone: {{ article.tone|default:"0.0" }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="text-center mt-4 mb-5">
-        <a href="/articles/" class="btn btn-outline-primary">View All Database Articles →</a>
     </div>
 </div>
 {% endblock %}
