@@ -23,7 +23,7 @@ from django.db.models import DateTimeField
 from django.views.decorators.http import require_http_methods
 from groq import Groq
 from django.conf import settings
-from .models import MediaNarrative
+from .models import MediaNarrative, MediaOutlet
 
 # =========================
 # CII CONSTANTS & HELPERS
