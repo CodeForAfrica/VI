@@ -166,60 +166,88 @@ def overview(request):
 
     total_articles = qs.count()
 
-    # 5. Global Stats
+    # 5. Global Stats (from full dataset)
     full_stats_qs = MediaNarrative.objects.all()
     for word in irrelevant_keywords:
         full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
 
     unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent='').values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor='').values('inferred_actor').distinct().count()
+    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
+    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
 
-    # 6. Volume Line Chart
+    # 6. FIXED: Average vulnerability index and confidence - SAFE AGGREGATION
+    from django.db.models import Avg
+    try:
+        # Filter out NULL values for safe aggregation
+        filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
+        
+        if filtered_qs.exists():
+            stats = filtered_qs.aggregate(
+                avg_vulnerability=Avg('vulnerability_index'),
+                avg_confidence=Avg('confidence')
+            )
+            avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
+            avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
+        else:
+            # If no records have vulnerability_index values, calculate them on-the-fly
+            avg_vulnerability = 0.0
+            avg_confidence = full_stats_qs.aggregate(Avg('confidence'))['confidence__avg'] or 0.0
+    except Exception:
+        # Fallback if anything goes wrong
+        avg_vulnerability = 0.0
+        avg_confidence = 0.0
+
+    # 7. Volume Line Chart
     if full_stats_qs.exists():
         try:
             df = pd.DataFrame.from_records(full_stats_qs.values('posting_time'))
+            df = df.dropna(subset=['posting_time'])
             df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
             daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-            fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-            fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
-            chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+            
+            if not daily_counts.empty:
+                fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
+                chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
 
-    # 7. Top Countries Table
+    # 8. Top Countries Table
     country_list = full_stats_qs.values('target_country') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:10]
 
-    # 8. Top Subjects
+    # 9. Top Subjects
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]) \
         .values('strategic_intent') \
         .annotate(total=Count('id')) \
         .order_by('-total')[:5]
 
-    # 9. Pagination
+    # 10. Pagination
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 10. ML Service for VI Calculation (FIXED with Mapping)
+    # 11. ML Service for VI Calculation (FIXED with Mapping)
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
-        # We pass the raw values; the calculate_vulnerability_index mapping handles the spelling
-        score = ml_service.calculate_vulnerability_index(
-            article.strategic_intent or 'neutral',
-            article.tone or 'neutral',
-            article.target_country,
-            article.inferred_actor,
-            article.confidence or 0.5
-        )
-        article.vulnerability_index = float(score) if score else 0.0
+        # Calculate vulnerability index if it's NULL in the database
+        if article.vulnerability_index is None:
+            vi_score = ml_service.calculate_vulnerability_index(
+                article.strategic_intent or 'neutral',
+                article.tone or 'neutral',
+                article.target_country,
+                article.inferred_actor,
+                article.confidence or 0.5
+            )
+            article.vulnerability_index = float(vi_score) if vi_score else 0.0
+        else:
+            article.vulnerability_index = float(article.vulnerability_index) if article.vulnerability_index is not None else 0.0
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 11. Calculator Score Result (FIXED with Mapping)
+    # 12. Calculator Score Result (FIXED with Mapping)
     if target_country and foreign_actor:
         # We use the selected dropdown values directly
         latest = qs.first() 
@@ -231,7 +259,7 @@ def overview(request):
             latest.confidence if latest else 0.5
         )
 
-    # 12. Context
+    # 13. Context
     context = {
         'chart': chart,
         'page_obj': page_obj,
@@ -239,6 +267,8 @@ def overview(request):
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
+        'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
+        'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
@@ -248,6 +278,7 @@ def overview(request):
         'selected_actor': foreign_actor,
     }
     return render(request, 'overview.html', context)
+    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
