@@ -15,6 +15,9 @@ from datetime import datetime
 import base64
 import json
 import logging
+import matplotlib
+matplotlib.use('Agg')  # Required for Django to prevent "main thread" GUI errors
+import matplotlib.pyplot as plt
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from groq import Groq
