@@ -138,33 +138,39 @@ class MLInferenceService:
         return classifier
     
     def _load_contextual_module_from_s3(self):
-        """Load contextual module from S3 (from your notebook) - YES, WE'RE IMPORTING IT"""
+        """Load contextual module from S3 and import it as a dynamic module"""
         if self._contextual_module is not None:
             return self._contextual_module
         
         if not self.s3_client:
-            raise Exception("AWS S3 credentials not configured")
+            logger.error("AWS S3 credentials not configured")
+            return None
         
         try:
-            # Download contextual module from S3 - THIS IS THE ORIGINAL contextual_all_intents_v2.py FILE
+            # Note: If this still fails, try 'models/contextual_all_intents_v2%20(1).py'
             response = self.s3_client.get_object(
                 Bucket=self.bucket_name,
                 Key='models/contextual_all_intents_v2 (1).py'
             )
             
-            # Save temporarily and import - WE'RE LOADING THE EXISTING PYTHON FILE
-            import tempfile
-            import importlib.util
+            file_content = response['Body'].read().decode('utf-8')
+            
+            # Create a temporary file to import from
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(response['Body'].read().decode('utf-8'))
+                f.write(file_content)
                 temp_py_path = f.name
             
+            # Dynamic import logic
             spec = importlib.util.spec_from_file_location('contextual_mod', temp_py_path)
             contextual_mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(contextual_mod)
             
+            # Cleanup the temp file
+            os.remove(temp_py_path)
+            
             self._contextual_module = contextual_mod
             return contextual_mod
+
         except Exception as e:
             logger.error(f"Error loading contextual module from S3: {e}")
             return None
