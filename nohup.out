@@ -1,0 +1,44 @@
+[2026-02-08 14:50:46 +0000] [77785] [INFO] Starting gunicorn 25.0.3
+[2026-02-08 14:50:46 +0000] [77785] [INFO] Listening at: http://0.0.0.0:8000 (77785)
+[2026-02-08 14:50:46 +0000] [77785] [INFO] Using worker: sync
+[2026-02-08 14:50:46 +0000] [77786] [INFO] Booting worker with pid: 77786
+Failed to find attribute 'application' in 'config.wsgi'.
+[2026-02-08 14:50:46 +0000] [77786] [INFO] Worker exiting (pid: 77786)
+[2026-02-08 14:50:46 +0000] [77787] [INFO] Booting worker with pid: 77787
+Failed to find attribute 'application' in 'config.wsgi'.
+[2026-02-08 14:50:46 +0000] [77787] [INFO] Worker exiting (pid: 77787)
+[2026-02-08 14:50:46 +0000] [77788] [INFO] Booting worker with pid: 77788
+Failed to find attribute 'application' in 'config.wsgi'.
+[2026-02-08 14:50:46 +0000] [77788] [INFO] Worker exiting (pid: 77788)
+[2026-02-08 14:50:46 +0000] [77785] [ERROR] Worker (pid:77786) exited with code 4.
+[2026-02-08 14:50:46 +0000] [77785] [ERROR] Worker (pid:77787) exited with code 4.
+Traceback (most recent call last):
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 225, in run
+    handler()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 250, in handle_chld
+    self.reap_workers()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 617, in reap_workers
+    raise HaltServer(reason, self.APP_LOAD_ERROR)
+gunicorn.errors.HaltServer: <HaltServer 'App failed to load.' 4>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/Vulnerability_index_tool/venv/bin/gunicorn", line 6, in <module>
+    sys.exit(run())
+             ^^^^^
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/app/wsgiapp.py", line 66, in run
+    WSGIApplication("%(prog)s [OPTIONS] [APP_MODULE]", prog=prog).run()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/app/base.py", line 235, in run
+    super().run()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/app/base.py", line 71, in run
+    Arbiter(self).run()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 233, in run
+    self.halt(reason=inst.reason, exit_status=inst.exit_status)
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 354, in halt
+    self.stop()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 434, in stop
+    self.reap_workers()
+  File "/home/ubuntu/Vulnerability_index_tool/venv/lib/python3.12/site-packages/gunicorn/arbiter.py", line 617, in reap_workers
+    raise HaltServer(reason, self.APP_LOAD_ERROR)
+gunicorn.errors.HaltServer: <HaltServer 'App failed to load.' 4>

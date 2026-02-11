@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vulnerability Index Tool - Code for Africa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    {% load static %}
+    
+    <style>
+        /* === UPDATED COLOR SCHEME === */
+        :root {
+            --primary-navy: #1a3a5f;        /* Deep navy blue - professional */
+            --primary-accent: #2c7be5;      /* Bright blue accent */
+            --secondary-teal: #00897b;      /* Teal - complementary */
+            --light-bg: #f5f7fa;            /* Soft light gray */
+            --dark-text: #2d3748;           /* Dark gray text */
+            --medium-gray: #718096;         /* Medium gray */
+            --light-gray: #e2e8f0;          /* Light gray borders */
+        }
+
+        /* Existing styles - UPDATED COLORS */
+        body { 
+            background-color: var(--light-bg); 
+            color: var(--dark-text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .cfa-navy { 
+            background-color: var(--primary-navy) !important; 
+            color: white !important; 
+        }
+        
+        .cfa-navy-text { 
+            color: var(--primary-navy); 
+        }
+        
+        .cfa-accent { 
+            color: var(--primary-accent); 
+            font-weight: 600;
+        }
+        
+        .main-title { 
+            font-size: 3rem; 
+            font-weight: bold; 
+            color: var(--primary-navy);
+        }
+        
+        .chart-container { 
+            height: 500px; 
+            width: 100%; 
+        }
+        
+        .nav-tabs .nav-link.active { 
+            background-color: var(--primary-navy); 
+            border-color: var(--primary-navy); 
+            color: white; 
+            font-weight: 600;
+        }
+        
+        .nav-tabs .nav-link { 
+            border: 1px solid var(--light-gray); 
+            color: var(--medium-gray);
+            font-weight: 500;
+        }
+        
+        .nav-tabs .nav-link:hover { 
+            color: var(--primary-navy); 
+            border-color: var(--light-gray);
+        }
+
+        /* Chatbot Styles - UPDATED COLORS */
+        .chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+        }
+        
+        .chatbot-button {
+            background-color: var(--secondary-teal);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .chatbot-button:hover {
+            transform: scale(1.1);
+            background-color: #00695c;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        .chatbot-window {
+            width: 350px;
+            height: 450px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            border: 1px solid var(--light-gray);
+        }
+        
+        .chatbot-header {
+            background-color: var(--secondary-teal);
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chatbot-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .chatbot-close:hover {
+            opacity: 0.8;
+        }
+        
+        .chatbot-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: var(--light-bg);
+        }
+        
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 85%;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+        
+        .user-message {
+            background-color: #e3f2fd;
+            color: var(--dark-text);
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .bot-message {
+            background-color: white;
+            color: var(--dark-text);
+            border: 1px solid var(--light-gray);
+            border-bottom-left-radius: 4px;
+        }
+        
+        .chatbot-input {
+            display: flex;
+            padding: 12px;
+            background-color: white;
+            border-top: 1px solid var(--light-gray);
+        }
+        
+        .chatbot-input input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--light-gray);
+            border-radius: 24px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .chatbot-input input:focus {
+            border-color: var(--secondary-teal);
+            box-shadow: 0 0 0 3px rgba(0, 137, 123, 0.1);
+        }
+        
+        .chatbot-input button {
+            margin-left: 10px;
+            padding: 10px 20px;
+            background-color: var(--secondary-teal);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .chatbot-input button:hover {
+            background-color: #00695c;
+            transform: translateY(-1px);
+        }
+        
+        .typing-indicator {
+            display: none;
+            padding: 10px 15px;
+            color: var(--medium-gray);
+            font-style: italic;
+            background-color: var(--light-bg);
+            font-size: 13px;
+        }
+
+        /* Header styling - UPDATED */
+        header.bg-white {
+            background-color: white !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Footer styling - UPDATED */
+        footer {
+            background-color: var(--primary-navy) !important;
+            color: white !important;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Subtitle styling */
+        .lead.text-muted {
+            color: var(--medium-gray) !important;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Logo + Centered Title -->
+    <header class="bg-white shadow-sm py-4 mb-4">
+        <div class="container">
+            <div class="row align-items-center">
+                <!-- Left: Africa Logo -->
+                <div class="col-md-3 col-12 text-md-start text-center mb-md-0 mb-3">
+                    <img src="{% static 'dashboard/images/Africa logo.png' %}" 
+                         alt="Code for Africa" 
+                         height="45" 
+                         width="auto"
+                         class="img-fluid rounded shadow-sm"
+                         style="max-height: 45px; object-fit: contain;">
+                </div>
+
+                <!-- Center: Title & Subtitle -->
+                <div class="col-md-6 col-12 text-center">
+                    <h1 class="display-5 fw-bold cfa-navy-text mb-2">
+                        Vulnerability Index Tool
+                    </h1>
+                    <p class="lead text-muted mb-0">
+                        Monitoring Media Narratives Across Africa
+                    </p>
+                </div>
+
+                <!-- Right: Balance -->
+                <div class="col-md-3 col-12 text-md-end text-center">
+                    <small class="text-muted d-block mt-2">
+                        Last updated: January 2026
+                    </small>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="container mt-4">
+        <ul class="nav nav-tabs justify-content-center">
+            <li class="nav-item">
+                <a class="nav-link active" href="/">Home</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/authors/">Authors</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/actors/">Actors</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'cii' %}">CII</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/countries/' %}active{% endif %}" href="/countries/">Countries</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/media/">Media</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'generate_report' %}">Report</a>
+            </li>
+        </ul>
+
+        <div class="my-5">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="cfa-navy text-white text-center py-4 mt-5">
+        <div class="container">
+            <p class="mb-0">© 2026 Code for Africa • Vulnerability Index Tool</p>
+        </div>
+    </footer>
+
+    <!-- Floating Chat Widget - Properly integrated -->
+    <div class="chatbot-container">
+        <button class="chatbot-button" id="chatbotToggle">
+            💬
+        </button>
+        <div class="chatbot-window" id="chatbotWindow">
+            <div class="chatbot-header">
+                <span>Disinfo Assistant</span>
+                <button class="chatbot-close" id="chatbotClose">×</button>
+            </div>
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="message bot-message">
+                    Hello! I'm your disinformation analysis assistant. Ask me about articles, trends, actors, or anything else in our database!
+                </div>
+            </div>
+            <div class="typing-indicator" id="typingIndicator">
+                Your assistant is typing...
+            </div>
+            <div class="chatbot-input">
+                <input type="text" id="chatbotInput" placeholder="Ask about articles, trends, actors...">
+                <button id="chatbotSend">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Chatbot JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatbotToggle = document.getElementById('chatbotToggle');
+            const chatbotWindow = document.getElementById('chatbotWindow');
+            const chatbotClose = document.getElementById('chatbotClose');
+            const chatbotMessages = document.getElementById('chatbotMessages');
+            const chatbotInput = document.getElementById('chatbotInput');
+            const chatbotSend = document.getElementById('chatbotSend');
+            const typingIndicator = document.getElementById('typingIndicator');
+
+            // Toggle chat window
+            chatbotToggle.addEventListener('click', () => {
+                chatbotWindow.style.display = chatbotWindow.style.display === 'flex' ? 'none' : 'flex';
+            });
+
+            // Close chat window
+            chatbotClose.addEventListener('click', () => {
+                chatbotWindow.style.display = 'none';
+            });
+
+            // Send message
+            chatbotSend.addEventListener('click', sendMessage);
+            chatbotInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            function sendMessage() {
+                const message = chatbotInput.value.trim();
+                if (!message) return;
+            
+                // Add user message to UI
+                addMessage(message, 'user');
+                chatbotInput.value = '';
+            
+                // Show typing indicator
+                typingIndicator.style.display = 'block';
+            
+                // Send to backend
+                fetch('{% url "chatbot_response" %}', {  
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({message: message})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    typingIndicator.style.display = 'none';
+                    if (data.success && data.response) {
+                        addMessage(data.response, 'bot');
+                    } else {
+                        addMessage('Sorry, I encountered an error: ' + (data.response || 'Unknown error'), 'bot');
+                    }
+                })
+                .catch(error => {
+                    typingIndicator.style.display = 'none';
+                    addMessage('Connection error. Please check your server.', 'bot');
+                    console.error('Error:', error);
+                });
+            }
+
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message', `${sender}-message`);
+                messageDiv.textContent = text;
+                chatbotMessages.appendChild(messageDiv);
+                
+                // Scroll to bottom
+                chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+            }
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    </script>
+</body>
+</html>
