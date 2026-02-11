@@ -1,0 +1,22 @@
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom py-3">
+        <h5 class="mb-0 fw-bold">Vulnerability Index Tool</h5>
+    </div>
+    <div class="card-body">
+        {% if cii_result %}
+            <div class="alert alert-info text-center">
+                <p class="mb-0 small text-uppercase fw-bold">Overall Risk Score</p>
+                <h2 class="mb-0">{{ cii_result }}</h2>
+            </div>
+        {% endif %}
+
+        {% if factor_chart_base64 %}
+            <div class="mt-4">
+                <p class="small fw-bold mb-2">Risk Factor Contribution:</p>
+                <img src="data:image/png;base64,{{ factor_chart_base64 }}" class="img-fluid border rounded shadow-sm">
+            </div>
+        {% else %}
+            <p class="text-muted small text-center py-4 italic">Select a country and actor to see risk breakdown.</p>
+        {% endif %}
+    </div>
+</div>
