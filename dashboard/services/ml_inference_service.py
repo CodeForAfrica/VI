@@ -280,7 +280,7 @@ class MLInferenceService:
             'strategic_intent_source': 'model'  # From your notebook's logic
         }
     
-    def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
+def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """Calculate vulnerability index using contextual module and PPI approach"""
         try:
             # Load contextual module from S3
@@ -316,12 +316,16 @@ class MLInferenceService:
                 
                 if intent_category in CA:
                     # Convert target country to match the EXACT format in contextual module
+                    # FIXED: Added Côte d'Ivoire with accents and Ivory Coast variations
                     country_mapping = {
                         "senegal": "Senegal",
                         "drc": "DRC", 
                         "congo": "DRC",
                         "democraticrepublicofcongo": "DRC",
                         "coteivoire": "CoteIvoire",
+                        "cotedivoire": "CoteIvoire",
+                        "côtedivoire": "CoteIvoire",
+                        "côted'ivoire": "CoteIvoire",
                         "coted'ivoire": "CoteIvoire",
                         "ivorycoast": "CoteIvoire",
                         "ethiopia": "Ethiopia",
@@ -332,6 +336,7 @@ class MLInferenceService:
                     
                     formatted_country = None
                     for key, expected_format in country_mapping.items():
+                        # We use the same cleaning logic to ensure "Côte d'Ivoire" matches "côtedivoire"
                         key_clean = key.lower().replace(" ", "").replace("'", "").replace("-", "").replace("_", "")
                         if target_clean == key_clean:
                             formatted_country = expected_format
@@ -352,6 +357,7 @@ class MLInferenceService:
                             "china": "China",
                             "france": "France", 
                             "unitedstates": "UnitedStates",
+                            "usa": "UnitedStates",
                             "russia": "Russia",
                             "rwanda": "Rwanda",
                             "saudi": "Saudi",
