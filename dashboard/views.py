@@ -516,7 +516,7 @@ def chatbot_response(request):
 # OVERVIEW PAGE
 # =========================
 def overview(request):
-    # Get filter parameters
+    # 1. Capture All Filter Parameters
     media_outlet = request.GET.get('media_outlet', '').strip()
     target_country = request.GET.get('target_country', '').strip()
     foreign_actor = request.GET.get('foreign_actor', '').strip()
@@ -524,10 +524,9 @@ def overview(request):
     tone = request.GET.get('tone', '').strip()
     search_query = request.GET.get('q', '').strip()
 
-    # Base queryset
+    # 2. Base Queryset (Filtered)
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
-    # Apply filters
     if media_outlet:
         qs = qs.filter(media_outlet_fk__name__iexact=media_outlet)
     if target_country:
@@ -541,90 +540,59 @@ def overview(request):
     if search_query:
         qs = qs.filter(Q(article_text__icontains=search_query))
 
-    total_articles = qs.count()
+    # 3. Dynamic VI Index Calculation (The new "Vulnerability Score")
+    # This reflects ONLY the filtered data (e.g., if I pick Senegal, I see Senegal's VI)
+    vi_stats = qs.aggregate(avg_v=Avg('vulnerability_index'), avg_c=Avg('confidence'))
+    current_vi = vi_stats['avg_v'] or 0.0
+    avg_conf = vi_stats['avg_c'] or 0.0
 
-    # Key Stats (from full dataset)
-    full_stats_qs = MediaNarrative.objects.all()
-    unique_outlets = full_stats_qs.exclude(media_outlet__in=['', 'Unknown', None]).values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
+    # 4. Top 5 Actors Sidebar (New Insight)
+    top_actors = qs.values('inferred_actor').annotate(count=Count('id')).order_by('-count')[:5]
 
-    # Average vulnerability index and confidence
-    from django.db.models import Avg  # Move this import inside function if needed
+    # 5. Global Database Stats (Static insights from full dataset)
+    full_qs = MediaNarrative.objects.all()
+    unique_outlets = full_qs.exclude(media_outlet__in=['', 'Unknown', None]).values('media_outlet').distinct().count()
+    unique_intents = full_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
 
-    # Handle the case where all values are NULL
-    try:
-        stats = full_stats_qs.aggregate(
-            avg_vulnerability=Avg('vulnerability_index'),
-            avg_confidence=Avg('confidence')
-        )
-        # Convert None to appropriate default values
-        avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
-        avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
-    except Exception as e:
-        # Fallback if anything goes wrong
-        avg_vulnerability = 0.0
-        avg_confidence = 0.0
-
-    # Chart: Full narrative volume over time
-    chart_qs = MediaNarrative.objects.all()
-    if chart_qs.exists():
-        df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
+    # 6. Chart Logic (Trend over time)
+    chart = ""
+    if qs.exists():
+        df = pd.DataFrame.from_records(qs.values('posting_time'))
         df = df.dropna(subset=['posting_time'])
-        df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
-        daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-
-        if not daily_counts.empty:
-            fig = px.line(
-                daily_counts,
-                x='date',
-                y='count',
-                title='Narrative Volume Over Time',
-                labels={'date': 'Date', 'count': 'Number of Articles'}
-            )
-            fig.update_layout(height=500, template="plotly_white")
+        if not df.empty:
+            df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
+            daily = df['date'].value_counts().sort_index().reset_index(name='count')
+            fig = px.line(daily, x='date', y='count', title='Narrative Trend')
+            fig.update_layout(height=400, template="plotly_white")
             chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        else:
-            chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No date data available for chart.</p></div>"
-    else:
-        chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No articles in database.</p></div>"
 
-    # Pagination
+    # 7. Pagination & LLM Summaries (Your critical insight)
     paginator = Paginator(qs, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Add LLM summaries
-    for article in page_obj.object_list:
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    for article in page_obj:
+        # Keep your summarizer call!
         article.summary = get_summary(article.article_text)
 
-    # Filter choices for dropdowns
-    outlet_choices = MediaNarrative.objects.exclude(media_outlet__in=['', 'Unknown', None]).values('media_outlet').distinct().order_by('media_outlet')
-    country_choices = MediaNarrative.objects.exclude(target_country__in=['', 'Unknown', None]).values('target_country').distinct().order_by('target_country')
-    intent_choices = MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().order_by('strategic_intent')
-    tone_choices = MediaNarrative.objects.exclude(tone__in=['', 'Unknown', None]).values('tone').distinct().order_by('tone')
-
+    # 8. Filter Choices (Keeping your dynamic dropdowns)
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,
+        'vi_score': round(current_vi, 3),
+        'avg_confidence': round(avg_conf, 3),
+        'top_actors': top_actors,
+        'total_articles': qs.count(),
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
-        'unique_actors': unique_actors,
-        'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
-        'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
-
-        'outlet_choices': outlet_choices,
-        'country_choices': country_choices,
-        'intent_choices': intent_choices,
-        'tone_choices': tone_choices,
-        'foreign_actors': FOREIGN_ACTORS,
-
-        'selected_outlet': media_outlet,
+        
+        # Choices for the dropdowns
+        'country_choices': COUNTRIES, # Using your predefined list for consistency
+        'actor_choices': FOREIGN_ACTORS,
+        'intent_choices': list(INTENT_FACTORS.keys()),
+        
+        # Keep track of selections
         'selected_country': target_country,
         'selected_actor': foreign_actor,
-        'selected_intent': intent,
-        'selected_tone': tone,
         'search_query': search_query,
     }
     return render(request, 'overview.html', context)
@@ -852,64 +820,57 @@ def articles_view(request):
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
 
-    # Filter articles if an outlet is selected
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if outlet_name:
-        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
-
-    # Top 10 Media Outlets from MediaOutlet model (with article count)
+    # 1. Top 10 Outlets (The "Leaderboard")
+    # This remains the core value of the page: seeing market share of narratives.
     top_outlets = MediaOutlet.objects.annotate(
         article_count=Count('articles')
     ).order_by('-article_count')[:10]
 
-    # Chart: Top Media Outlets
+    # 2. Simplified Chart Logic
+    media_chart = ""
     if top_outlets.exists():
-        df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
-        df['media_outlet'] = df['media_outlet'].astype(str) # Ensure strings
-        df = df.sort_values('article_count')
-        
+        data = list(top_outlets.values('name', 'article_count'))
+        df = pd.DataFrame(data)
+        df['name'] = df['name'].astype(str)
+        df = df.sort_values('article_count', ascending=True)
+
         fig = px.bar(
             df,
-            # ... keep your x, y, orientation ...
+            x='article_count',
+            y='name',
+            orientation='h',
             title='Most Frequent Media Outlets',
-            labels={'article_count': 'Number of Articles', 'name': 'Media Outlet'},
+            labels={'article_count': 'Total Articles', 'name': 'Source'},
             text='article_count',
-            # REMOVE color='name'
             template="plotly_white"
         )
-        fig.update_traces(marker_color='teal', textposition='outside') 
-        fig.update_layout(
-            height=500,
-            showlegend=False,
-            template="plotly_white",
-            xaxis_title="Number of Articles",
-            yaxis_title="Media Outlet"
-        )
+        fig.update_traces(marker_color='#1a2a6c', textposition='outside')
+        fig.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20))
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    else:
-        media_chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No media outlet data available.</p></div>"
 
-    # Pagination for articles
-    paginator = Paginator(qs, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Selected outlet profile
+    # 3. Selected Outlet Profile (Quick Insights)
     selected_outlet = None
+    top_intents = []
+    
     if outlet_name:
         selected_outlet = MediaOutlet.objects.filter(name__iexact=outlet_name).first()
+        
+        # New Insight: Show the top 3 themes (Strategic Intents) for this outlet
+        # This tells the user: "When this outlet speaks, it's usually about [X]"
+        top_intents = MediaNarrative.objects.filter(media_outlet_fk__name__iexact=outlet_name) \
+                        .values('strategic_intent') \
+                        .annotate(intent_count=Count('id')) \
+                        .order_by('-intent_count')[:3]
 
     context = {
         'media_chart': media_chart,
         'top_outlets': top_outlets,
-        'page_obj': page_obj,
         'selected_outlet': selected_outlet,
-        'selected_name': outlet_name or "All Outlets",
-        'covers_targets': qs.filter(target_country__in=TARGET_COUNTRIES).exists() if outlet_name else False,
-        'target_countries': TARGET_COUNTRIES,
+        'selected_name': outlet_name or "All Media Sources",
+        'top_intents': top_intents,
     }
     return render(request, 'dashboard/media.html', context)
-
+    
 def intents(request):
     intent_name = request.GET.get('intent', '').strip()
 
