@@ -23,6 +23,7 @@ from django.db.models import DateTimeField
 from django.views.decorators.http import require_http_methods
 from groq import Groq
 from django.conf import settings
+from .models import MediaNarrative
 
 # =========================
 # CII CONSTANTS & HELPERS
@@ -774,7 +775,61 @@ def authors(request):
         'selected_name': journalist_name or "All Journalists",
     }
     return render(request, 'dashboard/authors.html', context)
+    
+def actors(request):
+    actor_name = request.GET.get('actor', '').strip()
 
+    # Filter articles if an actor is selected
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+    if actor_name:
+        qs = qs.filter(inferred_actor__iexact=actor_name)
+
+    # Aggregate top actors
+    top_actors_data = (
+        MediaNarrative.objects
+        .exclude(inferred_actor__in=['', 'Unknown', None])
+        .values('inferred_actor')
+        .annotate(article_count=Count('id'))
+        .order_by('-article_count')[:10]
+    )
+
+    actor_chart = ""
+    if top_actors_data:
+        df = pd.DataFrame(list(top_actors_data))
+        # Ensure data is clean for Plotly
+        df['inferred_actor'] = df['inferred_actor'].astype(str)
+        df = df.sort_values('article_count')
+
+        fig = px.bar(
+            df,
+            x='article_count',
+            y='inferred_actor',
+            orientation='h',
+            title='Top Actors by Mention Count',
+            labels={'article_count': 'Number of Mentions', 'inferred_actor': 'Actor'},
+            text='article_count',
+            template="plotly_white"
+        )
+        # Apply colors safely via traces to avoid KeyError
+        fig.update_traces(marker_color='indianred', textposition='outside')
+        fig.update_layout(height=500, showlegend=False)
+        actor_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    else:
+        actor_chart = "<p class='text-center py-5 text-muted'>No actor data available.</p>"
+
+    # Pagination
+    paginator = Paginator(qs, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'actor_chart': actor_chart,
+        'page_obj': page_obj,
+        'selected_name': actor_name or "All Actors",
+        'top_actors_list': top_actors_data,
+    }
+    return render(request, 'dashboard/actors.html', context)
+    
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
@@ -810,19 +865,19 @@ def media(request):
     # Chart: Top Media Outlets
     if top_outlets.exists():
         df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
-        df = df.sort_values('article_count', ascending=True)
+        df['media_outlet'] = df['media_outlet'].astype(str) # Ensure strings
+        df = df.sort_values('article_count')
+        
         fig = px.bar(
             df,
-            x='article_count',
-            y='name',
-            orientation='h',
+            # ... keep your x, y, orientation ...
             title='Most Frequent Media Outlets',
             labels={'article_count': 'Number of Articles', 'name': 'Media Outlet'},
             text='article_count',
-            color='name',
-            color_discrete_sequence=px.colors.qualitative.Bold
+            # REMOVE color='name'
+            template="plotly_white"
         )
-        fig.update_traces(textposition='outside')
+        fig.update_traces(marker_color='teal', textposition='outside') 
         fig.update_layout(
             height=500,
             showlegend=False,
