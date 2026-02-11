@@ -24,7 +24,7 @@ from django.views.decorators.http import require_http_methods
 from groq import Groq
 from django.conf import settings
 from .models import MediaNarrative, MediaOutlet
-from dashboard.services.ml_inference import MLInferenceService
+from dashboard.services.ml_inference_service import MLInferenceService
 import logging
 
 logger = logging.getLogger(__name__)
