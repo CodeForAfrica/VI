@@ -209,14 +209,28 @@ def overview(request):
     page_obj.object_list = articles_with_vi
 
     # 11. Calculator Score Result
-    # Because target_country and foreign_actor are now synced from the inputs, 
-    # we just calculate based on the first article in our filtered results.
-    if target_country and foreign_actor:
+    if target_country_raw and foreign_actor:
         latest = qs.first() 
         if latest:
             cvi_score = ml_service.calculate_vulnerability_index(
-                latest.strategic_intent, latest.tone, latest.target_country, latest.inferred_actor, latest.confidence or 0.5
+                latest.strategic_intent, 
+                latest.tone, 
+                latest.target_country, 
+                latest.inferred_actor, 
+                latest.confidence or 0.5
             )
+        else:
+            # Fallback for name mismatches like Côte d'Ivoire
+            fallback_art = MediaNarrative.objects.filter(
+                target_country__icontains="Ivoire", 
+                inferred_actor__iexact=foreign_actor
+            ).first()
+            
+            if fallback_art:
+                cvi_score = ml_service.calculate_vulnerability_index(
+                    fallback_art.strategic_intent, fallback_art.tone, 
+                    fallback_art.target_country, fallback_art.inferred_actor, 0.5
+                )
 
     context = {
         'chart': chart,
