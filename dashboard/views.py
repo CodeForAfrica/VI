@@ -38,36 +38,48 @@ TARGET_COUNTRIES = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi A
 # =========================
 class DisinfoAnalysisChatbot:
     def __init__(self):
+        # Initializing the Groq client with your specific Llama 4 model
         self.client = Groq(api_key=settings.GROQ_API_KEY)
         self.model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
     def process_query(self, query):
         query_l = query.lower()
-        # Simple Logic for counts
-        if any(word in query_l for word in ['how many', 'count', 'total']):
-            total = MediaNarrative.objects.count()
-            return f"The database contains {total:,} analyzed articles."
         
-        # Geopolitical AI analysis
+        # 1. Quick Relevance Check: If user asks about sports/music, pivot back.
+        irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity']
+        if any(word in query_l for word in irrelevant):
+            return "I specialize in geopolitical narratives and vulnerability indices. I don't track sports or entertainment data."
+
+        # 2. Database Stats Logic
+        if any(word in query_l for word in ['how many', 'count', 'total']):
+            total = MediaNarrative.objects.exclude(article_text__icontains='football').count()
+            return f"The database currently contains {total:,} relevant analyzed articles (excluding non-strategic content like sports)."
+        
+        # 3. Geopolitical AI analysis
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
 
+    def get_context_from_db(self, query):
+        # Filter out irrelevant topics before sending context to the AI
+        articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+        context = ""
+        for art in articles:
+            # Safety check for empty text fields
+            text_snippet = (art.article_text[:200] + "...") if art.article_text else "No text content."
+            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Text: {text_snippet}\n\n"
+        return context
+
     def get_insights_from_ai(self, query, context):
         system_prompt = """
-        You are an expert analyst explaining media narratives and vulnerability indices related to foreign influence in African countries.
-        Your task is to analyze the provided context information and answer the user's query accurately and concisely.
-        The context includes retrieved articles and potentially dashboard metrics related to the user's request.
-        Provide clear, insightful explanations based solely on the information provided.
-        If the context doesn't fully answer the query, say so clearly.
-        Cite relevant articles from the retrieved list if possible.
+        You are an expert analyst explaining media narratives and vulnerability indices in Africa.
+        Analyze the context provided and answer the query concisely. 
+        Focus strictly on foreign influence and strategic narratives.
         """
-
         try:
-            # Prepare the messages for the LLM
             chat_completion = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Context Information:\n{context}\n\nUser Query: '{query}'"}
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
                 ],
                 model=self.model,
                 temperature=0.1,
@@ -76,14 +88,8 @@ class DisinfoAnalysisChatbot:
         except Exception as e:
             return f"AI Error: {str(e)}"
 
-    def get_context_from_db(self, query):
-        articles = MediaNarrative.objects.all().order_by('-posting_time')[:5]
-        context = ""
-        for art in articles:
-            context += f"Source: {art.media_outlet} | Text: {art.article_text[:200]}...\n\n"
-        return context
-
-chatbot = DisinfoAnalysisChatbot()
+# Instantiate the chatbot once
+chatbot_instance = DisinfoAnalysisChatbot()
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -91,9 +97,19 @@ def chatbot_response(request):
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
-        return JsonResponse({'response': chatbot.process_query(user_message), 'success': True})
+        
+        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
+        bot_reply = chatbot_instance.process_query(user_message)
+        
+        return JsonResponse({
+            'reply': bot_reply, 
+            'success': True
+        })
     except Exception as e:
-        return JsonResponse({'response': str(e), 'success': False})
+        return JsonResponse({
+            'reply': f"Error: {str(e)}", 
+            'success': False
+        })
 
 # =========================
 # OVERVIEW PAGE (Updated with ML VI Logic)
