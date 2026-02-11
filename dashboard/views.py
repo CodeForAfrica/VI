@@ -208,6 +208,24 @@ def authors(request):
         'selected_name': journalist_name or "All Journalists",
     }
     return render(request, 'dashboard/authors.html', context)
+    
+def articles_view(request):
+    search_query = request.GET.get("q", "")
+
+    articles = Article.objects.all().order_by("-posting_time")
+
+    if search_query:
+        articles = articles.filter(article_text__icontains=search_query)
+
+    paginator = Paginator(articles, 5)  # ✅ 5 articles per page
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "page_obj": page_obj,
+        "search_query": search_query,
+    }
+    return render(request, "articles.html", context)
 
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
@@ -264,10 +282,106 @@ def all_articles(request):
     }
     return render(request, 'dashboard/all_articles.html', context)
 
-def generate_pdf(request):
-    qs = MediaNarrative.objects.all()[:50]
+def generate_report(request):
+    selected_country = request.GET.get('country')
+    selected_actors = request.GET.getlist('actors')
+
+    # 1. Handle Form Display
+    if not selected_country or not selected_actors:
+        context = {
+            'african_countries': COUNTRIES,
+            'foreign_actors': FOREIGN_ACTORS,
+        }
+        return render(request, 'dashboard/report_form.html', context)
+
+    # 2. Setup Data & Normalization
+    actor_map = {"US": "UnitedStates"}
+    report_data = []
+
+    # 3. Calculate CVI Risk Scores
+    try:
+        # Note: Ensure these functions are imported or defined in your services
+        g = compute_gs()
+        R = compute_R(g)
+        CA = compute_CAs(g, R)
+        final = compute_finalrisk(CA)
+
+        for actor in selected_actors:
+            norm_actor = actor_map.get(actor, actor)
+            # Check against your defined constants
+            if selected_country in COUNTRIES:
+                # Accessing the nested dictionary safely
+                score = final.get("Economic", {}).get(norm_actor, {}).get(selected_country, 0.0)
+                risk_level = "High" if score > 0.7 else "Medium" if score > 0.4 else "Low"
+                report_data.append({
+                    'actor': actor,
+                    'cvi_score': round(score, 3),
+                    'risk_level': risk_level,
+                })
+    except Exception as e:
+        logger.error(f"CVI calculation error: {e}")
+        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A"} for a in selected_actors]
+
+    # 4. Generate Narrative Volume Chart
+    articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+    volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
+        .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
+
+    volume_chart_base64 = ""
+    if volume_data:
+        df = pd.DataFrame(list(volume_data))
+        df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+        df = df.dropna(subset=['date']).sort_values('date')
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(df['date'], df['articles'], marker='o', color='royalblue')
+        ax.set_title(f'Narrative Volume Over Time - {selected_country}')
+        ax.grid(True, linestyle='--', alpha=0.7)
+        plt.xticks(rotation=45)
+        
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format='png', bbox_inches='tight')
+        img_buffer.seek(0)
+        volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+        plt.close(fig)
+
+    # 5. Generate Factor Contribution Chart
+    factor_chart_base64 = ""
+    try:
+        factors = {'Economic': 0.35, 'Sovereignty': 0.18, 'Election': 0.11, 'Social': 0.07} # Sample
+        df_f = pd.DataFrame({'Factor': list(factors.keys()), 'Val': list(factors.values())}).sort_values('Val')
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
+        ax.set_title(f'CVI Factor Contribution - {selected_country}')
+        
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format='png', bbox_inches='tight')
+        img_buffer.seek(0)
+        factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+        plt.close(fig)
+    except Exception as e:
+        logger.error(f"Factor chart error: {e}")
+
+    # 6. Render PDF
+    context = {
+        'country': selected_country,
+        'report_data': report_data,
+        'articles_count': articles_count,
+        'date_generated': datetime.now().strftime("%B %d, %Y"),
+        'volume_chart_base64': volume_chart_base64,
+        'factor_chart_base64': factor_chart_base64,
+    }
+
     template = get_template('dashboard/report_pdf.html')
-    html = template.render({'articles': qs, 'date': datetime.now()})
+    html = template.render(context)
     result = BytesIO()
-    pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
-    return HttpResponse(result.getvalue(), content_type='application/pdf')
+    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
+
+    if not pdf.err:
+        response = HttpResponse(result.getvalue(), content_type='application/pdf')
+        filename = f"CVI_Report_{selected_country}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return HttpResponse("Error generating PDF.", status=500)
