@@ -2,120 +2,136 @@
 {% block content %}
 
 <style>
-    /* Stats Row Styling */
+    /* Stats Cards */
     .stat-card {
         background: white;
         border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 20px;
+        border-radius: 4px;
+        padding: 15px;
         text-align: center;
-        transition: transform 0.2s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .stat-card:hover { transform: translateY(-5px); }
-    .stat-label { font-size: 0.85rem; color: var(--slate); font-weight: 600; text-transform: uppercase; }
-    .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--navy-dark); margin: 10px 0; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #1e40af; }
+    .stat-label { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
 
-    /* CVI Split Container */
-    .cvi-container {
+    /* CVI Split Section */
+    .cvi-panel {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        display: flex;
+        overflow: hidden;
+        margin-bottom: 40px;
+    }
+    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; }
+    .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; }
+
+    /* Article List (from your 2nd screenshot) */
+    .article-row {
         display: flex;
         background: white;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        overflow: hidden;
-        min-height: 350px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border-bottom: 1px solid #edf2f7;
+        padding: 20px 0;
+        transition: background 0.2s;
     }
-    .cvi-left {
-        flex: 1;
-        padding: 40px;
-        border-right: 1px solid #e2e8f0;
-    }
-    .cvi-right {
-        flex: 1.2;
-        padding: 40px;
-        background-color: #fafafa;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    .btn-navy {
-        background-color: var(--navy-dark);
-        color: white;
-        padding: 12px;
-        font-weight: 600;
-        border: none;
-    }
-    .btn-navy:hover { background-color: #0d1521; color: white; }
+    .article-row:hover { background: #f8fafc; }
+    .article-img { width: 200px; height: 120px; object-fit: cover; border-radius: 4px; }
+    .article-content { flex: 1; padding-left: 20px; }
+    .article-title { color: #2563eb; font-weight: 700; text-decoration: none; font-size: 1.1rem; }
+    .article-meta { font-size: 0.85rem; color: #64748b; margin-top: 5px; }
+    .badge-tone { background: #10b981; color: white; font-size: 0.7rem; padding: 4px 8px; }
+    .badge-intent { background: #f59e0b; color: white; font-size: 0.7rem; padding: 4px 8px; }
 </style>
 
-<div class="text-center mb-5">
-    <h1 class="fw-extrabold" style="color: var(--navy-dark);">Vulnerability Index Tool</h1>
-    <p class="text-muted">Monitoring Media Narratives Across Africa</p>
-</div>
-
-<div class="row g-4 mb-5">
+<div class="row g-3 mb-5">
     <div class="col-md-3">
-        <div class="stat-card" style="border-top: 5px solid #3b82f6;">
+        <div class="stat-card" style="border-bottom: 4px solid #3b82f6;">
             <div class="stat-label">Total Articles</div>
-            <div class="stat-value">{{ total_articles|default:"15,166" }}</div>
+            <div class="stat-value">{{ total_articles }}</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-top: 5px solid #10b981;">
+        <div class="stat-card" style="border-bottom: 4px solid #10b981;">
             <div class="stat-label">Media Outlets</div>
-            <div class="stat-value">{{ unique_outlets|default:"1,233" }}</div>
+            <div class="stat-value">{{ unique_outlets }}</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-top: 5px solid #f59e0b;">
+        <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
             <div class="stat-label">Narratives Identified</div>
-            <div class="stat-value">{{ unique_intents|default:"46" }}</div>
+            <div class="stat-value">{{ unique_intents }}</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-top: 5px solid #06b6d4;">
+        <div class="stat-card" style="border-bottom: 4px solid #06b6d4;">
             <div class="stat-label">Actors Detected</div>
-            <div class="stat-value">{{ unique_actors|default:"10" }}</div>
+            <div class="stat-value">{{ unique_actors }}</div>
         </div>
     </div>
 </div>
 
-<div class="mb-4">
-    <h3 class="text-center fw-bold mb-4">Contextual Vulnerability Index (CVI)</h3>
-    <div class="cvi-container">
-        <div class="cvi-left">
-            <form action="/report/" method="get">
-                <div class="mb-4">
-                    <label class="form-label fw-bold small text-muted">Target African Country</label>
-                    <select name="country" class="form-select form-select-lg">
-                        <option value="">-- Select Country --</option>
-                        {% for c in african_countries %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div class="mb-4">
-                    <label class="form-label fw-bold small text-muted">Foreign Inferred Actor</label>
-                    <select name="actor" class="form-select form-select-lg">
-                        <option value="">-- Select Actor --</option>
-                        {% for a in foreign_actors %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-navy w-100 btn-lg shadow-sm">
-                    Generate Vulnerability Report
-                </button>
-            </form>
-        </div>
-
-        <div class="cvi-right text-center">
-            {% if chart_data %}
-                <img src="data:image/png;base64,{{ chart_data }}" class="img-fluid">
-            {% else %}
-                <div class="opacity-50">
-                    <i class="fas fa-chart-pie fa-4x mb-3 text-muted"></i>
-                    <p class="mb-0">Select parameters on the left to view <br>the factor contribution chart.</p>
-                </div>
-            {% endif %}
-        </div>
+<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Contextual Vulnerability Index (CVI)</h4>
+<div class="cvi-panel shadow-sm">
+    <div class="cvi-left">
+        <form action="/" method="get">
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">Target African Country</label>
+                <select name="african_country" class="form-select">
+                    <option value="">-- Select Country --</option>
+                    {% for c in african_countries %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
+                <select name="foreign_actor" class="form-select">
+                    <option value="">-- Select Actor --</option>
+                    {% for a in foreign_actors %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 fw-bold" style="background: #2563eb;">Calculate CVI</button>
+        </form>
     </div>
+    <div class="cvi-right text-center">
+        {% if chart_data %}
+            <img src="data:image/png;base64,{{ chart_data }}" class="img-fluid">
+        {% else %}
+            <p class="text-muted small">Select parameters to view factor contribution</p>
+        {% endif %}
+    </div>
+</div>
+
+<h4 class="text-center fw-bold mb-4" style="color: #2563eb;">Recent Articles</h4>
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% for article in recent_articles %}
+        <div class="article-row mx-3">
+            {% if article.image_url %}
+                <img src="{{ article.image_url }}" class="article-img" onerror="this.src='https://placehold.co/200x120?text=No+Image'">
+            {% else %}
+                <div class="article-img bg-light d-flex align-items-center justify-content-center text-muted small">No Image</div>
+            {% endif %}
+            
+            <div class="article-content">
+                <a href="{{ article.url }}" class="article-title">{{ article.title }}</a>
+                <div class="article-meta">
+                    <strong>{{ article.outlet }}</strong> • {{ article.date }}
+                </div>
+                <p class="small text-muted mb-2 mt-1">{{ article.excerpt|truncatewords:25 }}</p>
+                <div>
+                    <span class="badge badge-tone text-uppercase">Tone: {{ article.tone }}</span>
+                    <span class="badge badge-intent text-uppercase">Intent: {{ article.intent }}</span>
+                    <a href="{{ article.url }}" class="float-end small fw-bold text-primary" style="text-decoration:none;">Read full article →</a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="p-5 text-center text-muted">No recent articles found.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="text-center mt-4">
+    <a href="/report/" class="btn btn-outline-secondary px-5">View Full Archive</a>
 </div>
 
 {% endblock %}
