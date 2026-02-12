@@ -129,6 +129,12 @@
             border-radius: 8px;
             border-left: 4px solid #2563eb;
         }
+        .ai-insights {
+            background: #f0fdf4;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #16a34a;
+        }
         .recommendations {
             background: #fef3c7;
             padding: 20px;
@@ -151,6 +157,10 @@
             font-size: 20px;
             font-weight: bold;
             color: #2563eb;
+        }
+        .insight-section {
+            white-space: pre-wrap;
+            line-height: 1.8;
         }
     </style>
 </head>
@@ -221,10 +231,17 @@
     </div>
 
     <div class="section">
+        <div class="section-title">AI-Generated Insights & Analysis</div>
+        <div class="ai-insights">
+            <div class="insight-section">{{ ai_insights|linebreaks }}</div>
+        </div>
+    </div>
+
+    <div class="section">
         <div class="section-title">Narrative Volume Over Time</div>
         <div class="chart-container">
             {% if volume_chart_base64 %}
-            <img src="data:image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%; max-width: 600px;">
+            <img src="image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%; max-width: 600px;">
             {% else %}
             <p>No narrative volume data available for this country.</p>
             {% endif %}
@@ -235,7 +252,7 @@
         <div class="section-title">Top Strategic Intents</div>
         <div class="chart-container">
             {% if factor_chart_base64 %}
-            <img src="data:image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%; max-width: 600px;">
+            <img src="image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%; max-width: 600px;">
             {% else %}
             <p>No chart data available.</p>
             {% endif %}
