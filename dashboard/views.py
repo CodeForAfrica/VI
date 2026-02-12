@@ -728,7 +728,7 @@ def generate_report(request):
                 # FIXED: This should now show the correct score from your CSV
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(max_score), 3),  # This is from your CSV!
+                    'cvi_score': round(float(max_score), 3),  # This is from your CSV! Shows 0.610, not 0.0
                     'risk_level': risk_level,
                     'primary_threat': max_intent
                 })
@@ -749,7 +749,7 @@ def generate_report(request):
     # 4. Get Key Narratives with URLs for the selected country - FIXED: Accurate counting and data
     key_narratives = []
     try:
-        # FIXED: Get actual articles count for this country from database
+        # FIXED: Get actual articles count for this country from database - EXCLUDE SPORTS
         articles_count = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -1349,7 +1349,82 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Render PDF
+    # 7. Generate AI Insights using Groq API with NO HALUCINATION PROMPT
+    ai_insights = ""
+    try:
+        from groq import Groq
+        import os
+        
+        # Get Groq API key from environment
+        groq_api_key = os.environ.get('GROQ_API_KEY')
+        if not groq_api_key:
+            logger.error("GROQ_API_KEY not found in environment variables")
+            ai_insights = f"No AI insights available. Please configure your GROQ API key."
+        else:
+            client = Groq(api_key=groq_api_key)
+            
+            # Prepare article summaries for AI analysis - FIXED: Only include actual articles
+            article_summaries = []
+            for article in key_narratives[:5]:  # Use top 5 articles for efficiency
+                summary = f"Title: {article['title']}\nIntent: {article['intent']}\nTone: {article['tone']}\nScore: {article['vulnerability_score']}\nURL: {article['url']}\nSummary: {article['summary']}\n\n"
+                article_summaries.append(summary)
+            
+            # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
+            joined_summaries = "\n".join(article_summaries)
+            url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:5]])
+            
+            prompt = f"""
+**Strict Instructions:**
+  - Only summarize content that is **directly present in the posts provided**.
+  - Do **not** invent claims — only document what is explicitly stated in posts.
+  - For every claim, **only use a URL that explicitly contains that exact claim**.
+  - Do **not** repeat the same claim with different wording.
+  - Do **not** include URLs that do NOT contain the claim.
+  - Do not add outside knowledge, fact-checking, or assumptions.
+
+  **Output Format:**
+  - Start each cluster with a bold title: **Narrative Title Here**
+  - Summarize factually in short narrative paragraphs.
+  - Include post URLs for every claim or reused message.
+  - End with the narrative lifecycle:
+    - First Detected: {{min_timestamp_str}}
+    - Last Updated: {{max_timestamp_str}}
+
+Analyze the following media narratives for {selected_country} and provide a comprehensive summary:
+
+Articles:
+{joined_summaries}
+
+URL Context:
+{url_context}
+
+Please provide:
+1. A brief summary of the main themes and narratives
+2. Key concerns or vulnerabilities identified based on the article contents
+3. Recommended actions or monitoring priorities
+4. Focus on foreign influence patterns and strategic intents
+
+Keep the response concise but informative for a policy report.
+"""
+            
+            # Call Groq API
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                model="meta-llama/llama-4-scout-17b-16e-instruct",  # You can change this to another available model
+            )
+            
+            ai_insights = chat_completion.choices[0].message.content
+            
+    except Exception as e:
+        logger.error(f"Groq API error: {e}")
+        ai_insights = "AI insights temporarily unavailable due to API error."
+
+    # 8. Render PDF
     context = {
         'country': selected_country,
         'report_data': report_data,  # This now contains your CSV scores!
@@ -1358,6 +1433,7 @@ def generate_report(request):
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
         'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
+        'ai_insights': ai_insights,  # NEW: Include AI-generated insights
     }
 
     template = get_template('dashboard/report_pdf.html')
