@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CVI Report - {{ country }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .section { margin-bottom: 20px; }
+        .section-title { background-color: #f0f0f0; padding: 8px; font-weight: bold; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .risk-high { color: red; font-weight: bold; }
+        .risk-medium { color: orange; font-weight: bold; }
+        .risk-low { color: green; font-weight: bold; }
+        .narrative-item { margin-bottom: 10px; padding: 10px; border-left: 3px solid #ccc; }
+        .narrative-url { color: blue; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Foreign Influence Vulnerability Assessment Report</h1>
+        <h2>{{ country }}</h2>
+        <p>Date Generated: {{ date_generated }}</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Executive Summary</div>
+        <p>Total Articles Analyzed: {{ articles_count }}</p>
+        <p>This report provides an assessment of foreign influence vulnerability in {{ country }}.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Vulnerability Index Scores by Foreign Actor</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Foreign Actor</th>
+                    <th>Vulnerability Score</th>
+                    <th>Risk Level</th>
+                    <th>Primary Threat Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for data in report_data %}
+                <tr>
+                    <td>{{ data.actor }}</td>
+                    <td>{{ data.cvi_score }}</td>
+                    <td class="{% if data.risk_level == 'High' %}risk-high{% elif data.risk_level == 'Medium' %}risk-medium{% else %}risk-low{% endif %}">{{ data.risk_level }}</td>
+                    <td>{{ data.primary_threat }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Key Narratives and Articles</div>
+        {% for narrative in key_narratives %}
+        <div class="narrative-item">
+            <strong>{{ narrative.intent }}</strong> - {{ narrative.tone }} (Score: {{ narrative.vulnerability_score }})<br>
+            <em>{{ narrative.title }}</em><br>
+            <small>Source: {{ narrative.media_outlet }} | Date: {{ narrative.posting_time }}</small><br>
+            <a href="{{ narrative.url }}" class="narrative-url">Read Full Article</a>
+        </div>
+        {% empty %}
+        <p>No key narratives found for {{ country }}.</p>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Narrative Volume Over Time</div>
+        {% if volume_chart_base64 %}
+        <img src="image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%;">
+        {% else %}
+        <p>No chart data available.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Top Strategic Intents</div>
+        {% if factor_chart_base64 %}
+        <img src="image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%;">
+        {% else %}
+        <p>No chart data available.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Recommendations</div>
+        <p>Based on the vulnerability assessments, prioritize monitoring of high-risk actors and strategic intent areas identified above.</p>
+    </div>
+</body>
+</html>
