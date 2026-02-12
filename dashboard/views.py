@@ -1436,7 +1436,7 @@ Keep the response concise but informative for a policy report.
         'ai_insights': ai_insights,  # NEW: Include AI-generated insights
     }
 
-    template = get_template('dashboard/report_pdf.html')
+    template = get_template('report_pdf.html')
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
