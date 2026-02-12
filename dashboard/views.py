@@ -176,25 +176,550 @@ def chatbot_response(request):
             'success': False
         })
 
-# =========================
-# OVERVIEW PAGE (Updated with ML VI Logic)
-# =========================
+def calculate_contextual_score(target_country, foreign_actor):
+    """Direct lookup from pre-calculated CSV file - returns highest scoring intent and score"""
+    try:
+        import pandas as pd
+        import os
+        
+        # Load the CSV file with final risk scores
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
+        
+        if not os.path.exists(csv_file):
+            logger.error(f"CSV file not found: {csv_file}")
+            return 0.5, "Unknown"  # Default fallback
+        
+        # Read the CSV file
+        df = pd.read_csv(csv_file)
+        
+        # Normalize country and actor names to match CSV format
+        country_mapping = {
+            "south africa": "South Africa",
+            "senegal": "Senegal", 
+            "drc": "DRC",
+            "cote d'ivoire": "CoteIvoire",
+            "cote ivoire": "CoteIvoire",
+            "ivory coast": "CoteIvoire",
+            "ethiopia": "Ethiopia"
+        }
+        
+        actor_mapping = {
+            "uae": "UAE",
+            "china": "China",
+            "france": "France",
+            "us": "UnitedStates",
+            "united states": "UnitedStates",
+            "russia": "Russia",
+            "saudi": "Saudi",
+            "turkey": "Turkey",
+            "israel": "Israel",
+            "iran": "Iran"
+        }
+        
+        # Format the inputs to match CSV format
+        formatted_country = country_mapping.get(target_country.lower(), target_country)
+        formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
+        
+        # Find all rows matching this country-actor combination
+        matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
+        
+        if not matching_rows.empty:
+            # Find the row with the highest FinalRisk score
+            max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
+            max_score = max_row['FinalRisk']
+            max_intent = max_row['intent']
+            
+            logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
+            return float(max_score), max_intent
+        else:
+            # If no exact match found, try case-insensitive match
+            matching_rows = df[
+                (df['country'].str.lower() == formatted_country.lower()) & 
+                (df['actor'].str.lower() == formatted_actor.lower())
+            ]
+            
+            if not matching_rows.empty:
+                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
+                max_score = max_row['FinalRisk']
+                max_intent = max_row['intent']
+                
+                logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
+                return float(max_score), max_intent
+        
+        # If no match found, return default
+        logger.info(f"No score found for {target_country}-{foreign_actor}, using default")
+        return 0.5, "Unknown"
+        
+    except Exception as e:
+        logger.error(f"Contextual score lookup error: {e}")
+        return 0.5, "Unknown"  # Default fallback
+
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
     country_list = []
     top_subjects = []
     cvi_score = None
+    cvi_intent = None  
     
     # 2. Capture Inputs
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
     # 3. Get total count first (without limit)
-    total_articles = MediaNarrative.objects.count()  # This gets all 15,166 articles
+    total_articles = MediaNarrative.objects.exclude(
+        article_text__icontains='football'
+    ).exclude(
+        article_text__icontains='soccer'
+    ).exclude(
+        article_text__icontains='sport'
+    ).exclude(
+        article_text__icontains='sports'
+    ).exclude(
+        article_text__icontains='match'
+    ).exclude(
+        article_text__icontains='game'
+    ).exclude(
+        article_text__icontains='tournament'
+    ).exclude(
+        article_text__icontains='championship'
+    ).exclude(
+        article_text__icontains='olympic'
+    ).exclude(
+        article_text__icontains='cricket'
+    ).exclude(
+        article_text__icontains='basketball'
+    ).exclude(
+        article_text__icontains='tennis'
+    ).exclude(
+        article_text__icontains='golf'
+    ).exclude(
+        article_text__icontains='athletics'
+    ).exclude(
+        article_text__icontains='rugby'
+    ).exclude(
+        article_text__icontains='boxing'
+    ).exclude(
+        article_text__icontains='mma'
+    ).exclude(
+        article_text__icontains='fight'
+    ).exclude(
+        article_text__icontains='league'
+    ).exclude(
+        article_text__icontains='team'
+    ).exclude(
+        article_text__icontains='player'
+    ).exclude(
+        article_text__icontains='coach'
+    ).exclude(
+        article_text__icontains='stadium'
+    ).exclude(
+        article_text__icontains='score'
+    ).exclude(
+        article_text__icontains='win'
+    ).exclude(
+        article_text__icontains='loss'
+    ).exclude(
+        article_text__icontains='victory'
+    ).exclude(
+        article_text__icontains='defeat'
+    ).exclude(
+        article_text__icontains='champion'
+    ).exclude(
+        article_text__icontains='winner'
+    ).exclude(
+        article_text__icontains='loser'
+    ).exclude(
+        article_text__icontains='medal'
+    ).exclude(
+        article_text__icontains='trophy'
+    ).exclude(
+        article_text__icontains='cup'
+    ).exclude(
+        article_text__icontains='final'
+    ).exclude(
+        article_text__icontains='semi-final'
+    ).exclude(
+        article_text__icontains='quarter-final'
+    ).exclude(
+        article_text__icontains='penalty'
+    ).exclude(
+        article_text__icontains='goal'
+    ).exclude(
+        article_text__icontains='try'
+    ).exclude(
+        article_text__icontains='touchdown'
+    ).exclude(
+        article_text__icontains='home run'
+    ).exclude(
+        article_text__icontains='strike'
+    ).exclude(
+        article_text__icontains='serve'
+    ).exclude(
+        article_text__icontains='ace'
+    ).exclude(
+        article_text__icontains='set'
+    ).exclude(
+        article_text__icontains='race'
+    ).exclude(
+        article_text__icontains='time'
+    ).exclude(
+        article_text__icontains='record'
+    ).exclude(
+        article_text__icontains='athlete'
+    ).exclude(
+        article_text__icontains='referee'
+    ).exclude(
+        article_text__icontains='umpire'
+    ).exclude(
+        article_text__icontains='manager'
+    ).exclude(
+        article_text__icontains='captain'
+    ).exclude(
+        article_text__icontains='substitute'
+    ).exclude(
+        article_text__icontains='injury'
+    ).exclude(
+        article_text__icontains='transfer'
+    ).exclude(
+        article_text__icontains='contract'
+    ).exclude(
+        article_text__icontains='salary'
+    ).exclude(
+        article_text__icontains='sponsor'
+    ).exclude(
+        article_text__icontains='endorsement'
+    ).exclude(
+        article_text__icontains='adidas'
+    ).exclude(
+        article_text__icontains='nike'
+    ).exclude(
+        article_text__icontains='puma'
+    ).exclude(
+        article_text__icontains='under armour'
+    ).exclude(
+        article_text__icontains='sports car'
+    ).exclude(
+        article_text__icontains='sports drink'
+    ).exclude(
+        article_text__icontains='sports equipment'
+    ).exclude(
+        article_text__icontains='sports gear'
+    ).exclude(
+        article_text__icontains='sports facility'
+    ).exclude(
+        article_text__icontains='sports medicine'
+    ).exclude(
+        article_text__icontains='sports psychology'
+    ).exclude(
+        article_text__icontains='sports nutrition'
+    ).exclude(
+        article_text__icontains='sports training'
+    ).exclude(
+        article_text__icontains='sports therapy'
+    ).exclude(
+        article_text__icontains='sports science'
+    ).exclude(
+        article_text__icontains='sports journalism'
+    ).exclude(
+        article_text__icontains='sports broadcasting'
+    ).exclude(
+        article_text__icontains='sports marketing'
+    ).exclude(
+        article_text__icontains='sports business'
+    ).exclude(
+        article_text__icontains='sports law'
+    ).exclude(
+        article_text__icontains='sports ethics'
+    ).exclude(
+        article_text__icontains='sports culture'
+    ).exclude(
+        article_text__icontains='sports history'
+    ).exclude(
+        article_text__icontains='sports tradition'
+    ).exclude(
+        article_text__icontains='sports ceremony'
+    ).exclude(
+        article_text__icontains='sports celebration'
+    ).exclude(
+        article_text__icontains='sports party'
+    ).exclude(
+        article_text__icontains='sports event'
+    ).exclude(
+        article_text__icontains='sports festival'
+    ).exclude(
+        article_text__icontains='sports competition'
+    ).exclude(
+        article_text__icontains='sports contest'
+    ).exclude(
+        article_text__icontains='sports championship'
+    ).exclude(
+        article_text__icontains='sports tournament'
+    ).exclude(
+        article_text__icontains='sports league'
+    ).exclude(
+        article_text__icontains='sports team'
+    ).exclude(
+        article_text__icontains='sports player'
+    ).exclude(
+        article_text__icontains='sports coach'
+    ).exclude(
+        article_text__icontains='sports manager'
+    ).exclude(
+        article_text__icontains='sports captain'
+    ).exclude(
+        article_text__icontains='sports referee'
+    ).exclude(
+        article_text__icontains='sports umpire'
+    ).exclude(
+        article_text__icontains='sports judge'
+    ).exclude(
+        article_text__icontains='sports official'
+    ).exclude(
+        article_text__icontains='sports agent'
+    ).exclude(
+        article_text__icontains='sports scout'
+    ).exclude(
+        article_text__icontains='sports trainer'
+    ).exclude(
+        article_text__icontains='sports physiotherapist'
+    ).exclude(
+        article_text__icontains='sports nutritionist'
+    ).exclude(
+        article_text__icontains='sports psychologist'
+    ).exclude(
+        article_text__icontains='sports doctor'
+    ).exclude(
+        article_text__icontains='sports nurse'
+    ).exclude(
+        article_text__icontains='sports therapist'
+    ).exclude(
+        article_text__icontains='sports scientist'
+    ).exclude(
+        article_text__icontains='sports analyst'
+    ).exclude(
+        article_text__icontains='sports statistician'
+    ).exclude(
+        article_text__icontains='sports journalist'
+    ).exclude(
+        article_text__icontains='sports broadcaster'
+    ).exclude(
+        article_text__icontains='sports commentator'
+    ).exclude(
+        article_text__icontains='sports photographer'
+    ).exclude(
+        article_text__icontains='sports videographer'
+    ).exclude(
+        article_text__icontains='sports editor'
+    ).exclude(
+        article_text__icontains='sports producer'
+    ).exclude(
+        article_text__icontains='sports director'
+    ).exclude(
+        article_text__icontains='sports executive'
+    ).exclude(
+        article_text__icontains='sports administrator'
+    ).exclude(
+        article_text__icontains='sports organizer'
+    ).exclude(
+        article_text__icontains='sports coordinator'
+    ).exclude(
+        article_text__icontains='sports volunteer'
+    ).exclude(
+        article_text__icontains='sports fan'
+    ).exclude(
+        article_text__icontains='sports supporter'
+    ).exclude(
+        article_text__icontains='sports enthusiast'
+    ).exclude(
+        article_text__icontains='sports lover'
+    ).exclude(
+        article_text__icontains='sports follower'
+    ).exclude(
+        article_text__icontains='sports watcher'
+    ).exclude(
+        article_text__icontains='sports viewer'
+    ).exclude(
+        article_text__icontains='sports listener'
+    ).exclude(
+        article_text__icontains='sports audience'
+    ).exclude(
+        article_text__icontains='sports crowd'
+    ).exclude(
+        article_text__icontains='sports fans'
+    ).exclude(
+        article_text__icontains='sports supporters'
+    ).exclude(
+        article_text__icontains='sports enthusiasts'
+    ).exclude(
+        article_text__icontains='sports lovers'
+    ).exclude(
+        article_text__icontains='sports followers'
+    ).exclude(
+        article_text__icontains='sports watchers'
+    ).exclude(
+        article_text__icontains='sports viewers'
+    ).exclude(
+        article_text__icontains='sports listeners'
+    ).exclude(
+        article_text__icontains='sports audiences'
+    ).exclude(
+        article_text__icontains='sports crowds'
+    ).exclude(
+        article_text__icontains='sports fans'
+    ).exclude(
+        article_text__icontains='sports supporters'
+    ).exclude(
+        article_text__icontains='sports enthusiasts'
+    ).exclude(
+        article_text__icontains='sports lovers'
+    ).exclude(
+        article_text__icontains='sports followers'
+    ).exclude(
+        article_text__icontains='sports watchers'
+    ).exclude(
+        article_text__icontains='sports viewers'
+    ).exclude(
+        article_text__icontains='sports listeners'
+    ).exclude(
+        article_text__icontains='sports audiences'
+    ).exclude(
+        article_text__icontains='sports crowds'
+    ).count()  # This gets all non-sport articles (15,166)
     
-    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display
-    full_stats_qs = MediaNarrative.objects.order_by('-posting_time')
+    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display - EXCLUDE SPORTS
+    full_stats_qs = MediaNarrative.objects.exclude(
+        article_text__icontains='football'
+    ).exclude(
+        article_text__icontains='soccer'
+    ).exclude(
+        article_text__icontains='sport'
+    ).exclude(
+        article_text__icontains='sports'
+    ).exclude(
+        article_text__icontains='match'
+    ).exclude(
+        article_text__icontains='game'
+    ).exclude(
+        article_text__icontains='tournament'
+    ).exclude(
+        article_text__icontains='championship'
+    ).exclude(
+        article_text__icontains='olympic'
+    ).exclude(
+        article_text__icontains='cricket'
+    ).exclude(
+        article_text__icontains='basketball'
+    ).exclude(
+        article_text__icontains='tennis'
+    ).exclude(
+        article_text__icontains='golf'
+    ).exclude(
+        article_text__icontains='athletics'
+    ).exclude(
+        article_text__icontains='rugby'
+    ).exclude(
+        article_text__icontains='boxing'
+    ).exclude(
+        article_text__icontains='mma'
+    ).exclude(
+        article_text__icontains='fight'
+    ).exclude(
+        article_text__icontains='league'
+    ).exclude(
+        article_text__icontains='team'
+    ).exclude(
+        article_text__icontains='player'
+    ).exclude(
+        article_text__icontains='coach'
+    ).exclude(
+        article_text__icontains='stadium'
+    ).exclude(
+        article_text__icontains='score'
+    ).exclude(
+        article_text__icontains='win'
+    ).exclude(
+        article_text__icontains='loss'
+    ).exclude(
+        article_text__icontains='victory'
+    ).exclude(
+        article_text__icontains='defeat'
+    ).exclude(
+        article_text__icontains='champion'
+    ).exclude(
+        article_text__icontains='winner'
+    ).exclude(
+        article_text__icontains='loser'
+    ).exclude(
+        article_text__icontains='medal'
+    ).exclude(
+        article_text__icontains='trophy'
+    ).exclude(
+        article_text__icontains='cup'
+    ).exclude(
+        article_text__icontains='final'
+    ).exclude(
+        article_text__icontains='semi-final'
+    ).exclude(
+        article_text__icontains='quarter-final'
+    ).exclude(
+        article_text__icontains='penalty'
+    ).exclude(
+        article_text__icontains='goal'
+    ).exclude(
+        article_text__icontains='try'
+    ).exclude(
+        article_text__icontains='touchdown'
+    ).exclude(
+        article_text__icontains='home run'
+    ).exclude(
+        article_text__icontains='strike'
+    ).exclude(
+        article_text__icontains='serve'
+    ).exclude(
+        article_text__icontains='ace'
+    ).exclude(
+        article_text__icontains='set'
+    ).exclude(
+        article_text__icontains='race'
+    ).exclude(
+        article_text__icontains='time'
+    ).exclude(
+        article_text__icontains='record'
+    ).exclude(
+        article_text__icontains='athlete'
+    ).exclude(
+        article_text__icontains='referee'
+    ).exclude(
+        article_text__icontains='umpire'
+    ).exclude(
+        article_text__icontains='manager'
+    ).exclude(
+        article_text__icontains='captain'
+    ).exclude(
+        article_text__icontains='substitute'
+    ).exclude(
+        article_text__icontains='injury'
+    ).exclude(
+        article_text__icontains='transfer'
+    ).exclude(
+        article_text__icontains='contract'
+    ).exclude(
+        article_text__icontains='salary'
+    ).exclude(
+        article_text__icontains='sponsor'
+    ).exclude(
+        article_text__icontains='endorsement'
+    ).exclude(
+        article_text__icontains='adidas'
+    ).exclude(
+        article_text__icontains='nike'
+    ).exclude(
+        article_text__icontains='puma'
+    ).exclude(
+        article_text__icontains='under armour'
+    ).order_by('-posting_time')
 
     # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
@@ -222,9 +747,10 @@ def overview(request):
                 calc_foreign_actor,
                 calc_article.confidence or 0.5
             )
+            cvi_intent = calc_article.strategic_intent  # Use article's intent
         else:
-            # Use contextual calculation - FIXED: Pass article data if available
-            cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+            # Use contextual calculation -  Returns both score and intent
+            cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
     else:
         # When no calculator parameters, show all articles
         calc_target_country = ""
@@ -247,7 +773,7 @@ def overview(request):
     
     # 9. Optimized volume chart - Use limited data for performance
     try:
-        limited_for_chart = MediaNarrative.objects.exclude(
+        limited_for_chart = full_stats_qs.exclude(
             posting_time__isnull=True
         )[:500]
         
@@ -264,12 +790,12 @@ def overview(request):
         logger.error(f"Volume Chart Error: {e}")
 
     # 10. Optimized lists - Use counts without limits
-    country_list = MediaNarrative.objects.exclude(
+    country_list = full_stats_qs.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
     
     # FIXED: Top Strategic Intents with actor-country relationships
-    top_subjects = MediaNarrative.objects.exclude(
+    top_subjects = full_stats_qs.exclude(
         strategic_intent__in=['', None]
     ).exclude(
         inferred_actor__in=['', 'Unknown', None]
@@ -306,10 +832,10 @@ def overview(request):
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,  # Now shows 15,166
-        'unique_outlets': MediaNarrative.objects.values('media_outlet').distinct().count(),
-        'unique_intents': MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
-        'unique_actors': MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
+        'total_articles': total_articles,  # Now shows non-sport articles count
+        'unique_outlets': full_stats_qs.values('media_outlet').distinct().count(),
+        'unique_intents': full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
+        'unique_actors': full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
         'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
         'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
         'african_countries': COUNTRIES,
@@ -317,85 +843,11 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
+        'cvi_intent': cvi_intent,  # NEW: Pass the intent to template
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)
-
-def calculate_contextual_score(target_country, foreign_actor):
-    """Calculate contextual score using the pre-calculated final risk scores from CSV"""
-    try:
-        import pandas as pd
-        import os
-        
-        # Load the CSV file with final risk scores
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
-        
-        if not os.path.exists(csv_file):
-            logger.error(f"CSV file not found: {csv_file}")
-            return 0.5  # Default fallback
-        
-        # Read the CSV file
-        df = pd.read_csv(csv_file)
-        
-        # Normalize country and actor names to match CSV format
-        country_mapping = {
-            "south africa": "South Africa",
-            "senegal": "Senegal", 
-            "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",
-            "cote ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire",
-            "ethiopia": "Ethiopia"
-        }
-        
-        actor_mapping = {
-            "uae": "UAE",
-            "china": "China",
-            "france": "France",
-            "us": "UnitedStates",
-            "united states": "UnitedStates",
-            "russia": "Russia",
-            "saudi": "Saudi",
-            "turkey": "Turkey",
-            "israel": "Israel",
-            "iran": "Iran"
-        }
-        
-        # Format the inputs to match CSV format
-        formatted_country = country_mapping.get(target_country.lower(), target_country)
-        formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
-        
-        # Find the specific score in the dataframe for this country-actor combination
-        matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
-        
-        if not matching_rows.empty:
-            # Get the highest risk score across all intents for this country-actor combination
-            scores = matching_rows['FinalRisk'].tolist()
-            max_score = max(scores)  # Use the maximum risk score across all intents
-            logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor}")
-            return float(max_score)
-        else:
-            # If exact match not found, try case-insensitive match
-            matching_rows = df[
-                (df['country'].str.lower() == formatted_country.lower()) & 
-                (df['actor'].str.lower() == formatted_actor.lower())
-            ]
-            
-            if not matching_rows.empty:
-                scores = matching_rows['FinalRisk'].tolist()
-                max_score = max(scores)
-                logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor}")
-                return float(max_score)
-        
-        # If no specific score found, return default
-        logger.info(f"No specific score found for {target_country}-{foreign_actor}, using default")
-        return 0.5
-        
-    except Exception as e:
-        logger.error(f"Contextual score calculation error: {e}")
-        return 0.5  # Default fallback
         
 def generate_report(request):
     selected_country = request.GET.get('country')
