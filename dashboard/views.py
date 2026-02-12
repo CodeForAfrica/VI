@@ -311,16 +311,23 @@ def overview(request):
 # =========================
 
 def countries(request):
-    # 1. Data for the table and bar chart
-    top_publishers = MediaNarrative.objects.values('target_country') \
-        .annotate(article_count=Count('id')) \
-        .order_by('-article_count')[:10]
+    # OPTIMIZED: Fast queries
+    top_publishers = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('target_country').annotate(
+        article_count=Count('id')
+    ).order_by('-article_count')[:10]
     
-    # 2. Data for the "Top Subjects" chart
-    top_subjects = MediaNarrative.objects.exclude(strategic_intent__in=['', None]) \
-        .values('strategic_intent') \
-        .annotate(total=Count('id')) \
-        .order_by('-total')[:10]
+    # FIXED: Top strategic intents by actor and country
+    top_subjects = MediaNarrative.objects.exclude(
+        strategic_intent__in=['', None]
+    ).exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
+        total=Count('id')
+    ).order_by('-total')[:10]
 
     # Generate Publisher Chart
     publisher_chart = ""
@@ -328,20 +335,23 @@ def countries(request):
         df = pd.DataFrame(list(top_publishers))
         fig = px.bar(df, x='article_count', y='target_country', orientation='h', 
                      color_discrete_sequence=['#6366f1'])
+        fig.update_layout(height=400)  # INCREASE HEIGHT
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Generate Subject Chart (The empty box in your screenshot)
+    # Generate Subject Chart
     subject_chart = ""
     if top_subjects:
         df_s = pd.DataFrame(list(top_subjects))
-        fig_s = px.pie(df_s, values='total', names='strategic_intent', hole=.3)
+        df_s['combined'] = df_s['strategic_intent'] + ' (' + df_s['inferred_actor'] + '→' + df_s['target_country'] + ')'
+        fig_s = px.pie(df_s, values='total', names='combined', hole=.3)
+        fig_s.update_layout(height=400)  # INCREASE HEIGHT
         subject_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')
 
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
-        'coverage_table': top_publishers, # This matches the name in your HTML
-        'sample_articles': MediaNarrative.objects.all()[:5],
+        'coverage_table': top_publishers,
+        'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
     }
     return render(request, 'dashboard/countries.html', context)
     
