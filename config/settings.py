@@ -18,7 +18,7 @@ except:
 
 # SECURITY WARNING: Don't run with debug turned on in production!
 #DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-DEBUG = False
+DEBUG = True
 # Security: Allow specific hosts only
 
 # Get ALLOWED_HOSTS from environment variable, with fallback to specific IPs
