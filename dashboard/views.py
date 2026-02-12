@@ -266,7 +266,7 @@ def overview(request):
     country_list = []
     top_subjects = []
     cvi_score = None
-    cvi_intent = None  
+    cvi_intent = None  # NEW: Store the intent with highest score
     
     # 2. Capture Inputs
     calc_target_country = request.GET.get('calc_target_country', '').strip()
@@ -403,194 +403,6 @@ def overview(request):
         article_text__icontains='puma'
     ).exclude(
         article_text__icontains='under armour'
-    ).exclude(
-        article_text__icontains='sports car'
-    ).exclude(
-        article_text__icontains='sports drink'
-    ).exclude(
-        article_text__icontains='sports equipment'
-    ).exclude(
-        article_text__icontains='sports gear'
-    ).exclude(
-        article_text__icontains='sports facility'
-    ).exclude(
-        article_text__icontains='sports medicine'
-    ).exclude(
-        article_text__icontains='sports psychology'
-    ).exclude(
-        article_text__icontains='sports nutrition'
-    ).exclude(
-        article_text__icontains='sports training'
-    ).exclude(
-        article_text__icontains='sports therapy'
-    ).exclude(
-        article_text__icontains='sports science'
-    ).exclude(
-        article_text__icontains='sports journalism'
-    ).exclude(
-        article_text__icontains='sports broadcasting'
-    ).exclude(
-        article_text__icontains='sports marketing'
-    ).exclude(
-        article_text__icontains='sports business'
-    ).exclude(
-        article_text__icontains='sports law'
-    ).exclude(
-        article_text__icontains='sports ethics'
-    ).exclude(
-        article_text__icontains='sports culture'
-    ).exclude(
-        article_text__icontains='sports history'
-    ).exclude(
-        article_text__icontains='sports tradition'
-    ).exclude(
-        article_text__icontains='sports ceremony'
-    ).exclude(
-        article_text__icontains='sports celebration'
-    ).exclude(
-        article_text__icontains='sports party'
-    ).exclude(
-        article_text__icontains='sports event'
-    ).exclude(
-        article_text__icontains='sports festival'
-    ).exclude(
-        article_text__icontains='sports competition'
-    ).exclude(
-        article_text__icontains='sports contest'
-    ).exclude(
-        article_text__icontains='sports championship'
-    ).exclude(
-        article_text__icontains='sports tournament'
-    ).exclude(
-        article_text__icontains='sports league'
-    ).exclude(
-        article_text__icontains='sports team'
-    ).exclude(
-        article_text__icontains='sports player'
-    ).exclude(
-        article_text__icontains='sports coach'
-    ).exclude(
-        article_text__icontains='sports manager'
-    ).exclude(
-        article_text__icontains='sports captain'
-    ).exclude(
-        article_text__icontains='sports referee'
-    ).exclude(
-        article_text__icontains='sports umpire'
-    ).exclude(
-        article_text__icontains='sports judge'
-    ).exclude(
-        article_text__icontains='sports official'
-    ).exclude(
-        article_text__icontains='sports agent'
-    ).exclude(
-        article_text__icontains='sports scout'
-    ).exclude(
-        article_text__icontains='sports trainer'
-    ).exclude(
-        article_text__icontains='sports physiotherapist'
-    ).exclude(
-        article_text__icontains='sports nutritionist'
-    ).exclude(
-        article_text__icontains='sports psychologist'
-    ).exclude(
-        article_text__icontains='sports doctor'
-    ).exclude(
-        article_text__icontains='sports nurse'
-    ).exclude(
-        article_text__icontains='sports therapist'
-    ).exclude(
-        article_text__icontains='sports scientist'
-    ).exclude(
-        article_text__icontains='sports analyst'
-    ).exclude(
-        article_text__icontains='sports statistician'
-    ).exclude(
-        article_text__icontains='sports journalist'
-    ).exclude(
-        article_text__icontains='sports broadcaster'
-    ).exclude(
-        article_text__icontains='sports commentator'
-    ).exclude(
-        article_text__icontains='sports photographer'
-    ).exclude(
-        article_text__icontains='sports videographer'
-    ).exclude(
-        article_text__icontains='sports editor'
-    ).exclude(
-        article_text__icontains='sports producer'
-    ).exclude(
-        article_text__icontains='sports director'
-    ).exclude(
-        article_text__icontains='sports executive'
-    ).exclude(
-        article_text__icontains='sports administrator'
-    ).exclude(
-        article_text__icontains='sports organizer'
-    ).exclude(
-        article_text__icontains='sports coordinator'
-    ).exclude(
-        article_text__icontains='sports volunteer'
-    ).exclude(
-        article_text__icontains='sports fan'
-    ).exclude(
-        article_text__icontains='sports supporter'
-    ).exclude(
-        article_text__icontains='sports enthusiast'
-    ).exclude(
-        article_text__icontains='sports lover'
-    ).exclude(
-        article_text__icontains='sports follower'
-    ).exclude(
-        article_text__icontains='sports watcher'
-    ).exclude(
-        article_text__icontains='sports viewer'
-    ).exclude(
-        article_text__icontains='sports listener'
-    ).exclude(
-        article_text__icontains='sports audience'
-    ).exclude(
-        article_text__icontains='sports crowd'
-    ).exclude(
-        article_text__icontains='sports fans'
-    ).exclude(
-        article_text__icontains='sports supporters'
-    ).exclude(
-        article_text__icontains='sports enthusiasts'
-    ).exclude(
-        article_text__icontains='sports lovers'
-    ).exclude(
-        article_text__icontains='sports followers'
-    ).exclude(
-        article_text__icontains='sports watchers'
-    ).exclude(
-        article_text__icontains='sports viewers'
-    ).exclude(
-        article_text__icontains='sports listeners'
-    ).exclude(
-        article_text__icontains='sports audiences'
-    ).exclude(
-        article_text__icontains='sports crowds'
-    ).exclude(
-        article_text__icontains='sports fans'
-    ).exclude(
-        article_text__icontains='sports supporters'
-    ).exclude(
-        article_text__icontains='sports enthusiasts'
-    ).exclude(
-        article_text__icontains='sports lovers'
-    ).exclude(
-        article_text__icontains='sports followers'
-    ).exclude(
-        article_text__icontains='sports watchers'
-    ).exclude(
-        article_text__icontains='sports viewers'
-    ).exclude(
-        article_text__icontains='sports listeners'
-    ).exclude(
-        article_text__icontains='sports audiences'
-    ).exclude(
-        article_text__icontains='sports crowds'
     ).count()  # This gets all non-sport articles (15,166)
     
     # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display - EXCLUDE SPORTS
@@ -728,30 +540,19 @@ def overview(request):
 
     # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
-    # FIX: Skip ML inference and use direct CSV lookup
-    cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
-    
-    # If we get a score from CSV, use it (don't fall back to ML inference)
-    if cvi_score != 0.5 or cvi_intent != "Unknown":
-        # Use the CSV score directly
-        pass
+        # FIX: Skip ML inference and use direct CSV lookup
+        cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
     else:
-        # Only use ML inference if CSV lookup fails
-        ml_service = MLInferenceService()
-        calc_qs = MediaNarrative.objects.filter(
+        # When no calculator parameters, show all articles
+        calc_target_country = ""
+        calc_foreign_actor = ""
+
+    # 6. Apply calculator filters to main queryset for display if needed
+    if calc_target_country and calc_foreign_actor:
+        full_stats_qs = full_stats_qs.filter(
             target_country__iexact=calc_target_country,
             inferred_actor__iexact=calc_foreign_actor
-        ).first()
-        
-        if calc_qs:
-            cvi_score = ml_service.calculate_vulnerability_index(
-                calc_qs.strategic_intent or "neutral", 
-                calc_qs.tone or "neutral", 
-                calc_target_country,
-                calc_foreign_actor,
-                calc_qs.confidence or 0.5
-            )
-            cvi_intent = calc_qs.strategic_intent
+        )
 
     # 7. Global Stats (optimized)
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
