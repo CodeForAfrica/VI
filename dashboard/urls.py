@@ -12,6 +12,4 @@ urlpatterns = [
     path('countries/', views.countries, name='countries'),
     path('all-articles/', views.all_articles, name='all_articles'),
     path('articles/', views.articles_view, name='articles'),
-    path('generate-report/', views.generate_report, name='generate_report'),  # ADD THIS
-    path('chatbot-response/', views.chatbot_response, name='chatbot_response'),
 ]
