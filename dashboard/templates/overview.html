@@ -98,16 +98,15 @@
         <form method="get" action=".">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
-                <select name="target_country" class="form-select">
+                <select name="calc_target_country" class="form-select">  <!-- FIXED: Changed parameter name -->
                     {% for country in african_countries %}
-                    {# Normalize check for selection state #}
                     <option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
-                <select name="foreign_actor" class="form-select">
+                <select name="calc_foreign_actor" class="form-select">  <!-- FIXED: Changed parameter name -->
                     {% for actor in foreign_actors %}
                     <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>
                     {% endfor %}
@@ -190,7 +189,7 @@
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}">Previous</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}">Previous</a>
             </li>
         {% endif %}
         
@@ -198,7 +197,7 @@
 
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&target_country={{ selected_country }}{% endif %}{% if selected_actor %}&foreign_actor={{ selected_actor }}{% endif %}">Next</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}">Next</a>
             </li>
         {% endif %}
     </ul>
