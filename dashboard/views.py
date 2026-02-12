@@ -140,7 +140,7 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs (support both old and new parameter names for compatibility)
+    # 2. Capture Inputs (for calculator only, not for initial view)
     calc_target_country = request.GET.get('calc_target_country', '').strip() or request.GET.get('target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip() or request.GET.get('foreign_actor', '').strip()
     
@@ -174,6 +174,9 @@ def overview(request):
                 calc_foreign_actor,
                 calc_article.confidence or 0.5
             )
+            # Store the calculated score in the database for future reference
+            calc_article.vulnerability_index = cvi_score
+            calc_article.save(update_fields=['vulnerability_index'])
     else:
         # No calculator filters, show all articles
         calc_article = None
@@ -257,6 +260,8 @@ def overview(request):
                 article.confidence or 0.5
             )
             article.vulnerability_index = float(vi_score) if vi_score else 0.0
+            # Save the calculated score to database
+            article.save(update_fields=['vulnerability_index'])
         else:
             article.vulnerability_index = float(article.vulnerability_index) if article.vulnerability_index is not None else 0.0
         articles_with_vi.append(article)
@@ -277,8 +282,8 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': calc_target_country,  # This will now capture from both parameter names
-        'selected_actor': calc_foreign_actor,    # This will now capture from both parameter names
+        'selected_country': calc_target_country,
+        'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)    
 
