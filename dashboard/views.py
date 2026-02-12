@@ -728,45 +728,30 @@ def overview(request):
 
     # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
-        # FIX: Remove select_related and only conflict
-        calc_qs = MediaNarrative.objects
-        
-        if any(term in calc_target_country.lower() for term in ["ivoire", "ivory", "cote"]):
-            calc_qs = calc_qs.filter(
-                Q(target_country__icontains="Ivoire") | 
-                Q(target_country__icontains="Cote") | 
-                Q(target_country__icontains="Ivory")
-            )
-        else:
-            calc_qs = calc_qs.filter(target_country__iexact=calc_target_country)
-
-        calc_qs = calc_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-        calc_article = calc_qs.first()
-        
-        if calc_article:
-            ml_service = MLInferenceService()
-            cvi_score = ml_service.calculate_vulnerability_index(
-                calc_article.strategic_intent or "neutral", 
-                calc_article.tone or "neutral", 
-                calc_target_country,
-                calc_foreign_actor,
-                calc_article.confidence or 0.5
-            )
-            cvi_intent = calc_article.strategic_intent  # Use article's intent
-        else:
-            # Use contextual calculation -  Returns both score and intent
-            cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+    # FIX: Skip ML inference and use direct CSV lookup
+    cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+    
+    # If we get a score from CSV, use it (don't fall back to ML inference)
+    if cvi_score != 0.5 or cvi_intent != "Unknown":
+        # Use the CSV score directly
+        pass
     else:
-        # When no calculator parameters, show all articles
-        calc_target_country = ""
-        calc_foreign_actor = ""
-
-    # 6. Apply calculator filters to main queryset for display if needed
-    if calc_target_country and calc_foreign_actor:
-        full_stats_qs = full_stats_qs.filter(
+        # Only use ML inference if CSV lookup fails
+        ml_service = MLInferenceService()
+        calc_qs = MediaNarrative.objects.filter(
             target_country__iexact=calc_target_country,
             inferred_actor__iexact=calc_foreign_actor
-        )
+        ).first()
+        
+        if calc_qs:
+            cvi_score = ml_service.calculate_vulnerability_index(
+                calc_qs.strategic_intent or "neutral", 
+                calc_qs.tone or "neutral", 
+                calc_target_country,
+                calc_foreign_actor,
+                calc_qs.confidence or 0.5
+            )
+            cvi_intent = calc_qs.strategic_intent
 
     # 7. Global Stats (optimized)
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
@@ -870,14 +855,14 @@ def generate_report(request):
     actor_map = {"US": "UnitedStates"}
     report_data = []
 
-    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data
+    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data for REPORT
     try:
         import pandas as pd
         import os
         
         # Load the CSV file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
         
         if not os.path.exists(csv_file):
             logger.error(f"CSV file not found: {csv_file}")
@@ -890,7 +875,7 @@ def generate_report(request):
             "south africa": "South Africa",
             "senegal": "Senegal", 
             "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",
+            "cote d'ivoire": "CoteIvoire",  # This is the exact format in your CSV
             "cote ivoire": "CoteIvoire",
             "ivory coast": "CoteIvoire",
             "ethiopia": "Ethiopia"
@@ -899,7 +884,7 @@ def generate_report(request):
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
-            "france": "France",
+            "france": "France",         # This matches your CSV
             "us": "UnitedStates",
             "united states": "UnitedStates",
             "russia": "Russia",
@@ -914,37 +899,45 @@ def generate_report(request):
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
             
-            # Get scores from CSV for this specific country-actor pair
+            # Get scores from CSV for this specific country-actor pair - FIXED: Use your exact data
             matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
             
             if not matching_rows.empty:
-                # Get the highest score across all intents for this country-actor
+                # Get the highest score across all intents for this country-actor - FROM YOUR CSV
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
                 
                 risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
+                
+                # FIXED: This should now show the correct score from your CSV
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(max_score), 3),
+                    'cvi_score': round(float(max_score), 3),  # This is from your CSV!
                     'risk_level': risk_level,
                     'primary_threat': max_intent
                 })
+                
+                logger.info(f"Report: {formatted_country}-{formatted_actor} = {max_score} ({max_intent})")
             else:
+                logger.warning(f"No data found in CSV for {formatted_country}-{formatted_actor}")
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': 0.0,
+                    'cvi_score': 0.0,  # This appears when no data found
                     'risk_level': "N/A",
-                    'primary_threat': "Unknown"
+                    'primary_threat': "No Data"
                 })
     except Exception as e:
         logger.error(f"CVI calculation error: {e}")
-        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Unknown"} for a in selected_actors]
+        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
     # 4. Get Key Narratives with URLs for the selected country
     key_narratives = []
     try:
-        # Get articles for the selected country
+        # Get articles for the selected country - FIXED: Count total articles for this country
+        articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+        
+        # Get top articles for this country
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -965,9 +958,9 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Key narratives error: {e}")
         key_narratives = []
+        articles_count = 0  # This explains the "0 articles" in your PDF
 
     # 5. Generate Narrative Volume Chart
-    articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
     volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
         .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
@@ -1020,12 +1013,12 @@ def generate_report(request):
     # 7. Render PDF
     context = {
         'country': selected_country,
-        'report_data': report_data,
-        'articles_count': articles_count,
+        'report_data': report_data,  # This now contains your CSV scores!
+        'articles_count': articles_count,  # This is likely 0 causing the issue
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # NEW: Include key narratives with URLs
+        'key_narratives': key_narratives,
     }
 
     template = get_template('dashboard/report_pdf.html')
