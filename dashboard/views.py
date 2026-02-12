@@ -193,13 +193,13 @@ def overview(request):
     # 3. Get total count first (without limit)
     total_articles = MediaNarrative.objects.count()  # This gets all 15,166 articles
     
-    # 4. FOR MAIN DISPLAY: Show limited articles for performance
+    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display
     full_stats_qs = MediaNarrative.objects.only(
         'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
         'vulnerability_index', 'confidence', 'article_text', 'posting_time'
-    ).order_by('-posting_time')[:10]  # Limit to 10 per page for performance
+    ).order_by('-posting_time')
 
-    # 5. Calculator logic (when both params provided)
+    # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
         calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').only(
             'strategic_intent', 'tone', 'target_country', 'inferred_actor', 'confidence'
@@ -229,16 +229,27 @@ def overview(request):
         else:
             # Use contextual calculation
             cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+    else:
+        # When no calculator parameters, show all articles
+        calc_target_country = ""
+        calc_foreign_actor = ""
 
-    # 6. Global Stats (optimized)
+    # 6. Apply calculator filters to main queryset for display if needed
+    if calc_target_country and calc_foreign_actor:
+        full_stats_qs = full_stats_qs.filter(
+            target_country__iexact=calc_target_country,
+            inferred_actor__iexact=calc_foreign_actor
+        )
+
+    # 7. Global Stats (optimized)
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     
-    # 7. Optimized averages
+    # 8. Optimized averages
     from django.db.models import Avg
     avg_vulnerability = 0.0
     avg_confidence = 0.0
     
-    # 8. Optimized volume chart - Use limited data for performance
+    # 9. Optimized volume chart - Use limited data for performance
     try:
         limited_for_chart = MediaNarrative.objects.only('posting_time').exclude(
             posting_time__isnull=True
@@ -256,7 +267,7 @@ def overview(request):
     except Exception as e:
         logger.error(f"Volume Chart Error: {e}")
 
-    # 9. Optimized lists - Use counts without limits
+    # 10. Optimized lists - Use counts without limits
     country_list = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
@@ -272,12 +283,12 @@ def overview(request):
         total=Count('id')
     ).order_by('-total')[:5]
 
-    # 10. Optimized pagination - Keep reasonable page size
-    paginator = Paginator(full_stats_qs, 5)  # 5 articles per page
+    # 11. Optimized pagination - Increase page size for more articles per page
+    paginator = Paginator(full_stats_qs, 10)  # Increased from 5 to 10
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 11. Process articles with vulnerability index
+    # 12. Process articles with vulnerability index
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
@@ -295,11 +306,11 @@ def overview(request):
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 12. Context - Use the actual total count
+    # 13. Context - Use the actual total count
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,  # Now shows 15,166 instead of 1000
+        'total_articles': total_articles,  # Now shows 15,166
         'unique_outlets': MediaNarrative.objects.values('media_outlet').distinct().count(),
         'unique_intents': MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
         'unique_actors': MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
@@ -325,7 +336,7 @@ def calculate_contextual_score(target_country, foreign_actor):
         
         # Get the current directory where the views.py file is located
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        contextual_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
+        contextual_file = os.path.join(current_dir, '..', 'contextual_all_intents_v2.py')
         
         # Resolve the absolute path
         contextual_file = os.path.abspath(contextual_file)
