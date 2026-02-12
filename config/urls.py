@@ -9,4 +9,6 @@ urlpatterns = [
     path('vi-tool/', include('dashboard.urls')),  # Another SEO-friendly option
     path('dashboard/', include('dashboard.urls')),  # Dashboard URL
     path('index/', RedirectView.as_view(pattern_name='overview'), name='index'),  # Redirect
+    path('generate-report/', views.generate_report, name='generate_report'),
+    path('report/', views.generate_report, name='report'),
 ]
