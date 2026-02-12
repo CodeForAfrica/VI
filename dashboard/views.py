@@ -991,43 +991,138 @@ def generate_report(request):
     actor_map = {"US": "UnitedStates"}
     report_data = []
 
-    # 3. Calculate CVI Risk Scores
+    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data for REPORT
     try:
-        # Note: Ensure these functions are imported or defined in your services
-        g = compute_gs()
-        R = compute_R(g)
-        CA = compute_CAs(g, R)
-        final = compute_finalrisk(CA)
-
+        import pandas as pd
+        import os
+        
+        # Load the CSV file - FIXED: Check multiple possible locations
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Try different possible file locations
+        possible_paths = [
+            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv'),
+            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
+            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),  # Without space
+            os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv'),  # In same directory
+            os.path.join(current_dir, '..', '..', 'final_risk_by_actor_intent_country (1).csv'),  # Go up two levels
+        ]
+        
+        csv_file = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                csv_file = path
+                logger.info(f"Found CSV file at: {path}")
+                break
+        
+        if csv_file is None:
+            logger.error(f"CSV file not found in any of these locations: {possible_paths}")
+            return HttpResponse("CSV file not found in any expected location", status=500)
+        
+        df = pd.read_csv(csv_file)
+        
+        # Normalize country names
+        country_mapping = {
+            "south africa": "South Africa",
+            "senegal": "Senegal", 
+            "drc": "DRC",
+            "cote d'ivoire": "CoteIvoire",  # This is the exact format in your CSV
+            "cote ivoire": "CoteIvoire",
+            "ivory coast": "CoteIvoire",
+            "ethiopia": "Ethiopia"
+        }
+        
+        actor_mapping = {
+            "uae": "UAE",
+            "china": "China",
+            "france": "France",         # This matches your CSV
+            "us": "UnitedStates",
+            "united states": "UnitedStates",
+            "russia": "Russia",
+            "saudi": "Saudi",
+            "turkey": "Turkey",
+            "israel": "Israel",
+            "iran": "Iran"
+        }
+        
+        formatted_country = country_mapping.get(selected_country.lower(), selected_country)
+        
         for actor in selected_actors:
-            norm_actor = actor_map.get(actor, actor)
-            # Check against your defined constants
-            if selected_country in COUNTRIES:
-                # Accessing the nested dictionary safely
-                score = final.get("Economic", {}).get(norm_actor, {}).get(selected_country, 0.0)
-                risk_level = "High" if score > 0.7 else "Medium" if score > 0.4 else "Low"
+            formatted_actor = actor_mapping.get(actor.lower(), actor)
+            
+            # Get scores from CSV for this specific country-actor pair - FIXED: Use your exact data
+            matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
+            
+            if not matching_rows.empty:
+                # Get the highest score across all intents for this country-actor - FROM YOUR CSV
+                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
+                max_score = max_row['FinalRisk']
+                max_intent = max_row['intent']
+                
+                risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
+                
+                # FIXED: This should now show the correct score from your CSV
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(score, 3),
+                    'cvi_score': round(float(max_score), 3),  # This is from your CSV!
                     'risk_level': risk_level,
+                    'primary_threat': max_intent
+                })
+                
+                logger.info(f"Report: {formatted_country}-{formatted_actor} = {max_score} ({max_intent})")
+            else:
+                logger.warning(f"No data found in CSV for {formatted_country}-{formatted_actor}")
+                report_data.append({
+                    'actor': actor,
+                    'cvi_score': 0.0,  # This appears when no data found
+                    'risk_level': "N/A",
+                    'primary_threat': "No Data"
                 })
     except Exception as e:
         logger.error(f"CVI calculation error: {e}")
-        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A"} for a in selected_actors]
+        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Generate Narrative Volume Chart
-    articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+    # 4. Get Key Narratives with URLs for the selected country
+    key_narratives = []
+    try:
+        # Get total articles for this country - FIXED: This was causing 0 articles
+        articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+        
+        # Get top articles for this country
+        country_articles = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            strategic_intent__in=['', None, 'Unknown', 'unknown']
+        ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
+        
+        for article in country_articles:
+            narrative_data = {
+                'intent': article.strategic_intent,
+                'tone': article.tone,
+                'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
+                'url': article.url,
+                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
+                'media_outlet': article.media_outlet,
+                'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown"
+            }
+            key_narratives.append(narrative_data)
+    except Exception as e:
+        logger.error(f"Key narratives error: {e}")
+        key_narratives = []
+        articles_count = 0  # This explains the "0 articles" in your PDF
+
+    # 5. Generate Narrative Volume Chart
     volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
         .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
-    if volume_data.exists():  # Fixed: was "if volume_" 
-        df = pd.DataFrame(list(volume_data))
-        df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-        df = df.dropna(subset=['date']).sort_values('date')
+    if volume_data.exists():
+        df_vol = pd.DataFrame(list(volume_data))
+        df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+        df_vol = df_vol.dropna(subset=['date']).sort_values('date')
 
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(df['date'], df['articles'], marker='o', color='royalblue')
+        ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
         ax.set_title(f'Narrative Volume Over Time - {selected_country}')
         ax.grid(True, linestyle='--', alpha=0.7)
         plt.xticks(rotation=45)
@@ -1038,32 +1133,43 @@ def generate_report(request):
         volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
         plt.close(fig)
 
-    # 5. Generate Factor Contribution Chart
+    # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        factors = {'Economic': 0.35, 'Sovereignty': 0.18, 'Election': 0.11, 'Social': 0.07} # Sample
-        df_f = pd.DataFrame({'Factor': list(factors.keys()), 'Val': list(factors.values())}).sort_values('Val')
-
-        fig, ax = plt.subplots(figsize=(7, 5))
-        ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
-        ax.set_title(f'CVI Factor Contribution - {selected_country}')
+        # Get top strategic intents for this country
+        intent_counts = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            strategic_intent__in=['', None, 'Unknown', 'unknown']
+        ).values('strategic_intent').annotate(
+            count=Count('id')
+        ).order_by('-count')[:5]
         
-        img_buffer = BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight')
-        img_buffer.seek(0)
-        factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-        plt.close(fig)
+        if intent_counts.exists():
+            df_f = pd.DataFrame(list(intent_counts))
+            df_f = df_f.rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
+            
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
+            ax.set_title(f'Top Strategic Intents - {selected_country}')
+            
+            img_buffer = BytesIO()
+            plt.savefig(img_buffer, format='png', bbox_inches='tight')
+            img_buffer.seek(0)
+            factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+            plt.close(fig)
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 6. Render PDF
+    # 7. Render PDF
     context = {
         'country': selected_country,
-        'report_data': report_data,
-        'articles_count': articles_count,
+        'report_data': report_data,  # This now contains your CSV scores!
+        'articles_count': articles_count,  # This is likely 0 causing the issue
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
+        'key_narratives': key_narratives,
     }
 
     template = get_template('dashboard/report_pdf.html')
