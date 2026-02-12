@@ -166,7 +166,7 @@ def overview(request):
         
         # Calculate score for calculator
         if calc_article:
-            ml_service = get_ml_service()  # Use lazy loading
+            ml_service = MLInferenceService()  # Use consistent approach
             cvi_score = ml_service.calculate_vulnerability_index(
                 calc_article.strategic_intent or "neutral", 
                 calc_article.tone or "neutral", 
@@ -244,7 +244,7 @@ def overview(request):
     page_obj = paginator.get_page(page_number)
 
     # 11. Add vulnerability index to articles (calculate if needed)
-    ml_service = MLInferenceService()   
+    ml_service = MLInferenceService()   # Use consistent approach
     articles_with_vi = []
     for article in page_obj.object_list:
         # Calculate vulnerability index if it's NULL in the database
