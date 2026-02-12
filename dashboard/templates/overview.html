@@ -98,7 +98,8 @@
         <form method="get" action=".">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
-                <select name="calc_target_country" class="form-select">  <!-- FIXED: Changed parameter name -->
+                <select name="calc_target_country" class="form-select">
+                    <option value="">Select Country</option>
                     {% for country in african_countries %}
                     <option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>
                     {% endfor %}
@@ -106,7 +107,8 @@
             </div>
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
-                <select name="calc_foreign_actor" class="form-select">  <!-- FIXED: Changed parameter name -->
+                <select name="calc_foreign_actor" class="form-select">
+                    <option value="">Select Actor</option>
                     {% for actor in foreign_actors %}
                     <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>
                     {% endfor %}
