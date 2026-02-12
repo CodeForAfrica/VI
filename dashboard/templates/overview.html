@@ -177,7 +177,7 @@
                 <div class="mb-3 mt-2">
                     <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
                     <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
-                    <span class="badge bg-dark text-white" title="Vulnerability Index per article">VI Score: {{ article.vulnerability_index|floatformat:2 }}</span>
+                    <!-- REMOVED VI SCORE LABEL -->
                 </div>
                 <p class="small text-muted mb-3">{{ article.article_text|truncatewords:45 }}</p>
                 <div class="d-flex justify-content-between align-items-center">
@@ -259,7 +259,7 @@
         box.scrollTop = box.scrollHeight;
 
         // 3. Fetch from Django (UPDATED URL)
-        fetch('/chatbot-response/', {  // <--- CHANGED THIS LINE
+        fetch('/chatbot-response/', {  
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
