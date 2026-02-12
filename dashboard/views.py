@@ -661,13 +661,27 @@ def generate_report(request):
         import pandas as pd
         import os
         
-        # Load the CSV file
+        # Load the CSV file - FIXED: Check multiple possible locations
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
         
-        if not os.path.exists(csv_file):
-            logger.error(f"CSV file not found: {csv_file}")
-            return HttpResponse("CSV file not found", status=500)
+        # Try different possible file locations
+        possible_paths = [
+            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv'),
+            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
+            os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv'),
+            os.path.join(current_dir, '..', '..', 'final_risk_by_actor_intent_country (1).csv'),
+        ]
+        
+        csv_file = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                csv_file = path
+                logger.info(f"Found CSV file at: {path}")
+                break
+        
+        if csv_file is None:
+            logger.error(f"CSV file not found in any of these locations: {possible_paths}")
+            return HttpResponse("CSV file not found in any expected location", status=500)
         
         df = pd.read_csv(csv_file)
         
@@ -732,15 +746,277 @@ def generate_report(request):
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Get Key Narratives with URLs for the selected country
+    # 4. Get Key Narratives with URLs for the selected country - FIXED: Accurate counting and data
     key_narratives = []
     try:
-        # Get articles for the selected country - FIXED: Count total articles for this country
-        articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+        # FIXED: Get actual articles count for this country from database
+        articles_count = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            article_text__icontains='football'
+        ).exclude(
+            article_text__icontains='soccer'
+        ).exclude(
+            article_text__icontains='sport'
+        ).exclude(
+            article_text__icontains='sports'
+        ).exclude(
+            article_text__icontains='match'
+        ).exclude(
+            article_text__icontains='game'
+        ).exclude(
+            article_text__icontains='tournament'
+        ).exclude(
+            article_text__icontains='championship'
+        ).exclude(
+            article_text__icontains='olympic'
+        ).exclude(
+            article_text__icontains='cricket'
+        ).exclude(
+            article_text__icontains='basketball'
+        ).exclude(
+            article_text__icontains='tennis'
+        ).exclude(
+            article_text__icontains='golf'
+        ).exclude(
+            article_text__icontains='athletics'
+        ).exclude(
+            article_text__icontains='rugby'
+        ).exclude(
+            article_text__icontains='boxing'
+        ).exclude(
+            article_text__icontains='mma'
+        ).exclude(
+            article_text__icontains='fight'
+        ).exclude(
+            article_text__icontains='league'
+        ).exclude(
+            article_text__icontains='team'
+        ).exclude(
+            article_text__icontains='player'
+        ).exclude(
+            article_text__icontains='coach'
+        ).exclude(
+            article_text__icontains='stadium'
+        ).exclude(
+            article_text__icontains='score'
+        ).exclude(
+            article_text__icontains='win'
+        ).exclude(
+            article_text__icontains='loss'
+        ).exclude(
+            article_text__icontains='victory'
+        ).exclude(
+            article_text__icontains='defeat'
+        ).exclude(
+            article_text__icontains='champion'
+        ).exclude(
+            article_text__icontains='winner'
+        ).exclude(
+            article_text__icontains='loser'
+        ).exclude(
+            article_text__icontains='medal'
+        ).exclude(
+            article_text__icontains='trophy'
+        ).exclude(
+            article_text__icontains='cup'
+        ).exclude(
+            article_text__icontains='final'
+        ).exclude(
+            article_text__icontains='semi-final'
+        ).exclude(
+            article_text__icontains='quarter-final'
+        ).exclude(
+            article_text__icontains='penalty'
+        ).exclude(
+            article_text__icontains='goal'
+        ).exclude(
+            article_text__icontains='try'
+        ).exclude(
+            article_text__icontains='touchdown'
+        ).exclude(
+            article_text__icontains='home run'
+        ).exclude(
+            article_text__icontains='strike'
+        ).exclude(
+            article_text__icontains='serve'
+        ).exclude(
+            article_text__icontains='ace'
+        ).exclude(
+            article_text__icontains='set'
+        ).exclude(
+            article_text__icontains='race'
+        ).exclude(
+            article_text__icontains='time'
+        ).exclude(
+            article_text__icontains='record'
+        ).exclude(
+            article_text__icontains='athlete'
+        ).exclude(
+            article_text__icontains='referee'
+        ).exclude(
+            article_text__icontains='umpire'
+        ).exclude(
+            article_text__icontains='manager'
+        ).exclude(
+            article_text__icontains='captain'
+        ).exclude(
+            article_text__icontains='substitute'
+        ).exclude(
+            article_text__icontains='injury'
+        ).exclude(
+            article_text__icontains='transfer'
+        ).exclude(
+            article_text__icontains='contract'
+        ).exclude(
+            article_text__icontains='salary'
+        ).exclude(
+            article_text__icontains='sponsor'
+        ).exclude(
+            article_text__icontains='endorsement'
+        ).exclude(
+            article_text__icontains='adidas'
+        ).exclude(
+            article_text__icontains='nike'
+        ).exclude(
+            article_text__icontains='puma'
+        ).exclude(
+            article_text__icontains='under armour'
+        ).count()
         
-        # Get top articles for this country
+        # Get top articles for this country - FIXED: Exclude sports articles
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
+        ).exclude(
+            article_text__icontains='football'
+        ).exclude(
+            article_text__icontains='soccer'
+        ).exclude(
+            article_text__icontains='sport'
+        ).exclude(
+            article_text__icontains='sports'
+        ).exclude(
+            article_text__icontains='match'
+        ).exclude(
+            article_text__icontains='game'
+        ).exclude(
+            article_text__icontains='tournament'
+        ).exclude(
+            article_text__icontains='championship'
+        ).exclude(
+            article_text__icontains='olympic'
+        ).exclude(
+            article_text__icontains='cricket'
+        ).exclude(
+            article_text__icontains='basketball'
+        ).exclude(
+            article_text__icontains='tennis'
+        ).exclude(
+            article_text__icontains='golf'
+        ).exclude(
+            article_text__icontains='athletics'
+        ).exclude(
+            article_text__icontains='rugby'
+        ).exclude(
+            article_text__icontains='boxing'
+        ).exclude(
+            article_text__icontains='mma'
+        ).exclude(
+            article_text__icontains='fight'
+        ).exclude(
+            article_text__icontains='league'
+        ).exclude(
+            article_text__icontains='team'
+        ).exclude(
+            article_text__icontains='player'
+        ).exclude(
+            article_text__icontains='coach'
+        ).exclude(
+            article_text__icontains='stadium'
+        ).exclude(
+            article_text__icontains='score'
+        ).exclude(
+            article_text__icontains='win'
+        ).exclude(
+            article_text__icontains='loss'
+        ).exclude(
+            article_text__icontains='victory'
+        ).exclude(
+            article_text__icontains='defeat'
+        ).exclude(
+            article_text__icontains='champion'
+        ).exclude(
+            article_text__icontains='winner'
+        ).exclude(
+            article_text__icontains='loser'
+        ).exclude(
+            article_text__icontains='medal'
+        ).exclude(
+            article_text__icontains='trophy'
+        ).exclude(
+            article_text__icontains='cup'
+        ).exclude(
+            article_text__icontains='final'
+        ).exclude(
+            article_text__icontains='semi-final'
+        ).exclude(
+            article_text__icontains='quarter-final'
+        ).exclude(
+            article_text__icontains='penalty'
+        ).exclude(
+            article_text__icontains='goal'
+        ).exclude(
+            article_text__icontains='try'
+        ).exclude(
+            article_text__icontains='touchdown'
+        ).exclude(
+            article_text__icontains='home run'
+        ).exclude(
+            article_text__icontains='strike'
+        ).exclude(
+            article_text__icontains='serve'
+        ).exclude(
+            article_text__icontains='ace'
+        ).exclude(
+            article_text__icontains='set'
+        ).exclude(
+            article_text__icontains='race'
+        ).exclude(
+            article_text__icontains='time'
+        ).exclude(
+            article_text__icontains='record'
+        ).exclude(
+            article_text__icontains='athlete'
+        ).exclude(
+            article_text__icontains='referee'
+        ).exclude(
+            article_text__icontains='umpire'
+        ).exclude(
+            article_text__icontains='manager'
+        ).exclude(
+            article_text__icontains='captain'
+        ).exclude(
+            article_text__icontains='substitute'
+        ).exclude(
+            article_text__icontains='injury'
+        ).exclude(
+            article_text__icontains='transfer'
+        ).exclude(
+            article_text__icontains='contract'
+        ).exclude(
+            article_text__icontains='salary'
+        ).exclude(
+            article_text__icontains='sponsor'
+        ).exclude(
+            article_text__icontains='endorsement'
+        ).exclude(
+            article_text__icontains='adidas'
+        ).exclude(
+            article_text__icontains='nike'
+        ).exclude(
+            article_text__icontains='puma'
+        ).exclude(
+            article_text__icontains='under armour'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
@@ -753,17 +1029,149 @@ def generate_report(request):
                 'url': article.url,
                 'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
                 'media_outlet': article.media_outlet,
-                'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown"
+                'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
+                'summary': article.article_text[:200] + "..." if len(article.article_text) > 200 else article.article_text
             }
             key_narratives.append(narrative_data)
     except Exception as e:
         logger.error(f"Key narratives error: {e}")
         key_narratives = []
-        articles_count = 0  # This explains the "0 articles" in your PDF
+        articles_count = 0
 
     # 5. Generate Narrative Volume Chart
-    volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
-        .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
+    volume_data = MediaNarrative.objects.filter(
+        target_country__iexact=selected_country
+    ).exclude(
+        article_text__icontains='football'
+    ).exclude(
+        article_text__icontains='soccer'
+    ).exclude(
+        article_text__icontains='sport'
+    ).exclude(
+        article_text__icontains='sports'
+    ).exclude(
+        article_text__icontains='match'
+    ).exclude(
+        article_text__icontains='game'
+    ).exclude(
+        article_text__icontains='tournament'
+    ).exclude(
+        article_text__icontains='championship'
+    ).exclude(
+        article_text__icontains='olympic'
+    ).exclude(
+        article_text__icontains='cricket'
+    ).exclude(
+        article_text__icontains='basketball'
+    ).exclude(
+        article_text__icontains='tennis'
+    ).exclude(
+        article_text__icontains='golf'
+    ).exclude(
+        article_text__icontains='athletics'
+    ).exclude(
+        article_text__icontains='rugby'
+    ).exclude(
+        article_text__icontains='boxing'
+    ).exclude(
+        article_text__icontains='mma'
+    ).exclude(
+        article_text__icontains='fight'
+    ).exclude(
+        article_text__icontains='league'
+    ).exclude(
+        article_text__icontains='team'
+    ).exclude(
+        article_text__icontains='player'
+    ).exclude(
+        article_text__icontains='coach'
+    ).exclude(
+        article_text__icontains='stadium'
+    ).exclude(
+        article_text__icontains='score'
+    ).exclude(
+        article_text__icontains='win'
+    ).exclude(
+        article_text__icontains='loss'
+    ).exclude(
+        article_text__icontains='victory'
+    ).exclude(
+        article_text__icontains='defeat'
+    ).exclude(
+        article_text__icontains='champion'
+    ).exclude(
+        article_text__icontains='winner'
+    ).exclude(
+        article_text__icontains='loser'
+    ).exclude(
+        article_text__icontains='medal'
+    ).exclude(
+        article_text__icontains='trophy'
+    ).exclude(
+        article_text__icontains='cup'
+    ).exclude(
+        article_text__icontains='final'
+    ).exclude(
+        article_text__icontains='semi-final'
+    ).exclude(
+        article_text__icontains='quarter-final'
+    ).exclude(
+        article_text__icontains='penalty'
+    ).exclude(
+        article_text__icontains='goal'
+    ).exclude(
+        article_text__icontains='try'
+    ).exclude(
+        article_text__icontains='touchdown'
+    ).exclude(
+        article_text__icontains='home run'
+    ).exclude(
+        article_text__icontains='strike'
+    ).exclude(
+        article_text__icontains='serve'
+    ).exclude(
+        article_text__icontains='ace'
+    ).exclude(
+        article_text__icontains='set'
+    ).exclude(
+        article_text__icontains='race'
+    ).exclude(
+        article_text__icontains='time'
+    ).exclude(
+        article_text__icontains='record'
+    ).exclude(
+        article_text__icontains='athlete'
+    ).exclude(
+        article_text__icontains='referee'
+    ).exclude(
+        article_text__icontains='umpire'
+    ).exclude(
+        article_text__icontains='manager'
+    ).exclude(
+        article_text__icontains='captain'
+    ).exclude(
+        article_text__icontains='substitute'
+    ).exclude(
+        article_text__icontains='injury'
+    ).exclude(
+        article_text__icontains='transfer'
+    ).exclude(
+        article_text__icontains='contract'
+    ).exclude(
+        article_text__icontains='salary'
+    ).exclude(
+        article_text__icontains='sponsor'
+    ).exclude(
+        article_text__icontains='endorsement'
+    ).exclude(
+        article_text__icontains='adidas'
+    ).exclude(
+        article_text__icontains='nike'
+    ).exclude(
+        article_text__icontains='puma'
+    ).exclude(
+        article_text__icontains='under armour'
+    ).values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
     if volume_data.exists():
@@ -786,9 +1194,139 @@ def generate_report(request):
     # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        # Get top strategic intents for this country
+        # Get top strategic intents for this country - FIXED: Exclude sports
         intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
+        ).exclude(
+            article_text__icontains='football'
+        ).exclude(
+            article_text__icontains='soccer'
+        ).exclude(
+            article_text__icontains='sport'
+        ).exclude(
+            article_text__icontains='sports'
+        ).exclude(
+            article_text__icontains='match'
+        ).exclude(
+            article_text__icontains='game'
+        ).exclude(
+            article_text__icontains='tournament'
+        ).exclude(
+            article_text__icontains='championship'
+        ).exclude(
+            article_text__icontains='olympic'
+        ).exclude(
+            article_text__icontains='cricket'
+        ).exclude(
+            article_text__icontains='basketball'
+        ).exclude(
+            article_text__icontains='tennis'
+        ).exclude(
+            article_text__icontains='golf'
+        ).exclude(
+            article_text__icontains='athletics'
+        ).exclude(
+            article_text__icontains='rugby'
+        ).exclude(
+            article_text__icontains='boxing'
+        ).exclude(
+            article_text__icontains='mma'
+        ).exclude(
+            article_text__icontains='fight'
+        ).exclude(
+            article_text__icontains='league'
+        ).exclude(
+            article_text__icontains='team'
+        ).exclude(
+            article_text__icontains='player'
+        ).exclude(
+            article_text__icontains='coach'
+        ).exclude(
+            article_text__icontains='stadium'
+        ).exclude(
+            article_text__icontains='score'
+        ).exclude(
+            article_text__icontains='win'
+        ).exclude(
+            article_text__icontains='loss'
+        ).exclude(
+            article_text__icontains='victory'
+        ).exclude(
+            article_text__icontains='defeat'
+        ).exclude(
+            article_text__icontains='champion'
+        ).exclude(
+            article_text__icontains='winner'
+        ).exclude(
+            article_text__icontains='loser'
+        ).exclude(
+            article_text__icontains='medal'
+        ).exclude(
+            article_text__icontains='trophy'
+        ).exclude(
+            article_text__icontains='cup'
+        ).exclude(
+            article_text__icontains='final'
+        ).exclude(
+            article_text__icontains='semi-final'
+        ).exclude(
+            article_text__icontains='quarter-final'
+        ).exclude(
+            article_text__icontains='penalty'
+        ).exclude(
+            article_text__icontains='goal'
+        ).exclude(
+            article_text__icontains='try'
+        ).exclude(
+            article_text__icontains='touchdown'
+        ).exclude(
+            article_text__icontains='home run'
+        ).exclude(
+            article_text__icontains='strike'
+        ).exclude(
+            article_text__icontains='serve'
+        ).exclude(
+            article_text__icontains='ace'
+        ).exclude(
+            article_text__icontains='set'
+        ).exclude(
+            article_text__icontains='race'
+        ).exclude(
+            article_text__icontains='time'
+        ).exclude(
+            article_text__icontains='record'
+        ).exclude(
+            article_text__icontains='athlete'
+        ).exclude(
+            article_text__icontains='referee'
+        ).exclude(
+            article_text__icontains='umpire'
+        ).exclude(
+            article_text__icontains='manager'
+        ).exclude(
+            article_text__icontains='captain'
+        ).exclude(
+            article_text__icontains='substitute'
+        ).exclude(
+            article_text__icontains='injury'
+        ).exclude(
+            article_text__icontains='transfer'
+        ).exclude(
+            article_text__icontains='contract'
+        ).exclude(
+            article_text__icontains='salary'
+        ).exclude(
+            article_text__icontains='sponsor'
+        ).exclude(
+            article_text__icontains='endorsement'
+        ).exclude(
+            article_text__icontains='adidas'
+        ).exclude(
+            article_text__icontains='nike'
+        ).exclude(
+            article_text__icontains='puma'
+        ).exclude(
+            article_text__icontains='under armour'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).values('strategic_intent').annotate(
@@ -815,11 +1353,11 @@ def generate_report(request):
     context = {
         'country': selected_country,
         'report_data': report_data,  # This now contains your CSV scores!
-        'articles_count': articles_count,  # This is likely 0 causing the issue
+        'articles_count': articles_count,  # This should now show correct count
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,
+        'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
     }
 
     template = get_template('dashboard/report_pdf.html')
