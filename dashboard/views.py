@@ -194,16 +194,12 @@ def overview(request):
     total_articles = MediaNarrative.objects.count()  # This gets all 15,166 articles
     
     # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display
-    full_stats_qs = MediaNarrative.objects.only(
-        'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
-        'vulnerability_index', 'confidence', 'article_text', 'posting_time'
-    ).order_by('-posting_time')
+    full_stats_qs = MediaNarrative.objects.order_by('-posting_time')
 
     # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
-        calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').only(
-            'strategic_intent', 'tone', 'target_country', 'inferred_actor', 'confidence'
-        )
+        # FIX: Remove select_related and only conflict
+        calc_qs = MediaNarrative.objects
         
         if any(term in calc_target_country.lower() for term in ["ivoire", "ivory", "cote"]):
             calc_qs = calc_qs.filter(
@@ -251,7 +247,7 @@ def overview(request):
     
     # 9. Optimized volume chart - Use limited data for performance
     try:
-        limited_for_chart = MediaNarrative.objects.only('posting_time').exclude(
+        limited_for_chart = MediaNarrative.objects.exclude(
             posting_time__isnull=True
         )[:500]
         
@@ -325,7 +321,7 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)
-    
+
 def calculate_contextual_score(target_country, foreign_actor):
     """Calculate contextual score using contextual_all_intents_v2.py data"""
     try:
@@ -569,14 +565,17 @@ def generate_report(request):
 # =========================
 
 def countries(request):
-    # OPTIMIZED: Fast queries
+    # 1. Setup Data & Normalization
+    actor_map = {"US": "UnitedStates"}
+
+    # 2. Get Top Publishers by Country
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
         article_count=Count('id')
     ).order_by('-article_count')[:10]
-    
-    # FIXED: Top strategic intents by actor and country
+
+    # 3. FIXED: Get Top Strategic Intents with actor-country relationships
     top_strategic_intents = MediaNarrative.objects.exclude(
         strategic_intent__in=['', None]
     ).exclude(
@@ -587,29 +586,30 @@ def countries(request):
         total=Count('id')
     ).order_by('-total')[:10]
 
-    # Generate Publisher Chart
+    # 4. Generate Publisher Chart
     publisher_chart = ""
     if top_publishers:
         df = pd.DataFrame(list(top_publishers))
         fig = px.bar(df, x='article_count', y='target_country', orientation='h', 
                      color_discrete_sequence=['#6366f1'])
-        fig.update_layout(height=400)  # INCREASE HEIGHT
+        fig.update_layout(height=400)
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Generate Subject Chart
+    # 5. Generate Subject Chart (Strategic Intents)
     subject_chart = ""
-    if top_subjects:
-        df_s = pd.DataFrame(list(top_subjects))
+    if top_strategic_intents:  # FIXED: Use correct variable name
+        df_s = pd.DataFrame(list(top_strategic_intents))
         df_s['combined'] = df_s['strategic_intent'] + ' (' + df_s['inferred_actor'] + '→' + df_s['target_country'] + ')'
         fig_s = px.pie(df_s, values='total', names='combined', hole=.3)
-        fig_s.update_layout(height=400)  # INCREASE HEIGHT
+        fig_s.update_layout(height=400)
         subject_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')
 
+    # 6. Context
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'coverage_table': top_publishers,
-        'top_strategic_intents': top_strategic_intents,  # Use this variable name
+        'top_strategic_intents': top_strategic_intents,  # FIXED: Use correct variable name
         'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
     }
     return render(request, 'dashboard/countries.html', context)
