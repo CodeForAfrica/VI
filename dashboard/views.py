@@ -870,21 +870,21 @@ def countries(request):
         fig.update_layout(height=400)
         publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 5. Generate Subject Chart (Strategic Intents)
-    subject_chart = ""
-    if top_strategic_intents:  # FIXED: Use correct variable name
+    # 5. Generate Strategic Intents Chart (FIXED: Renamed from "Subject Chart")
+    strategic_intents_chart = ""  # FIXED: Renamed variable
+    if top_strategic_intents:
         df_s = pd.DataFrame(list(top_strategic_intents))
         df_s['combined'] = df_s['strategic_intent'] + ' (' + df_s['inferred_actor'] + '→' + df_s['target_country'] + ')'
         fig_s = px.pie(df_s, values='total', names='combined', hole=.3)
         fig_s.update_layout(height=400)
-        subject_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')
+        strategic_intents_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')  # FIXED: Use renamed variable
 
     # 6. Context
     context = {
         'publisher_chart': publisher_chart,
-        'subject_chart': subject_chart,
+        'subject_chart': strategic_intents_chart,  # FIXED: Keep the variable name for template compatibility
         'coverage_table': top_publishers,
-        'top_strategic_intents': top_strategic_intents,  # FIXED: Use correct variable name
+        'top_strategic_intents': top_strategic_intents,
         'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
     }
     return render(request, 'dashboard/countries.html', context)
