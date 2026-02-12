@@ -1,4 +1,3 @@
- 
 {% extends "base.html" %}
 {% load custom_filters %}
 {% block content %}
@@ -18,7 +17,7 @@
     <div class="col-lg-6">
         <div class="card shadow-sm h-100">
             <div class="card-header bg-light text-center">
-                <h4>Top Intents Mentioned</h4>
+                <h4>Top Strategic Intents by Actor-Country</h4>
             </div>
             <div class="card-body">
                 {{ subject_chart|safe }}
@@ -30,24 +29,28 @@
 <!-- Simple Table -->
 <div class="card shadow-sm mb-5">
     <div class="card-header bg-light text-center">
-        <h4>Top African Countries Publishing</h4>
+        <h4>Top Strategic Intents Mentioned</h4>
     </div>
     <div class="card-body">
         <table class="table table-hover">
             <thead>
                 <tr>
-                    <th>Country</th>
-                    <th>Articles Published</th>
+                    <th>Strategic Intent</th>
+                    <th>Foreign Actor</th>
+                    <th>Target Country</th>
+                    <th>Article Count</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in coverage_table %}
+                {% for intent in top_strategic_intents %}
                 <tr>
-                    <td><strong>{{ item.target_country }}</strong></td>
-                    <td>{{ item.article_count }}</td>
+                    <td><strong>{{ intent.strategic_intent|title }}</strong></td>
+                    <td>{{ intent.inferred_actor }}</td>
+                    <td>{{ intent.target_country }}</td>
+                    <td>{{ intent.total }}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="2" class="text-center text-muted">No data</td></tr>
+                <tr><td colspan="4" class="text-center text-muted">No strategic intent data</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -55,5 +58,24 @@
 </div>
 
 <!-- Sample Articles (keep or remove if you want) -->
-<!-- ... your existing sample articles code ... -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light text-center">
+                <h4>Sample Articles</h4>
+            </div>
+            <div class="card-body">
+                {% for article in sample_articles %}
+                <div class="mb-3 pb-3 border-bottom">
+                    <h6>{{ article.article_text|truncatewords:10 }}</h6>
+                    <p class="small text-muted mb-1">Country: {{ article.target_country }}, Actor: {{ article.inferred_actor }}, Intent: {{ article.strategic_intent }}</p>
+                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary">Read Article</a>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center py-3">No sample articles available.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
