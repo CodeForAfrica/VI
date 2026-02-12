@@ -186,14 +186,20 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs (only apply filters if both are provided)
+    # 2. Capture Inputs
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # 3. FOR MAIN DISPLAY: Show ALL articles by default (no filters)
-    total_articles = MediaNarrative.objects.count()
+    # 3. Get total count first (without limit)
+    total_articles = MediaNarrative.objects.count()  # This gets all 15,166 articles
     
-    # 4. Calculator logic (only calculate when BOTH params are provided by user)
+    # 4. FOR MAIN DISPLAY: Show limited articles for performance
+    full_stats_qs = MediaNarrative.objects.only(
+        'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
+        'vulnerability_index', 'confidence', 'article_text', 'posting_time'
+    ).order_by('-posting_time')[:10]  # Limit to 10 per page for performance
+
+    # 5. Calculator logic (when both params provided)
     if calc_target_country and calc_foreign_actor:
         calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').only(
             'strategic_intent', 'tone', 'target_country', 'inferred_actor', 'confidence'
@@ -221,23 +227,18 @@ def overview(request):
                 calc_article.confidence or 0.5
             )
         else:
-            # Use contextual calculation for country-actor pair
+            # Use contextual calculation
             cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
-    else:
-        # When no calculator parameters provided, show default state
-        calc_target_country = ""  # Reset to empty string for display
-        calc_foreign_actor = ""   # Reset to empty string for display
 
-    # 5. Global Stats (optimized)
-    total_articles = full_stats_qs.count()
+    # 6. Global Stats (optimized)
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     
-    # 6. Optimized averages
+    # 7. Optimized averages
     from django.db.models import Avg
     avg_vulnerability = 0.0
     avg_confidence = 0.0
     
-    # 7. Optimized volume chart
+    # 8. Optimized volume chart - Use limited data for performance
     try:
         limited_for_chart = MediaNarrative.objects.only('posting_time').exclude(
             posting_time__isnull=True
@@ -255,7 +256,7 @@ def overview(request):
     except Exception as e:
         logger.error(f"Volume Chart Error: {e}")
 
-    # 8. Optimized lists
+    # 9. Optimized lists - Use counts without limits
     country_list = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
@@ -271,12 +272,12 @@ def overview(request):
         total=Count('id')
     ).order_by('-total')[:5]
 
-    # 9. Optimized pagination
-    paginator = Paginator(full_stats_qs, 5)
+    # 10. Optimized pagination - Keep reasonable page size
+    paginator = Paginator(full_stats_qs, 5)  # 5 articles per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 10. Process articles with vulnerability index
+    # 11. Process articles with vulnerability index
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
@@ -294,11 +295,11 @@ def overview(request):
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 11. Context
+    # 12. Context - Use the actual total count
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,
+        'total_articles': total_articles,  # Now shows 15,166 instead of 1000
         'unique_outlets': MediaNarrative.objects.values('media_outlet').distinct().count(),
         'unique_intents': MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
         'unique_actors': MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
@@ -309,11 +310,11 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': calc_target_country,  # Will be empty initially
-        'selected_actor': calc_foreign_actor,    # Will be empty initially
+        'selected_country': calc_target_country,
+        'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)
-
+    
 def calculate_contextual_score(target_country, foreign_actor):
     """Calculate contextual score using contextual_all_intents_v2.py data"""
     try:
