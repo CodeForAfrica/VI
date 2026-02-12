@@ -355,6 +355,10 @@ def calculate_contextual_score(target_country, foreign_actor):
         R = contextual_mod.compute_R(g)
         CA = contextual_mod.compute_CAs(g, R)
         
+        # Print debug info to see what's available
+        logger.info(f"Available countries in CA: {list(CA.get('Economic', {}).keys())}")
+        logger.info(f"Available actors in CA: {list(CA.get('Economic', {}).get('Senegal', {}).keys())}")
+        
         # Normalize country and actor names to match the contextual module
         country_mapping = {
             "south africa": "South Africa",
@@ -386,20 +390,33 @@ def calculate_contextual_score(target_country, foreign_actor):
         # Get the first available intent category from your file
         intent_categories = list(CA.keys())
         
+        # Debug: Print what we're looking for
+        logger.info(f"Looking for: Country={formatted_country}, Actor={formatted_actor}")
+        
         # Loop through intent categories to find the specific country-actor combination
         for intent_category in intent_categories:
             if formatted_country in CA[intent_category] and formatted_actor in CA[intent_category][formatted_country]:
                 # Return the specific score for this country-actor combination
                 specific_score = CA[intent_category][formatted_country][formatted_actor]
+                logger.info(f"Found score: {specific_score} for {formatted_country}-{formatted_actor}")
                 return float(specific_score)
         
-        # If no specific score found, return a default
+        # If no specific score found, try to find a general score
+        for intent_category in intent_categories:
+            if formatted_country in CA[intent_category]:
+                for available_actor in CA[intent_category][formatted_country]:
+                    score = CA[intent_category][formatted_country][available_actor]
+                    logger.info(f"Using fallback score: {score} for {formatted_country}-{available_actor}")
+                    return float(score)
+        
+        # If still no score found, return a default
+        logger.info("Using default score: 0.5")
         return 0.5  # Default score if not found
         
     except Exception as e:
         logger.error(f"Contextual score calculation error: {e}")
         return 0.5  # Default fallback
-
+        
 def generate_report(request):
     selected_country = request.GET.get('country')
     selected_actors = request.GET.getlist('actors')
