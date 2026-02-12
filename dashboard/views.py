@@ -323,43 +323,23 @@ def overview(request):
     return render(request, 'overview.html', context)
 
 def calculate_contextual_score(target_country, foreign_actor):
-    """Calculate contextual score using contextual_all_intents_v2.py data with specific country-actor values"""
+    """Calculate contextual score using the pre-calculated final risk scores from CSV"""
     try:
-        # Load the contextual module from the current directory
-        import importlib.util
+        import pandas as pd
         import os
-        import sys
         
-        # Get the current directory where the views.py file is located
+        # Load the CSV file with final risk scores
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        contextual_file = os.path.join(current_dir, '..', 'contextual_all_intents_v2.py')
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
         
-        # Resolve the absolute path
-        contextual_file = os.path.abspath(contextual_file)
+        if not os.path.exists(csv_file):
+            logger.error(f"CSV file not found: {csv_file}")
+            return 0.5  # Default fallback
         
-        # Check if file exists
-        if not os.path.exists(contextual_file):
-            logger.error(f"Contextual file not found: {contextual_file}")
-            return 0.5  # Return default score if file not found
+        # Read the CSV file
+        df = pd.read_csv(csv_file)
         
-        spec = importlib.util.spec_from_file_location("contextual_mod", contextual_file)
-        if spec is None:
-            logger.error(f"Could not load spec from {contextual_file}")
-            return 0.5
-            
-        contextual_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(contextual_mod)
-        
-        # Get the CA matrix from the module 
-        g = contextual_mod.compute_gs()
-        R = contextual_mod.compute_R(g)
-        CA = contextual_mod.compute_CAs(g, R)
-        
-        # Print debug info to see what's available
-        logger.info(f"Available countries in CA: {list(CA.get('Economic', {}).keys())}")
-        logger.info(f"Available actors in CA: {list(CA.get('Economic', {}).get('Senegal', {}).keys())}")
-        
-        # Normalize country and actor names to match the contextual module
+        # Normalize country and actor names to match CSV format
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal", 
@@ -383,35 +363,35 @@ def calculate_contextual_score(target_country, foreign_actor):
             "iran": "Iran"
         }
         
-        # Format the names to match your contextual file
+        # Format the inputs to match CSV format
         formatted_country = country_mapping.get(target_country.lower(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
         
-        # Get the first available intent category from your file
-        intent_categories = list(CA.keys())
+        # Find the specific score in the dataframe for this country-actor combination
+        matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
         
-        # Debug: Print what we're looking for
-        logger.info(f"Looking for: Country={formatted_country}, Actor={formatted_actor}")
+        if not matching_rows.empty:
+            # Get the highest risk score across all intents for this country-actor combination
+            scores = matching_rows['FinalRisk'].tolist()
+            max_score = max(scores)  # Use the maximum risk score across all intents
+            logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor}")
+            return float(max_score)
+        else:
+            # If exact match not found, try case-insensitive match
+            matching_rows = df[
+                (df['country'].str.lower() == formatted_country.lower()) & 
+                (df['actor'].str.lower() == formatted_actor.lower())
+            ]
+            
+            if not matching_rows.empty:
+                scores = matching_rows['FinalRisk'].tolist()
+                max_score = max(scores)
+                logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor}")
+                return float(max_score)
         
-        # Loop through intent categories to find the specific country-actor combination
-        for intent_category in intent_categories:
-            if formatted_country in CA[intent_category] and formatted_actor in CA[intent_category][formatted_country]:
-                # Return the specific score for this country-actor combination
-                specific_score = CA[intent_category][formatted_country][formatted_actor]
-                logger.info(f"Found score: {specific_score} for {formatted_country}-{formatted_actor}")
-                return float(specific_score)
-        
-        # If no specific score found, try to find a general score
-        for intent_category in intent_categories:
-            if formatted_country in CA[intent_category]:
-                for available_actor in CA[intent_category][formatted_country]:
-                    score = CA[intent_category][formatted_country][available_actor]
-                    logger.info(f"Using fallback score: {score} for {formatted_country}-{available_actor}")
-                    return float(score)
-        
-        # If still no score found, return a default
-        logger.info("Using default score: 0.5")
-        return 0.5  # Default score if not found
+        # If no specific score found, return default
+        logger.info(f"No specific score found for {target_country}-{foreign_actor}, using default")
+        return 0.5
         
     except Exception as e:
         logger.error(f"Contextual score calculation error: {e}")
