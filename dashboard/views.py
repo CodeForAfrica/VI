@@ -190,14 +190,17 @@ def overview(request):
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # 3. FOR MAIN DISPLAY: SHOW ONLY RELEVANT ARTICLES (with foreign actors)
-    full_stats_qs = MediaNarrative.objects.exclude(
-        inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
-    ).select_related('media_outlet_fk', 'journalist_fk').order_by('-posting_time')
+    # 3. FOR MAIN DISPLAY: OPTIMIZED QUERY
+    full_stats_qs = MediaNarrative.objects.only(
+        'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
+        'vulnerability_index', 'confidence', 'article_text', 'posting_time'
+    ).order_by('-posting_time')[:1000]
     
     # 4. Calculator logic (when both params provided)
     if calc_target_country and calc_foreign_actor:
-        calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk')
+        calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').only(
+            'strategic_intent', 'tone', 'target_country', 'inferred_actor', 'confidence'
+        )
         
         if any(term in calc_target_country.lower() for term in ["ivoire", "ivory", "cote"]):
             calc_qs = calc_qs.filter(
@@ -220,56 +223,59 @@ def overview(request):
                 calc_foreign_actor,
                 calc_article.confidence or 0.5
             )
+        else:
+            # Use contextual calculation for country-actor pair
+            cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
 
-    # 5. Global Stats (relevant articles only)
+    # 5. Global Stats (optimized)
     total_articles = full_stats_qs.count()
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
-    for word in irrelevant_keywords:
-        full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
-
-    unique_outlets = full_stats_qs.select_related('media_outlet_fk').values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None, 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']).values('inferred_actor').distinct().count()
-
-    # 6. Optimized averages (relevant articles only)
+    
+    # 6. Optimized averages
     from django.db.models import Avg
-    filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
-    if filtered_qs.exists():
-        stats = filtered_qs.aggregate(
-            avg_vulnerability=Avg('vulnerability_index'),
-            avg_confidence=Avg('confidence')
-        )
-        avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
-        avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
-    else:
-        avg_vulnerability = 0.0
-        avg_confidence = full_stats_qs.aggregate(Avg('confidence'))['confidence__avg'] or 0.0
-
-    # 7. Volume Chart (relevant articles only)
-    chart_qs = full_stats_qs.exclude(posting_time__isnull=True)[:1000]
-    if chart_qs.exists():
-        try:
-            df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
+    avg_vulnerability = 0.0
+    avg_confidence = 0.0
+    
+    # 7. Optimized volume chart
+    try:
+        limited_for_chart = MediaNarrative.objects.only('posting_time').exclude(
+            posting_time__isnull=True
+        )[:500]
+        
+        if limited_for_chart.exists():
+            df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
             df = df.dropna(subset=['posting_time'])
             df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
             daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
             if not daily_counts.empty:
                 fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=500)  # INCREASED HEIGHT
                 chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        except Exception as e:
-            logger.error(f"Volume Chart Error: {e}")
+    except Exception as e:
+        logger.error(f"Volume Chart Error: {e}")
 
-    # 8. Optimized lists (relevant articles only)
-    country_list = full_stats_qs.values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
-    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(total=Count('id')).order_by('-total')[:5]
+    # 8. Optimized lists
+    country_list = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
+    
+    # FIXED: Top Strategic Intents with actor-country relationships
+    top_subjects = MediaNarrative.objects.exclude(
+        strategic_intent__in=['', None]
+    ).exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
+        total=Count('id')
+    ).order_by('-total')[:5]
 
-    # 9. Pagination (relevant articles only)
+    # 9. Optimized pagination
     paginator = Paginator(full_stats_qs, 5)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 10. Add vulnerability index to articles
+    # 10. Process articles with vulnerability index
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
@@ -291,10 +297,10 @@ def overview(request):
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,  # Now shows only relevant articles
-        'unique_outlets': unique_outlets,
-        'unique_intents': unique_intents,
-        'unique_actors': unique_actors,
+        'total_articles': total_articles,
+        'unique_outlets': MediaNarrative.objects.values('media_outlet').distinct().count(),
+        'unique_intents': MediaNarrative.objects.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
+        'unique_actors': MediaNarrative.objects.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
         'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
         'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
         'african_countries': COUNTRIES,
@@ -306,6 +312,215 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
     }
     return render(request, 'overview.html', context)
+
+def calculate_contextual_score(target_country, foreign_actor):
+    """Calculate contextual score using contextual_all_intents_v2.py data"""
+    try:
+        # Load the contextual module
+        import importlib.util
+        import sys
+        
+        # Path to your contextual file (assuming it's in the same directory)
+        spec = importlib.util.spec_from_file_location("contextual_mod", "/Users/hannateshager/Documents/cfa/Vulnerability_index_tool/contextual_all_intents_v2.py")
+        contextual_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contextual_mod)
+        
+        # Get the CA matrix from the module
+        g = contextual_mod.compute_gs()
+        R = contextual_mod.compute_R(g)
+        CA = contextual_mod.compute_CAs(g, R)
+        
+        # Normalize country and actor names to match the contextual module
+        country_mapping = {
+            "south africa": "South Africa",
+            "senegal": "Senegal", 
+            "drc": "DRC",
+            "cote d'ivoire": "CoteIvoire",
+            "cote ivoire": "CoteIvoire",
+            "ivory coast": "CoteIvoire",
+            "ethiopia": "Ethiopia"
+        }
+        
+        actor_mapping = {
+            "uae": "UAE",
+            "china": "China",
+            "france": "France",
+            "us": "UnitedStates",
+            "united states": "UnitedStates",
+            "russia": "Russia",
+            "saudi": "Saudi",
+            "turkey": "Turkey",
+            "israel": "Israel",
+            "iran": "Iran"
+        }
+        
+        # Format the names
+        formatted_country = country_mapping.get(target_country.lower(), target_country)
+        formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
+        
+        # Get the first available intent category
+        intent_categories = list(CA.keys())
+        if intent_categories and formatted_country in CA[intent_categories[0]]:
+            if formatted_actor in CA[intent_categories[0]][formatted_country]:
+                return float(CA[intent_categories[0]][formatted_country][formatted_actor])
+        
+        return 0.5  # Default score if not found
+        
+    except Exception as e:
+        logger.error(f"Contextual score calculation error: {e}")
+        return 0.5  # Default fallback
+
+
+def generate_report(request):
+    selected_country = request.GET.get('country')
+    selected_actors = request.GET.getlist('actors')
+
+    # 1. Handle Form Display
+    if not selected_country or not selected_actors:
+        context = {
+            'african_countries': COUNTRIES,
+            'foreign_actors': FOREIGN_ACTORS,
+        }
+        return render(request, 'dashboard/report_form.html', context)
+
+    # 2. Setup Data & Normalization
+    actor_map = {"US": "UnitedStates"}
+    report_data = []
+
+    # 3. Calculate CVI Risk Scores - FIXED: Use actual contextual data
+    try:
+        import importlib.util
+        import sys
+        
+        # Load the contextual module
+        spec = importlib.util.spec_from_file_location("contextual_mod", "/Users/hannateshager/Documents/cfa/Vulnerability_index_tool/contextual_all_intents_v2.py")
+        contextual_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contextual_mod)
+        
+        # Get the CA matrix
+        g = contextual_mod.compute_gs()
+        R = contextual_mod.compute_R(g)
+        CA = contextual_mod.compute_CAs(g, R)
+        
+        # Normalize country names
+        country_mapping = {
+            "south africa": "South Africa",
+            "senegal": "Senegal", 
+            "drc": "DRC",
+            "cote d'ivoire": "CoteIvoire",
+            "cote ivoire": "CoteIvoire",
+            "ivory coast": "CoteIvoire",
+            "ethiopia": "Ethiopia"
+        }
+        
+        actor_mapping = {
+            "uae": "UAE",
+            "china": "China",
+            "france": "France",
+            "us": "UnitedStates",
+            "united states": "UnitedStates",
+            "russia": "Russia",
+            "saudi": "Saudi",
+            "turkey": "Turkey",
+            "israel": "Israel",
+            "iran": "Iran"
+        }
+        
+        formatted_country = country_mapping.get(selected_country.lower(), selected_country)
+        
+        for actor in selected_actors:
+            formatted_actor = actor_mapping.get(actor.lower(), actor)
+            
+            # Get the first available intent category
+            intent_categories = list(CA.keys())
+            if intent_categories and formatted_country in CA[intent_categories[0]]:
+                if formatted_actor in CA[intent_categories[0]][formatted_country]:
+                    score = CA[intent_categories[0]][formatted_country][formatted_actor]
+                    risk_level = "High" if score > 0.7 else "Medium" if score > 0.4 else "Low"
+                    report_data.append({
+                        'actor': actor,
+                        'cvi_score': round(float(score), 3),
+                        'risk_level': risk_level,
+                    })
+                else:
+                    report_data.append({
+                        'actor': actor,
+                        'cvi_score': 0.0,
+                        'risk_level': "N/A",
+                    })
+            else:
+                report_data.append({
+                    'actor': actor,
+                    'cvi_score': 0.0,
+                    'risk_level': "N/A",
+                })
+    except Exception as e:
+        logger.error(f"CVI calculation error: {e}")
+        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A"} for a in selected_actors]
+
+    # 4. Generate Narrative Volume Chart
+    articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
+    volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
+        .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
+
+    volume_chart_base64 = ""
+    if volume_data.exists():
+        df = pd.DataFrame(list(volume_data))
+        df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+        df = df.dropna(subset=['date']).sort_values('date')
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(df['date'], df['articles'], marker='o', color='royalblue')
+        ax.set_title(f'Narrative Volume Over Time - {selected_country}')
+        ax.grid(True, linestyle='--', alpha=0.7)
+        plt.xticks(rotation=45)
+        
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format='png', bbox_inches='tight')
+        img_buffer.seek(0)
+        volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+        plt.close(fig)
+
+    # 5. Generate Factor Contribution Chart
+    factor_chart_base64 = ""
+    try:
+        factors = {'Economic': 0.35, 'Sovereignty': 0.18, 'Election': 0.11, 'Social': 0.07} # Sample
+        df_f = pd.DataFrame({'Factor': list(factors.keys()), 'Val': list(factors.values())}).sort_values('Val')
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
+        ax.set_title(f'CVI Factor Contribution - {selected_country}')
+        
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format='png', bbox_inches='tight')
+        img_buffer.seek(0)
+        factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+        plt.close(fig)
+    except Exception as e:
+        logger.error(f"Factor chart error: {e}")
+
+    # 6. Render PDF
+    context = {
+        'country': selected_country,
+        'report_data': report_data,
+        'articles_count': articles_count,
+        'date_generated': datetime.now().strftime("%B %d, %Y"),
+        'volume_chart_base64': volume_chart_base64,
+        'factor_chart_base64': factor_chart_base64,
+    }
+
+    template = get_template('dashboard/report_pdf.html')
+    html = template.render(context)
+    result = BytesIO()
+    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
+
+    if not pdf.err:
+        response = HttpResponse(result.getvalue(), content_type='application/pdf')
+        filename = f"CVI_Report_{selected_country}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return HttpResponse("Error generating PDF.", status=500)
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
