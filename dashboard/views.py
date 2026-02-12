@@ -223,7 +223,7 @@ def overview(request):
                 calc_article.confidence or 0.5
             )
         else:
-            # Use contextual calculation
+            # Use contextual calculation - FIXED: Pass article data if available
             cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
     else:
         # When no calculator parameters, show all articles
@@ -323,7 +323,7 @@ def overview(request):
     return render(request, 'overview.html', context)
 
 def calculate_contextual_score(target_country, foreign_actor):
-    """Calculate contextual score using contextual_all_intents_v2.py data"""
+    """Calculate contextual score using contextual_all_intents_v2.py data with specific country-actor values"""
     try:
         # Load the contextual module from the current directory
         import importlib.util
@@ -350,7 +350,7 @@ def calculate_contextual_score(target_country, foreign_actor):
         contextual_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contextual_mod)
         
-        # Get the CA matrix from the module
+        # Get the CA matrix from the module - THIS USES YOUR SPECIFIC DATA
         g = contextual_mod.compute_gs()
         R = contextual_mod.compute_R(g)
         CA = contextual_mod.compute_CAs(g, R)
@@ -379,22 +379,26 @@ def calculate_contextual_score(target_country, foreign_actor):
             "iran": "Iran"
         }
         
-        # Format the names
+        # Format the names to match your contextual file
         formatted_country = country_mapping.get(target_country.lower(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
         
-        # Get the first available intent category
+        # Get the first available intent category from your file
         intent_categories = list(CA.keys())
-        if intent_categories and formatted_country in CA[intent_categories[0]]:
-            if formatted_actor in CA[intent_categories[0]][formatted_country]:
-                return float(CA[intent_categories[0]][formatted_country][formatted_actor])
         
+        # Loop through intent categories to find the specific country-actor combination
+        for intent_category in intent_categories:
+            if formatted_country in CA[intent_category] and formatted_actor in CA[intent_category][formatted_country]:
+                # Return the specific score for this country-actor combination
+                specific_score = CA[intent_category][formatted_country][formatted_actor]
+                return float(specific_score)
+        
+        # If no specific score found, return a default
         return 0.5  # Default score if not found
         
     except Exception as e:
         logger.error(f"Contextual score calculation error: {e}")
         return 0.5  # Default fallback
-
 
 def generate_report(request):
     selected_country = request.GET.get('country')
