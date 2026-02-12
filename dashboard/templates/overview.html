@@ -31,6 +31,9 @@
 
     /* Typing Animation */
     .typing { font-style: italic; color: #888; font-size: 0.8rem; }
+    
+    /* Larger chart sizes */
+    .plotly-graph-div { height: 500px !important; }
 </style>
 
 <div class="row g-3 mb-5">
@@ -74,17 +77,17 @@
     <div class="col-lg-5">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Subjects Mentioned</h5>
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents (Actor → Target)</h5>
             </div>
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
                     {% for sub in top_subjects %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ sub.strategic_intent|title }}
+                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
                         <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
                     </li>
                     {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No subject data found.</li>
+                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -174,7 +177,7 @@
                 <div class="mb-3 mt-2">
                     <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
                     <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
-                    <span class="badge bg-dark text-white">VI Score: {{ article.vulnerability_index|floatformat:2 }}</span>
+                    <span class="badge bg-dark text-white" title="Vulnerability Index per article">VI Score: {{ article.vulnerability_index|floatformat:2 }}</span>
                 </div>
                 <p class="small text-muted mb-3">{{ article.article_text|truncatewords:45 }}</p>
                 <div class="d-flex justify-content-between align-items-center">
