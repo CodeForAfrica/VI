@@ -186,17 +186,17 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs
+    # 2. Capture Inputs (only apply filters if both are provided)
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # 3. FOR MAIN DISPLAY: OPTIMIZED QUERY
+    # 3. FOR MAIN DISPLAY: Show ALL articles by default (no filters)
     full_stats_qs = MediaNarrative.objects.only(
         'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
         'vulnerability_index', 'confidence', 'article_text', 'posting_time'
     ).order_by('-posting_time')[:1000]
     
-    # 4. Calculator logic (when both params provided)
+    # 4. Calculator logic (only calculate when BOTH params are provided by user)
     if calc_target_country and calc_foreign_actor:
         calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').only(
             'strategic_intent', 'tone', 'target_country', 'inferred_actor', 'confidence'
@@ -226,6 +226,10 @@ def overview(request):
         else:
             # Use contextual calculation for country-actor pair
             cvi_score = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+    else:
+        # When no calculator parameters provided, show default state
+        calc_target_country = ""  # Reset to empty string for display
+        calc_foreign_actor = ""   # Reset to empty string for display
 
     # 5. Global Stats (optimized)
     total_articles = full_stats_qs.count()
@@ -249,7 +253,7 @@ def overview(request):
             daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
             if not daily_counts.empty:
                 fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=500)  # INCREASED HEIGHT
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=500)
                 chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
     except Exception as e:
         logger.error(f"Volume Chart Error: {e}")
@@ -308,20 +312,36 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': calc_target_country,
-        'selected_actor': calc_foreign_actor,
+        'selected_country': calc_target_country,  # Will be empty initially
+        'selected_actor': calc_foreign_actor,    # Will be empty initially
     }
     return render(request, 'overview.html', context)
 
 def calculate_contextual_score(target_country, foreign_actor):
     """Calculate contextual score using contextual_all_intents_v2.py data"""
     try:
-        # Load the contextual module
+        # Load the contextual module from the current directory
         import importlib.util
+        import os
         import sys
         
-        # Path to your contextual file (assuming it's in the same directory)
-        spec = importlib.util.spec_from_file_location("contextual_mod", "/Users/hannateshager/Documents/cfa/Vulnerability_index_tool/contextual_all_intents_v2.py")
+        # Get the current directory where the views.py file is located
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        contextual_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
+        
+        # Resolve the absolute path
+        contextual_file = os.path.abspath(contextual_file)
+        
+        # Check if file exists
+        if not os.path.exists(contextual_file):
+            logger.error(f"Contextual file not found: {contextual_file}")
+            return 0.5  # Return default score if file not found
+        
+        spec = importlib.util.spec_from_file_location("contextual_mod", contextual_file)
+        if spec is None:
+            logger.error(f"Could not load spec from {contextual_file}")
+            return 0.5
+            
         contextual_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contextual_mod)
         
@@ -390,10 +410,23 @@ def generate_report(request):
     # 3. Calculate CVI Risk Scores - FIXED: Use actual contextual data
     try:
         import importlib.util
+        import os
         import sys
         
-        # Load the contextual module
-        spec = importlib.util.spec_from_file_location("contextual_mod", "/Users/hannateshager/Documents/cfa/Vulnerability_index_tool/contextual_all_intents_v2.py")
+        # Load the contextual module from the current directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        contextual_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
+        contextual_file = os.path.abspath(contextual_file)
+        
+        if not os.path.exists(contextual_file):
+            logger.error(f"Contextual file not found: {contextual_file}")
+            return HttpResponse("Contextual file not found", status=500)
+        
+        spec = importlib.util.spec_from_file_location("contextual_mod", contextual_file)
+        if spec is None:
+            logger.error(f"Could not load spec from {contextual_file}")
+            return HttpResponse("Could not load contextual module", status=500)
+            
         contextual_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contextual_mod)
         
@@ -521,6 +554,7 @@ def generate_report(request):
         return response
 
     return HttpResponse("Error generating PDF.", status=500)
+    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
