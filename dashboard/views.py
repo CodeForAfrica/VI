@@ -140,9 +140,9 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs (for calculator only, not for initial view)
-    calc_target_country = request.GET.get('calc_target_country', '').strip()
-    calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
+    # 2. Capture Inputs (support both old and new parameter names for compatibility)
+    calc_target_country = request.GET.get('calc_target_country', '').strip() or request.GET.get('target_country', '').strip()
+    calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip() or request.GET.get('foreign_actor', '').strip()
     
     # 3. For initial view: SHOW ALL ARTICLES (no filters applied)
     full_stats_qs = MediaNarrative.objects.all().order_by('-posting_time')
@@ -166,7 +166,7 @@ def overview(request):
         
         # Calculate score for calculator
         if calc_article:
-            ml_service = MLInferenceService()  # Use consistent approach
+            ml_service = MLInferenceService()
             cvi_score = ml_service.calculate_vulnerability_index(
                 calc_article.strategic_intent or "neutral", 
                 calc_article.tone or "neutral", 
@@ -244,7 +244,7 @@ def overview(request):
     page_obj = paginator.get_page(page_number)
 
     # 11. Add vulnerability index to articles (calculate if needed)
-    ml_service = MLInferenceService()   # Use consistent approach
+    ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
         # Calculate vulnerability index if it's NULL in the database
@@ -277,8 +277,8 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'selected_country': calc_target_country,
-        'selected_actor': calc_foreign_actor,
+        'selected_country': calc_target_country,  # This will now capture from both parameter names
+        'selected_actor': calc_foreign_actor,    # This will now capture from both parameter names
     }
     return render(request, 'overview.html', context)    
 
