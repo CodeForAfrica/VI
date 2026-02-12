@@ -350,7 +350,7 @@ def calculate_contextual_score(target_country, foreign_actor):
         contextual_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contextual_mod)
         
-        # Get the CA matrix from the module - THIS USES YOUR SPECIFIC DATA
+        # Get the CA matrix from the module 
         g = contextual_mod.compute_gs()
         R = contextual_mod.compute_R(g)
         CA = contextual_mod.compute_CAs(g, R)
