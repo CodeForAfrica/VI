@@ -120,10 +120,14 @@
         </form>
     </div>
     <div class="cvi-right text-center">
-        {% if cvi_score %}
+        {% if selected_country and selected_actor %}
+            <!-- Always show the calculated score -->
             <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:2 }}</div>
             <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
-            <p class="small text-muted">Analysis for {{ selected_country }}</p>
+            <p class="small text-muted">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
+            {% if cvi_score == 0.0 %}
+            <p class="small text-warning">Note: Low vulnerability detected</p>
+            {% endif %}
         {% else %}
             <div class="text-muted opacity-50">
                 <i class="fas fa-calculator fa-3x mb-3"></i>
