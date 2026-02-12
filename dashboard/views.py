@@ -52,47 +52,41 @@ class DisinfoAnalysisChatbot:
         if any(word in query_l for word in irrelevant):
             return "I specialize in geopolitical narratives and vulnerability indices. I don't track sports or entertainment data."
     
-        # Handle multiple questions about ANY country
-        # Look for patterns like: "Give me the key narratives around [country] and how many articles did we analyse for this country"
+        # Handle multiple questions about ANY country with EXACT database matching
         import re
-        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
+        # Updated pattern to match your database format
+        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|côte d\'ivoire|cote d\'ivoire|cote d ivoire|coted\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         
         if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
-            country_mentioned = match.group(1).title()
+            country_mentioned = match.group(1).lower()
             
-            # Normalize country names to match database format
-            country_mapping = {
-                'Senegal': 'Senegal',
-                'Drc': 'DRC', 
-                'Democratic Republic Of Congo': 'DRC',
-                'Cote D\'ivoire': 'CoteIvoire',
-                'Cote Ivoire': 'CoteIvoire',
-                'Cote Ivoire': 'CoteIvoire',  # Alternative format
-                'Ivory Coast': 'CoteIvoire',
-                'Ethiopia': 'Ethiopia',
-                'South Africa': 'South Africa',
-                'Southafrica': 'South Africa'
-            }
-            
-            # Find the database format
+            # EXACT database format matching
             db_country = None
-            for key, db_format in country_mapping.items():
-                if key.lower() in country_mentioned.lower():
-                    db_country = db_format
-                    break
+            
+            # Match based on your actual database values
+            if 'south' in country_mentioned and 'africa' in country_mentioned:
+                db_country = 'South Africa'  # This is the exact format in your database
+            elif 'senegal' in country_mentioned:
+                db_country = 'Senegal'
+            elif 'drc' in country_mentioned:
+                db_country = 'DRC'
+            elif any(x in country_mentioned for x in ['cote', 'ivoire', 'ivory']):
+                db_country = 'Côte d\'Ivoire'  # This is the exact format in your database
+            elif 'ethiopia' in country_mentioned:
+                db_country = 'Ethiopia'
             
             if db_country:
-                # Count articles for this country
+                # COUNT articles for this EXACT database country name
                 country_articles = MediaNarrative.objects.filter(
-                    target_country__icontains=db_country.replace(' ', '').replace("'", "")
+                    target_country__iexact=db_country
                 ).count()
                 
-                # Get key narratives (top intents for this country)
+                # GET key narratives for this EXACT database country
                 country_narratives = MediaNarrative.objects.filter(
-                    target_country__icontains=db_country.replace(' ', '').replace("'", "")
+                    target_country__iexact=db_country
                 ).exclude(
-                    strategic_intent__in=['', None]
+                    strategic_intent__in=['', None, 'unknown', 'Unknown']
                 ).values('strategic_intent').annotate(
                     count=Count('id')
                 ).order_by('-count')[:5]
@@ -104,49 +98,41 @@ class DisinfoAnalysisChatbot:
                        f"• Total articles analyzed: {country_articles:,}\n"
                        f"• Key narratives:\n{narratives_str}")
     
-        # Handle multiple questions about ANY country (alternative pattern)
+        # Handle multiple questions about ANY country (alternative pattern - using your COUNTRIES list)
         for country in COUNTRIES:
+            # Match database format exactly
             if country.lower() in query_l and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
-                # Normalize the country name for database lookup
-                db_country = country.replace(' ', '').replace('-', '').replace('_', '')
+                # Use EXACT country name from your database
+                actual_db_country = country  # This should match your database format
+                
+                # Special case: if COUNTRIES has "South Africa" but database has different format
+                if country == "South Africa":
+                    actual_db_country = "South Africa"  # Use exact database format
+                elif country == "CoteIvoire":
+                    actual_db_country = "Côte d'Ivoire"  # Use exact database format
+                elif country == "DRC":
+                    actual_db_country = "DRC"  # Use exact database format
+                elif country == "Senegal":
+                    actual_db_country = "Senegal"  # Use exact database format
+                elif country == "Ethiopia":
+                    actual_db_country = "Ethiopia"  # Use exact database format
                 
                 country_articles = MediaNarrative.objects.filter(
-                    target_country__icontains=db_country
+                    target_country__iexact=actual_db_country
                 ).count()
                 
                 country_narratives = MediaNarrative.objects.filter(
-                    target_country__icontains=db_country
-                ).exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(
+                    target_country__iexact=actual_db_country
+                ).exclude(strategic_intent__in=['', None, 'unknown', 'Unknown']).values('strategic_intent').annotate(
                     count=Count('id')
                 ).order_by('-count')[:5]
                 
                 narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in country_narratives]
                 narratives_str = "\n".join(narratives_list) if narratives_list else "• No specific narratives identified"
                 
-                return (f"{country} Analysis:\n"
+                return (f"{actual_db_country} Analysis:\n"
                        f"• Total articles analyzed: {country_articles:,}\n"
                        f"• Key narratives:\n{narratives_str}")
-    
-        # Handle general multiple questions about multiple topics
-        if ('how many' in query_l or 'count' in query_l or 'total' in query_l) and (
-            'narrative' in query_l or 'key' in query_l or 'top' in query_l or 'articles' in query_l
-        ):
-            # If asking general questions about narratives and counts
-            total_articles = MediaNarrative.objects.exclude(article_text__icontains='football').count()
-            
-            # Get top narratives globally
-            top_narratives = MediaNarrative.objects.exclude(
-                strategic_intent__in=['', None]
-            ).values('strategic_intent').annotate(
-                count=Count('id')
-            ).order_by('-count')[:5]
-            
-            narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in top_narratives]
-            narratives_str = "\n".join(narratives_list) if narratives_list else "• No narratives identified"
-            
-            return (f"Overall Analysis:\n"
-                   f"• Total articles analyzed: {total_articles:,}\n"
-                   f"• Key narratives:\n{narratives_str}")
     
         # Dashboard-specific queries
         if any(word in query_l for word in ['dashboard', 'interface', 'how to', 'help', 'navigate', 'filter']):
