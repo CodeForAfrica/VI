@@ -191,10 +191,7 @@ def overview(request):
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
     # 3. FOR MAIN DISPLAY: Show ALL articles by default (no filters)
-    full_stats_qs = MediaNarrative.objects.only(
-        'target_country', 'inferred_actor', 'strategic_intent', 'tone', 
-        'vulnerability_index', 'confidence', 'article_text', 'posting_time'
-    ).order_by('-posting_time')[:1000]
+    total_articles = MediaNarrative.objects.count()
     
     # 4. Calculator logic (only calculate when BOTH params are provided by user)
     if calc_target_country and calc_foreign_actor:
