@@ -45,38 +45,128 @@ class DisinfoAnalysisChatbot:
         self.model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
     def process_query(self, query):
-        query_l = query.lower()
+        query_l = query.lower().strip()
         
-        # 1. Quick Relevance Check: If user asks about sports/music, pivot back.
+        # Quick Relevance Check
         irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity']
         if any(word in query_l for word in irrelevant):
             return "I specialize in geopolitical narratives and vulnerability indices. I don't track sports or entertainment data."
-
-        # 2. Database Stats Logic (enhanced)
-        if any(word in query_l for word in ['how many', 'count', 'total']):
-            total = MediaNarrative.objects.exclude(article_text__icontains='football').count()
-            return f"The database currently contains {total:,} relevant analyzed articles (excluding non-strategic content like sports)."
+    
+        # Handle multiple questions about ANY country
+        # Look for patterns like: "Give me the key narratives around [country] and how many articles did we analyse for this country"
+        import re
+        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
+        match = re.search(country_pattern, query_l, re.IGNORECASE)
         
-        # 3. Vulnerability Index Info (consistent with overview)
+        if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
+            country_mentioned = match.group(1).title()
+            
+            # Normalize country names to match database format
+            country_mapping = {
+                'Senegal': 'Senegal',
+                'Drc': 'DRC', 
+                'Democratic Republic Of Congo': 'DRC',
+                'Cote D\'ivoire': 'CoteIvoire',
+                'Cote Ivoire': 'CoteIvoire',
+                'Cote Ivoire': 'CoteIvoire',  # Alternative format
+                'Ivory Coast': 'CoteIvoire',
+                'Ethiopia': 'Ethiopia',
+                'South Africa': 'South Africa',
+                'Southafrica': 'South Africa'
+            }
+            
+            # Find the database format
+            db_country = None
+            for key, db_format in country_mapping.items():
+                if key.lower() in country_mentioned.lower():
+                    db_country = db_format
+                    break
+            
+            if db_country:
+                # Count articles for this country
+                country_articles = MediaNarrative.objects.filter(
+                    target_country__icontains=db_country.replace(' ', '').replace("'", "")
+                ).count()
+                
+                # Get key narratives (top intents for this country)
+                country_narratives = MediaNarrative.objects.filter(
+                    target_country__icontains=db_country.replace(' ', '').replace("'", "")
+                ).exclude(
+                    strategic_intent__in=['', None]
+                ).values('strategic_intent').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:5]
+                
+                narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in country_narratives]
+                narratives_str = "\n".join(narratives_list) if narratives_list else "• No specific narratives identified"
+                
+                return (f"{db_country} Analysis:\n"
+                       f"• Total articles analyzed: {country_articles:,}\n"
+                       f"• Key narratives:\n{narratives_str}")
+    
+        # Handle multiple questions about ANY country (alternative pattern)
+        for country in COUNTRIES:
+            if country.lower() in query_l and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
+                # Normalize the country name for database lookup
+                db_country = country.replace(' ', '').replace('-', '').replace('_', '')
+                
+                country_articles = MediaNarrative.objects.filter(
+                    target_country__icontains=db_country
+                ).count()
+                
+                country_narratives = MediaNarrative.objects.filter(
+                    target_country__icontains=db_country
+                ).exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:5]
+                
+                narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in country_narratives]
+                narratives_str = "\n".join(narratives_list) if narratives_list else "• No specific narratives identified"
+                
+                return (f"{country} Analysis:\n"
+                       f"• Total articles analyzed: {country_articles:,}\n"
+                       f"• Key narratives:\n{narratives_str}")
+    
+        # Handle general multiple questions about multiple topics
+        if ('how many' in query_l or 'count' in query_l or 'total' in query_l) and (
+            'narrative' in query_l or 'key' in query_l or 'top' in query_l or 'articles' in query_l
+        ):
+            # If asking general questions about narratives and counts
+            total_articles = MediaNarrative.objects.exclude(article_text__icontains='football').count()
+            
+            # Get top narratives globally
+            top_narratives = MediaNarrative.objects.exclude(
+                strategic_intent__in=['', None]
+            ).values('strategic_intent').annotate(
+                count=Count('id')
+            ).order_by('-count')[:5]
+            
+            narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in top_narratives]
+            narratives_str = "\n".join(narratives_list) if narratives_list else "• No narratives identified"
+            
+            return (f"Overall Analysis:\n"
+                   f"• Total articles analyzed: {total_articles:,}\n"
+                   f"• Key narratives:\n{narratives_str}")
+    
+        # Dashboard-specific queries
+        if any(word in query_l for word in ['dashboard', 'interface', 'how to', 'help', 'navigate', 'filter']):
+            return "Our dashboard displays disinformation analysis across multiple tabs. You can filter results by country, actor, or intent. Each article has a vulnerability index score."
+    
+        # Statistical queries
+        if any(word in query_l for word in ['how many', 'count', 'total', 'number', 'statistics']):
+            total = MediaNarrative.objects.exclude(article_text__icontains='football').count()
+            return f"The database currently contains {total:,} relevant analyzed articles."
+    
+        # Vulnerability index queries
         if any(word in query_l for word in ['vulnerability', 'index', 'score', 'risk']):
-            # Same calculation as overview function
-            from django.db.models import Avg
-            full_stats_qs = MediaNarrative.objects.all()
-            filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
-            
-            if filtered_qs.exists():
-                stats = filtered_qs.aggregate(avg_vulnerability=Avg('vulnerability_index'))
-                avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
-                avg_str = f"{avg_vulnerability:.3f}"
-            else:
-                avg_str = "0.000 (scores not yet calculated)"
-            
-            return f"Vulnerability index: 0-1 scale. Current average: {avg_str}. Scores calculated using ML and geopolitical factors."
-
-        # 4. Geopolitical AI analysis
+            avg_vulnerability = MediaNarrative.objects.exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
+            avg_str = f"{avg_vulnerability:.3f}" if avg_vulnerability else "0.000 (not yet calculated for all records)"
+            return f"The vulnerability index ranges from 0 (low risk) to 1 (high risk). Current average: {avg_str}"
+    
+        # Default AI analysis
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
-
+        
     def get_context_from_db(self, query):
         # Filter out irrelevant topics before sending context to the AI
         articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
@@ -135,23 +225,21 @@ def chatbot_response(request):
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
-    country_chart = ""
     country_list = []
     top_subjects = []
     cvi_score = None
     
-    # 2. Capture Inputs (for calculator only, not for initial view)
-    calc_target_country = request.GET.get('calc_target_country', '').strip() or request.GET.get('target_country', '').strip()
-    calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip() or request.GET.get('foreign_actor', '').strip()
+    # 2. Capture Inputs
+    calc_target_country = request.GET.get('calc_target_country', '').strip()
+    calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # 3. For initial view: SHOW ALL ARTICLES (no filters applied)
-    full_stats_qs = MediaNarrative.objects.all().order_by('-posting_time')
+    # 3. Optimize main queryset with select_related
+    full_stats_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').order_by('-posting_time')
     
-    # 4. For calculator: Apply filters only when both values are provided
+    # 4. Calculator logic (only when both params provided)
     if calc_target_country and calc_foreign_actor:
-        calc_qs = MediaNarrative.objects.all()
+        calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk')
         
-        # Apply calculator filters
         if any(term in calc_target_country.lower() for term in ["ivoire", "ivory", "cote"]):
             calc_qs = calc_qs.filter(
                 Q(target_country__icontains="Ivoire") | 
@@ -164,7 +252,6 @@ def overview(request):
         calc_qs = calc_qs.filter(inferred_actor__iexact=calc_foreign_actor)
         calc_article = calc_qs.first()
         
-        # Calculate score for calculator
         if calc_article:
             ml_service = MLInferenceService()
             cvi_score = ml_service.calculate_vulnerability_index(
@@ -174,55 +261,39 @@ def overview(request):
                 calc_foreign_actor,
                 calc_article.confidence or 0.5
             )
-            # Store the calculated score in the database for future reference
-            calc_article.vulnerability_index = cvi_score
-            calc_article.save(update_fields=['vulnerability_index'])
-    else:
-        # No calculator filters, show all articles
-        calc_article = None
 
-    # 5. Global Stats (from full dataset - ALL ARTICLES)
+    # 5. Global Stats (optimized)
     total_articles = full_stats_qs.count()
-    
-    # Exclude non-relevant topics for all stats
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     for word in irrelevant_keywords:
         full_stats_qs = full_stats_qs.exclude(article_text__icontains=word)
 
-    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
+    unique_outlets = full_stats_qs.select_related('media_outlet_fk').values('media_outlet').distinct().count()
     unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
     unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
 
-    # 6. FIXED: Average vulnerability index and confidence - SAFE AGGREGATION
+    # 6. Optimized averages
     from django.db.models import Avg
-    try:
-        # Filter out NULL values for safe aggregation
-        filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
-        
-        if filtered_qs.exists():
-            stats = filtered_qs.aggregate(
-                avg_vulnerability=Avg('vulnerability_index'),
-                avg_confidence=Avg('confidence')
-            )
-            avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
-            avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
-        else:
-            # If no records have vulnerability_index values, calculate them on-the-fly
-            avg_vulnerability = 0.0
-            avg_confidence = full_stats_qs.aggregate(Avg('confidence'))['confidence__avg'] or 0.0
-    except Exception:
-        # Fallback if anything goes wrong
+    filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
+    if filtered_qs.exists():
+        stats = filtered_qs.aggregate(
+            avg_vulnerability=Avg('vulnerability_index'),
+            avg_confidence=Avg('confidence')
+        )
+        avg_vulnerability = stats['avg_vulnerability'] if stats['avg_vulnerability'] is not None else 0.0
+        avg_confidence = stats['avg_confidence'] if stats['avg_confidence'] is not None else 0.0
+    else:
         avg_vulnerability = 0.0
-        avg_confidence = 0.0
+        avg_confidence = full_stats_qs.aggregate(Avg('confidence'))['confidence__avg'] or 0.0
 
-    # 7. Volume Line Chart (show all articles)
-    if full_stats_qs.exists():
+    # 7. Volume Chart (optimized)
+    chart_qs = full_stats_qs.exclude(posting_time__isnull=True)[:1000]  # Limit for performance
+    if chart_qs.exists():
         try:
-            df = pd.DataFrame.from_records(full_stats_qs.values('posting_time'))
+            df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
             df = df.dropna(subset=['posting_time'])
             df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
             daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-            
             if not daily_counts.empty:
                 fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
                 fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
@@ -230,27 +301,19 @@ def overview(request):
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
 
-    # 8. Top Countries Table (show all articles)
-    country_list = full_stats_qs.values('target_country') \
-        .annotate(total=Count('id')) \
-        .order_by('-total')[:10]
+    # 8. Optimized lists
+    country_list = full_stats_qs.values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
+    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 9. Top Subjects (show all articles)
-    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]) \
-        .values('strategic_intent') \
-        .annotate(total=Count('id')) \
-        .order_by('-total')[:5]
-
-    # 10. Pagination (show all articles by default)
-    paginator = Paginator(full_stats_qs, 10)
+    # 9. Pagination (optimized - limit records per page)
+    paginator = Paginator(full_stats_qs, 5)  # Reduced from 10 to 5
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 11. Add vulnerability index to articles (calculate if needed)
+    # 10. Add vulnerability index to articles (batch processing)
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
-        # Calculate vulnerability index if it's NULL in the database
         if article.vulnerability_index is None:
             vi_score = ml_service.calculate_vulnerability_index(
                 article.strategic_intent or 'neutral',
@@ -260,14 +323,12 @@ def overview(request):
                 article.confidence or 0.5
             )
             article.vulnerability_index = float(vi_score) if vi_score else 0.0
-            # Save the calculated score to database
-            article.save(update_fields=['vulnerability_index'])
         else:
             article.vulnerability_index = float(article.vulnerability_index) if article.vulnerability_index is not None else 0.0
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 12. Context
+    # 11. Context
     context = {
         'chart': chart,
         'page_obj': page_obj,
