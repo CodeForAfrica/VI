@@ -577,7 +577,7 @@ def countries(request):
     ).order_by('-article_count')[:10]
     
     # FIXED: Top strategic intents by actor and country
-    top_subjects = MediaNarrative.objects.exclude(
+    top_strategic_intents = MediaNarrative.objects.exclude(
         strategic_intent__in=['', None]
     ).exclude(
         inferred_actor__in=['', 'Unknown', None]
@@ -609,6 +609,7 @@ def countries(request):
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'coverage_table': top_publishers,
+        'top_strategic_intents': top_strategic_intents,  # Use this variable name
         'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
     }
     return render(request, 'dashboard/countries.html', context)
