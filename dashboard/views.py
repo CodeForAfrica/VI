@@ -47,15 +47,14 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
         
-        # Quick Relevance Check
-        irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity']
-        if any(word in query_l for word in irrelevant):
-            return "I specialize in geopolitical narratives and vulnerability indices. I don't track sports or entertainment data."
+        # Quick Relevance Check - Focus on foreign influence
+        irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'local sport', 'local entertainment']
+        if any(word in query_l for word in irrelevant) and not any(actor in query_l for actor in ['france', 'china', 'usa', 'us', 'russia', 'united states', 'unitedstates']):
+            return "I specialize in foreign influence analysis and vulnerability indices. I don't track local sports or entertainment unless they involve foreign actors."
     
-        # Handle multiple questions about ANY country with EXACT database matching
+        # Handle multiple questions about ANY country with foreign actor focus
         import re
-        # Updated pattern to match your database format
-        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|côte d\'ivoire|cote d\'ivoire|cote d ivoire|coted\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
+        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         
         if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
@@ -63,91 +62,63 @@ class DisinfoAnalysisChatbot:
             
             # EXACT database format matching
             db_country = None
-            
-            # Match based on your actual database values
             if 'south' in country_mentioned and 'africa' in country_mentioned:
-                db_country = 'South Africa'  # This is the exact format in your database
-            elif 'senegal' in country_mentioned:
+                db_country = 'South Africa'
+            elif country_mentioned in ['senegal', 'senegal']:
                 db_country = 'Senegal'
-            elif 'drc' in country_mentioned:
+            elif country_mentioned in ['drc', 'democratic republic of congo', 'congo']:
                 db_country = 'DRC'
             elif any(x in country_mentioned for x in ['cote', 'ivoire', 'ivory']):
-                db_country = 'Côte d\'Ivoire'  # This is the exact format in your database
-            elif 'ethiopia' in country_mentioned:
+                db_country = 'Côte d\'Ivoire'
+            elif country_mentioned in ['ethiopia', 'ethopia']:
                 db_country = 'Ethiopia'
             
             if db_country:
-                # COUNT articles for this EXACT database country name
+                # COUNT articles for this country that mention foreign actors
                 country_articles = MediaNarrative.objects.filter(
                     target_country__iexact=db_country
+                ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
                 ).count()
                 
-                # GET key narratives for this EXACT database country
+                # GET key narratives for this country WITH FOREIGN ACTORS
                 country_narratives = MediaNarrative.objects.filter(
                     target_country__iexact=db_country
                 ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+                ).exclude(
                     strategic_intent__in=['', None, 'unknown', 'Unknown']
-                ).values('strategic_intent').annotate(
+                ).values('strategic_intent', 'inferred_actor').annotate(
                     count=Count('id')
                 ).order_by('-count')[:5]
                 
-                narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in country_narratives]
-                narratives_str = "\n".join(narratives_list) if narratives_list else "• No specific narratives identified"
+                narratives_list = [f"• {item['strategic_intent']} by {item['inferred_actor']}: {item['count']} articles" for item in country_narratives]
+                narratives_str = "\n".join(narratives_list) if narratives_list else "• No foreign influence narratives identified"
                 
-                return (f"{db_country} Analysis:\n"
-                       f"• Total articles analyzed: {country_articles:,}\n"
-                       f"• Key narratives:\n{narratives_str}")
-    
-        # Handle multiple questions about ANY country (alternative pattern - using your COUNTRIES list)
-        for country in COUNTRIES:
-            # Match database format exactly
-            if country.lower() in query_l and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
-                # Use EXACT country name from your database
-                actual_db_country = country  # This should match your database format
-                
-                # Special case: if COUNTRIES has "South Africa" but database has different format
-                if country == "South Africa":
-                    actual_db_country = "South Africa"  # Use exact database format
-                elif country == "CoteIvoire":
-                    actual_db_country = "Côte d'Ivoire"  # Use exact database format
-                elif country == "DRC":
-                    actual_db_country = "DRC"  # Use exact database format
-                elif country == "Senegal":
-                    actual_db_country = "Senegal"  # Use exact database format
-                elif country == "Ethiopia":
-                    actual_db_country = "Ethiopia"  # Use exact database format
-                
-                country_articles = MediaNarrative.objects.filter(
-                    target_country__iexact=actual_db_country
-                ).count()
-                
-                country_narratives = MediaNarrative.objects.filter(
-                    target_country__iexact=actual_db_country
-                ).exclude(strategic_intent__in=['', None, 'unknown', 'Unknown']).values('strategic_intent').annotate(
-                    count=Count('id')
-                ).order_by('-count')[:5]
-                
-                narratives_list = [f"• {item['strategic_intent']}: {item['count']} articles" for item in country_narratives]
-                narratives_str = "\n".join(narratives_list) if narratives_list else "• No specific narratives identified"
-                
-                return (f"{actual_db_country} Analysis:\n"
-                       f"• Total articles analyzed: {country_articles:,}\n"
-                       f"• Key narratives:\n{narratives_str}")
+                return (f"{db_country} Foreign Influence Analysis:\n"
+                       f"• Total articles with foreign actor involvement: {country_articles:,}\n"
+                       f"• Key foreign influence narratives:\n{narratives_str}")
     
         # Dashboard-specific queries
         if any(word in query_l for word in ['dashboard', 'interface', 'how to', 'help', 'navigate', 'filter']):
-            return "Our dashboard displays disinformation analysis across multiple tabs. You can filter results by country, actor, or intent. Each article has a vulnerability index score."
+            return "Our dashboard analyzes foreign influence in African media. You can filter by country, foreign actor, or strategic intent. Each article has a vulnerability index score showing foreign influence risk."
     
         # Statistical queries
         if any(word in query_l for word in ['how many', 'count', 'total', 'number', 'statistics']):
-            total = MediaNarrative.objects.exclude(article_text__icontains='football').count()
-            return f"The database currently contains {total:,} relevant analyzed articles."
+            # Count only articles with foreign actor mentions
+            total = MediaNarrative.objects.exclude(
+                inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+            ).exclude(article_text__icontains='football').count()
+            return f"The database contains {total:,} articles analyzing foreign influence (excluding local content)."
     
         # Vulnerability index queries
         if any(word in query_l for word in ['vulnerability', 'index', 'score', 'risk']):
-            avg_vulnerability = MediaNarrative.objects.exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
+            # Calculate average for articles with foreign actors only
+            avg_vulnerability = MediaNarrative.objects.exclude(
+                inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+            ).exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
             avg_str = f"{avg_vulnerability:.3f}" if avg_vulnerability else "0.000 (not yet calculated for all records)"
-            return f"The vulnerability index ranges from 0 (low risk) to 1 (high risk). Current average: {avg_str}"
+            return f"The vulnerability index measures foreign influence risk (0-1). Current average: {avg_str}"
     
         # Default AI analysis
         context = self.get_context_from_db(query)
@@ -219,10 +190,12 @@ def overview(request):
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     
-    # 3. Optimize main queryset with select_related
-    full_stats_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk').order_by('-posting_time')
+    # 3. FOR MAIN DISPLAY: SHOW ONLY RELEVANT ARTICLES (with foreign actors)
+    full_stats_qs = MediaNarrative.objects.exclude(
+        inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+    ).select_related('media_outlet_fk', 'journalist_fk').order_by('-posting_time')
     
-    # 4. Calculator logic (only when both params provided)
+    # 4. Calculator logic (when both params provided)
     if calc_target_country and calc_foreign_actor:
         calc_qs = MediaNarrative.objects.select_related('media_outlet_fk', 'journalist_fk')
         
@@ -248,7 +221,7 @@ def overview(request):
                 calc_article.confidence or 0.5
             )
 
-    # 5. Global Stats (optimized)
+    # 5. Global Stats (relevant articles only)
     total_articles = full_stats_qs.count()
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
     for word in irrelevant_keywords:
@@ -256,9 +229,9 @@ def overview(request):
 
     unique_outlets = full_stats_qs.select_related('media_outlet_fk').values('media_outlet').distinct().count()
     unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
+    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None, 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']).values('inferred_actor').distinct().count()
 
-    # 6. Optimized averages
+    # 6. Optimized averages (relevant articles only)
     from django.db.models import Avg
     filtered_qs = full_stats_qs.exclude(vulnerability_index__isnull=True)
     if filtered_qs.exists():
@@ -272,8 +245,8 @@ def overview(request):
         avg_vulnerability = 0.0
         avg_confidence = full_stats_qs.aggregate(Avg('confidence'))['confidence__avg'] or 0.0
 
-    # 7. Volume Chart (optimized)
-    chart_qs = full_stats_qs.exclude(posting_time__isnull=True)[:1000]  # Limit for performance
+    # 7. Volume Chart (relevant articles only)
+    chart_qs = full_stats_qs.exclude(posting_time__isnull=True)[:1000]
     if chart_qs.exists():
         try:
             df = pd.DataFrame.from_records(chart_qs.values('posting_time'))
@@ -287,16 +260,16 @@ def overview(request):
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
 
-    # 8. Optimized lists
+    # 8. Optimized lists (relevant articles only)
     country_list = full_stats_qs.values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 9. Pagination (optimized - limit records per page)
-    paginator = Paginator(full_stats_qs, 5)  # Reduced from 10 to 5
+    # 9. Pagination (relevant articles only)
+    paginator = Paginator(full_stats_qs, 5)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 10. Add vulnerability index to articles (batch processing)
+    # 10. Add vulnerability index to articles
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
@@ -318,7 +291,7 @@ def overview(request):
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,
+        'total_articles': total_articles,  # Now shows only relevant articles
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
@@ -332,8 +305,7 @@ def overview(request):
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
     }
-    return render(request, 'overview.html', context)    
-
+    return render(request, 'overview.html', context)
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
