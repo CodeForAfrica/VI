@@ -1,14 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include
-from dashboard import views  # ADD THIS LINE
-from django.views.generic import RedirectView
+from dashboard import views  # Make sure this import exists
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('dashboard.urls')),  # Your main dashboard
-    path('vulnerability-index/', include('dashboard.urls')),  # SEO-friendly URL
-    path('vi-tool/', include('dashboard.urls')),  # Another SEO-friendly option
-    path('dashboard/', include('dashboard.urls')),  # Dashboard URL
-    path('generate-report/', views.generate_report, name='generate_report'),  # ADD THIS
-    path('index/', RedirectView.as_view(pattern_name='overview'), name='index'),  # Redirect
+    path('', include('dashboard.urls')),
+    path('generate-report/', views.generate_report, name='generate_report'),
+    path('report/', views.generate_report, name='report'),
+    path('chatbot-response/', views.chatbot_response, name='chatbot_response'),
 ]
