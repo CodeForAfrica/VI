@@ -35,7 +35,6 @@ class MLInferenceService:
         
         self._model_cache = {}  # Cache loaded models
         self._temp_dirs = set()  # Track temp directories
-        self._contextual_module = None
         self._strategic_label_encoder = None
         self._tone_label_encoder = None
         self._strategic_vocab = None
@@ -138,37 +137,15 @@ class MLInferenceService:
         return classifier
     
     def _load_contextual_module_from_s3(self):
-        """Load contextual module from S3 - FIXED: Handle missing file gracefully"""
-        if self._contextual_module is not None:
-            return self._contextual_module
-        
-        if not self.s3_client:
-            # If no S3, try to load from local file
-            try:
-                import os
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                local_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
-                
-                if os.path.exists(local_file):
-                    spec = importlib.util.spec_from_file_location('contextual_mod', local_file)
-                    contextual_mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(contextual_mod)
-                    self._contextual_module = contextual_mod
-                    return contextual_mod
-            except Exception as e:
-                logger.error(f"Error loading contextual module from local: {e}")
-            return None
-        
+        """ONLY CHANGE: Load contextual module from S3 - SIMPLIFIED"""
         try:
-            # Download contextual module from S3
+            # Download contextual module from S3 - USE CORRECT PATH
             response = self.s3_client.get_object(
                 Bucket=self.bucket_name,
-                Key='models/contextual_all_intents_v2.py'  # This might not exist in S3
+                Key='contextual_all_intents_v2.py'  # SIMPLIFIED PATH - JUST THE FILE NAME
             )
             
             # Save temporarily and import
-            import tempfile
-            import importlib.util
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(response['Body'].read().decode('utf-8'))
                 temp_py_path = f.name
@@ -177,11 +154,10 @@ class MLInferenceService:
             contextual_mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(contextual_mod)
             
-            self._contextual_module = contextual_mod
             return contextual_mod
         except Exception as e:
-            logger.warning(f"S3 contextual module not found, trying local file: {e}")
-            # Try to load from local file instead
+            logger.warning(f"S3 contextual file not found, trying local: {e}")
+            # Try to load from local file
             try:
                 import os
                 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -191,10 +167,9 @@ class MLInferenceService:
                     spec = importlib.util.spec_from_file_location('contextual_mod', local_file)
                     contextual_mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(contextual_mod)
-                    self._contextual_module = contextual_mod
                     return contextual_mod
             except Exception as local_error:
-                logger.error(f"Error loading contextual module from local: {local_error}")
+                logger.error(f"Local contextual file also failed: {local_error}")
             return None
     
     def preprocess_text(self, text):
@@ -305,109 +280,76 @@ class MLInferenceService:
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """Calculate vulnerability index using contextual module and PPI approach (from your notebook)"""
         try:
-            # Load contextual module - FIXED: Handle gracefully if not available
+            # Load contextual module from S3 - ONLY CHANGE: Simplified loading
             contextual_mod = self._load_contextual_module_from_s3()
             
             if contextual_mod:
-                # Use contextual module if available (from your notebook) - WE'RE USING THE ORIGINAL MODULE
+                # Use contextual module if available
                 try:
-                    # Compute g, R, CA using functions from the ORIGINAL contextual_all_intents_v2.py
+                    # Compute g, R, CA using functions from your contextual_all_intents_v2.py
                     g = contextual_mod.compute_gs()
                     R = contextual_mod.compute_R(g)
                     CA = contextual_mod.compute_CAs(g, R)
                     
-                    # Get the contextual risk for this intent-category-target_country combination
+                    # Get the contextual risk for this specific country-actor pair
                     contextual_risk = 0.0
-                    # Use the most relevant intent category based on strategic intent
-                    intent_category = strategic_intent  # Use the original intent name
+                    intent_category = strategic_intent
                     
-                    if intent_category in CA:
-                        # Convert target country to match the EXACT format in your contextual module
-                        # Countries in your contextual_all_intents_v2.py: Senegal, DRC, CoteIvoire, Ethiopia, South Africa
-                        country_mapping = {
-                            "senegal": "Senegal",
-                            "drc": "DRC", 
-                            "congo": "DRC",  # Alternative name for DRC
-                            "democraticrepublicofcongo": "DRC",
-                            "democratic republic of congo": "DRC",
-                            "coteivoire": "CoteIvoire",  # Exact format from your module (no apostrophe)
-                            "coted'ivoire": "CoteIvoire",  # With apostrophe
-                            "ivorycoast": "CoteIvoire",
-                            "ivory coast": "CoteIvoire",
-                            "ethiopia": "Ethiopia",
-                            "southafrica": "South Africa",  # Space in the name
-                            "south africa": "South Africa"
-                        }
-                        
-                        # Normalize the target country name
-                        target_clean = target_country.lower().replace(" ", "").replace("'", "").replace("-", "").replace("_", "")
-                        
-                        # Find the exact format used in your contextual module
-                        formatted_country = None
-                        for key, expected_format in country_mapping.items():
-                            key_clean = key.lower().replace(" ", "").replace("'", "").replace("-", "").replace("_", "")
-                            if target_clean == key_clean:
-                                formatted_country = expected_format
-                                break
-                        
-                        # If still not found, try direct matching
-                        if formatted_country is None:
-                            available_countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia", "South Africa"]
-                            for country in available_countries:
-                                country_clean = country.lower().replace(" ", "").replace("'", "").replace("-", "").replace("_", "")
-                                if target_clean == country_clean:
-                                    formatted_country = country
-                                    break
-
-                        # Now get the contextual risk if we found a match
-                        if formatted_country and formatted_country in CA[intent_category]:
-                            # Use inferred actor or default to a known actor from your module
-                            # Actors in your contextual module: China, France, UnitedStates, Russia, Rwanda, Saudi, Turkey, UAE, Israel, Iran, NonState
-                            actor_mapping = {
-                                "china": "China",
-                                "france": "France", 
-                                "unitedstates": "UnitedStates",
-                                "russia": "Russia",
-                                "rwanda": "Rwanda",
-                                "saudi": "Saudi",
-                                "turkey": "Turkey",
-                                "uae": "UAE",
-                                "israel": "Israel",
-                                "iran": "Iran",
-                                "nonstate": "NonState",
-                                "government": "China",  # Default to China for government
-                                "opposition": "NonState",  # Default to NonState for opposition
-                                "media": "NonState"  # Default to NonState for media
-                            }
-                            
-                            actor_clean = inferred_actor.lower().replace(" ", "").replace("-", "").replace("_", "")
-                            formatted_actor = None
-                            for key, expected_format in actor_mapping.items():
-                                key_clean = key.lower().replace(" ", "").replace("-", "").replace("_", "")
-                                if actor_clean == key_clean:
-                                    formatted_actor = expected_format
-                                    break
-                            
-                            # If actor still not found, use first available actor as fallback
-                            if formatted_actor is None:
-                                available_actors = list(CA[intent_category][formatted_country].keys()) if formatted_country in CA[intent_category] else []
-                                if available_actors:
-                                    formatted_actor = available_actors[0]
-                            
-                            # Get the contextual risk value
-                            if formatted_country in CA[intent_category] and formatted_actor:
-                                if formatted_actor in CA[intent_category][formatted_country]:
-                                    contextual_risk = CA[intent_category][formatted_country][formatted_actor]
+                    # Normalize country names to match contextual module
+                    country_mapping = {
+                        "south africa": "South Africa",
+                        "senegal": "Senegal", 
+                        "drc": "DRC",
+                        "cote d'ivoire": "CoteIvoire",
+                        "cote ivoire": "CoteIvoire",
+                        "ivory coast": "CoteIvoire",
+                        "ethiopia": "Ethiopia"
+                    }
                     
-                    # Calculate composite risk using PPI approach (from your notebook)
+                    actor_mapping = {
+                        "uae": "UAE",
+                        "china": "China",
+                        "france": "France",
+                        "us": "UnitedStates",
+                        "united states": "UnitedStates",
+                        "russia": "Russia",
+                        "saudi": "Saudi",
+                        "turkey": "Turkey",
+                        "israel": "Israel",
+                        "iran": "Iran"
+                    }
+                    
+                    formatted_country = country_mapping.get(target_country.lower(), target_country)
+                    formatted_actor = actor_mapping.get(inferred_actor.lower(), inferred_actor)
+                    
+                    # Get the first available intent category
+                    intent_categories = list(CA.keys())
+                    if intent_categories and formatted_country in CA[intent_categories[0]]:
+                        if formatted_actor in CA[intent_categories[0]][formatted_country]:
+                            contextual_risk = CA[intent_categories[0]][formatted_country][formatted_actor]
+                    
+                    # Calculate composite risk
                     strategic_weight = 0.35
                     tone_weight = 0.25
                     confidence_weight = 0.2
-                    contextual_weight = 0.2  # Contextual risk from geopolitical model
+                    contextual_weight = 0.2
                     
-                    # Map intent and tone to risk scores (from your notebook logic)
-                    intent_risk = self._map_intent_to_risk(strategic_intent, CA)
-                    tone_risk = self._map_tone_to_risk(tone)
+                    # Map intent and tone to risk scores
+                    intent_scores = {
+                        'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
+                        'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
+                        'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
+                        'positive': 0.1, 'supportive': 0.0
+                    }
+                    
+                    tone_scores = {
+                        'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
+                        'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
+                        'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
+                    }
+                    
+                    intent_risk = intent_scores.get(strategic_intent.lower(), 0.3)
+                    tone_risk = tone_scores.get(tone.lower(), 0.3)
                     
                     # Normalize scores
                     normalized_intent = min(max(intent_risk, 0), 1)
@@ -484,43 +426,6 @@ class MLInferenceService:
             tone_score = tone_scores.get(tone.lower(), 0.3)
             
             return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
-    
-    def _map_intent_to_risk(self, intent, CA):
-        """Map strategic intent to risk score using contextual analysis (from your notebook)"""
-        if not CA:
-            # Simple mapping if contextual analysis unavailable
-            intent_scores = {
-                'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                'positive': 0.1, 'supportive': 0.0
-            }
-            return intent_scores.get(intent.lower(), 0.3)
-        
-        # Use contextual risk assessment if available (from your notebook)
-        # This would typically involve matching intent to CA keys
-        for ca_intent, risk_dict in CA.items():
-            if intent.lower() in ca_intent.lower() or ca_intent.lower() in intent.lower():
-                # Return the average risk across all countries and actors
-                total_risk = 0.0
-                count = 0
-                for country_risks in risk_dict.values():
-                    for risk_value in country_risks.values():
-                        total_risk += risk_value
-                        count += 1
-                if count > 0:
-                    return min(total_risk / count, 1.0)
-        
-        return 0.3  # Default neutral risk
-    
-    def _map_tone_to_risk(self, tone):
-        """Map tone to risk score (from your notebook)"""
-        tone_scores = {
-            'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-            'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-            'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-        }
-        return tone_scores.get(tone.lower(), 0.3)
     
     def cleanup(self):
         """Clean up temporary directories"""
