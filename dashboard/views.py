@@ -177,23 +177,25 @@ def chatbot_response(request):
         })
 
 def calculate_contextual_score(target_country, foreign_actor):
-    """Direct lookup from pre-calculated CSV file - returns highest scoring intent and score"""
+    """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
     try:
         import pandas as pd
         import os
         
-        # Load the CSV file with final risk scores
+        # Load YOUR CSV file with the exact path
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
         
+        # Verify the file exists
         if not os.path.exists(csv_file):
             logger.error(f"CSV file not found: {csv_file}")
+            logger.error(f"Files in parent directory: {os.listdir(os.path.join(current_dir, '..'))}")
             return 0.5, "Unknown"  # Default fallback
         
-        # Read the CSV file
+        # Read YOUR CSV file
         df = pd.read_csv(csv_file)
         
-        # Normalize country and actor names to match CSV format
+        # Normalize country and actor names to match your CSV format
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal", 
@@ -217,15 +219,15 @@ def calculate_contextual_score(target_country, foreign_actor):
             "iran": "Iran"
         }
         
-        # Format the inputs to match CSV format
+        # Format the inputs to match YOUR CSV format
         formatted_country = country_mapping.get(target_country.lower(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
         
-        # Find all rows matching this country-actor combination
+        # Find all rows matching this country-actor combination in YOUR CSV
         matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
         
         if not matching_rows.empty:
-            # Find the row with the highest FinalRisk score
+            # Find the row with the HIGHEST FinalRisk score for this country-actor combination
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             max_score = max_row['FinalRisk']
             max_intent = max_row['intent']
@@ -248,13 +250,16 @@ def calculate_contextual_score(target_country, foreign_actor):
                 return float(max_score), max_intent
         
         # If no match found, return default
-        logger.info(f"No score found for {target_country}-{foreign_actor}, using default")
+        logger.info(f"No score found for {target_country}-{foreign_actor} in CSV, using default")
         return 0.5, "Unknown"
         
+    except FileNotFoundError:
+        logger.error(f"CSV file not found at: {csv_file}")
+        return 0.5, "Unknown"
     except Exception as e:
         logger.error(f"Contextual score lookup error: {e}")
         return 0.5, "Unknown"  # Default fallback
-
+        
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
@@ -865,33 +870,20 @@ def generate_report(request):
     actor_map = {"US": "UnitedStates"}
     report_data = []
 
-    # 3. Calculate CVI Risk Scores - FIXED: Use actual contextual data
+    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data
     try:
-        import importlib.util
+        import pandas as pd
         import os
-        import sys
         
-        # Load the contextual module from the current directory
+        # Load the CSV file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        contextual_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
-        contextual_file = os.path.abspath(contextual_file)
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
         
-        if not os.path.exists(contextual_file):
-            logger.error(f"Contextual file not found: {contextual_file}")
-            return HttpResponse("Contextual file not found", status=500)
+        if not os.path.exists(csv_file):
+            logger.error(f"CSV file not found: {csv_file}")
+            return HttpResponse("CSV file not found", status=500)
         
-        spec = importlib.util.spec_from_file_location("contextual_mod", contextual_file)
-        if spec is None:
-            logger.error(f"Could not load spec from {contextual_file}")
-            return HttpResponse("Could not load contextual module", status=500)
-            
-        contextual_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(contextual_mod)
-        
-        # Get the CA matrix
-        g = contextual_mod.compute_gs()
-        R = contextual_mod.compute_R(g)
-        CA = contextual_mod.compute_CAs(g, R)
+        df = pd.read_csv(csv_file)
         
         # Normalize country names
         country_mapping = {
@@ -922,46 +914,71 @@ def generate_report(request):
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
             
-            # Get the first available intent category
-            intent_categories = list(CA.keys())
-            if intent_categories and formatted_country in CA[intent_categories[0]]:
-                if formatted_actor in CA[intent_categories[0]][formatted_country]:
-                    score = CA[intent_categories[0]][formatted_country][formatted_actor]
-                    risk_level = "High" if score > 0.7 else "Medium" if score > 0.4 else "Low"
-                    report_data.append({
-                        'actor': actor,
-                        'cvi_score': round(float(score), 3),
-                        'risk_level': risk_level,
-                    })
-                else:
-                    report_data.append({
-                        'actor': actor,
-                        'cvi_score': 0.0,
-                        'risk_level': "N/A",
-                    })
+            # Get scores from CSV for this specific country-actor pair
+            matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
+            
+            if not matching_rows.empty:
+                # Get the highest score across all intents for this country-actor
+                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
+                max_score = max_row['FinalRisk']
+                max_intent = max_row['intent']
+                
+                risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
+                report_data.append({
+                    'actor': actor,
+                    'cvi_score': round(float(max_score), 3),
+                    'risk_level': risk_level,
+                    'primary_threat': max_intent
+                })
             else:
                 report_data.append({
                     'actor': actor,
                     'cvi_score': 0.0,
                     'risk_level': "N/A",
+                    'primary_threat': "Unknown"
                 })
     except Exception as e:
         logger.error(f"CVI calculation error: {e}")
-        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A"} for a in selected_actors]
+        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Unknown"} for a in selected_actors]
 
-    # 4. Generate Narrative Volume Chart
+    # 4. Get Key Narratives with URLs for the selected country
+    key_narratives = []
+    try:
+        # Get articles for the selected country
+        country_articles = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            strategic_intent__in=['', None, 'Unknown', 'unknown']
+        ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
+        
+        for article in country_articles:
+            narrative_data = {
+                'intent': article.strategic_intent,
+                'tone': article.tone,
+                'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
+                'url': article.url,
+                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
+                'media_outlet': article.media_outlet,
+                'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown"
+            }
+            key_narratives.append(narrative_data)
+    except Exception as e:
+        logger.error(f"Key narratives error: {e}")
+        key_narratives = []
+
+    # 5. Generate Narrative Volume Chart
     articles_count = MediaNarrative.objects.filter(target_country__iexact=selected_country).count()
     volume_data = MediaNarrative.objects.filter(target_country__iexact=selected_country)\
         .values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
     if volume_data.exists():
-        df = pd.DataFrame(list(volume_data))
-        df = df.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-        df = df.dropna(subset=['date']).sort_values('date')
+        df_vol = pd.DataFrame(list(volume_data))
+        df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+        df_vol = df_vol.dropna(subset=['date']).sort_values('date')
 
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(df['date'], df['articles'], marker='o', color='royalblue')
+        ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
         ax.set_title(f'Narrative Volume Over Time - {selected_country}')
         ax.grid(True, linestyle='--', alpha=0.7)
         plt.xticks(rotation=45)
@@ -972,25 +989,35 @@ def generate_report(request):
         volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
         plt.close(fig)
 
-    # 5. Generate Factor Contribution Chart
+    # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        factors = {'Economic': 0.35, 'Sovereignty': 0.18, 'Election': 0.11, 'Social': 0.07} # Sample
-        df_f = pd.DataFrame({'Factor': list(factors.keys()), 'Val': list(factors.values())}).sort_values('Val')
-
-        fig, ax = plt.subplots(figsize=(7, 5))
-        ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
-        ax.set_title(f'CVI Factor Contribution - {selected_country}')
+        # Get top strategic intents for this country
+        intent_counts = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            strategic_intent__in=['', None, 'Unknown', 'unknown']
+        ).values('strategic_intent').annotate(
+            count=Count('id')
+        ).order_by('-count')[:5]
         
-        img_buffer = BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight')
-        img_buffer.seek(0)
-        factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-        plt.close(fig)
+        if intent_counts.exists():
+            df_f = pd.DataFrame(list(intent_counts))
+            df_f = df_f.rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
+            
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
+            ax.set_title(f'Top Strategic Intents - {selected_country}')
+            
+            img_buffer = BytesIO()
+            plt.savefig(img_buffer, format='png', bbox_inches='tight')
+            img_buffer.seek(0)
+            factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+            plt.close(fig)
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 6. Render PDF
+    # 7. Render PDF
     context = {
         'country': selected_country,
         'report_data': report_data,
@@ -998,6 +1025,7 @@ def generate_report(request):
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
+        'key_narratives': key_narratives,  # NEW: Include key narratives with URLs
     }
 
     template = get_template('dashboard/report_pdf.html')
