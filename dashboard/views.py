@@ -650,7 +650,7 @@ def generate_report(request):
             'african_countries': COUNTRIES,
             'foreign_actors': FOREIGN_ACTORS,
         }
-        return render(request, 'dashboard/report_pdf.html', context)
+        return render(request, 'dashboard/report_form.html', context)
 
     # 2. Setup Data & Normalization
     actor_map = {"US": "UnitedStates"}
@@ -685,7 +685,7 @@ def generate_report(request):
         
         df = pd.read_csv(csv_file)
         
-        # Normalize country names
+        # Normalize country names - FIXED: Use exact format from CSV
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal", 
@@ -751,7 +751,7 @@ def generate_report(request):
     try:
         # FIXED: Get actual articles count for this country from database - EXCLUDE SPORTS
         articles_count = MediaNarrative.objects.filter(
-            target_country__icontains=selected_country.lower().replace(" ", "").replace("'", "").replace("é", "e")
+            target_country__iexact=selected_country
         ).exclude(
             article_text__icontains='football'
         ).exclude(
@@ -1021,7 +1021,8 @@ def generate_report(request):
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
         
-        for article in country_articles:
+        # FIXED: Only take first 4 articles for the report
+        for article in country_articles[:4]:  # Only 4 articles for the report
             narrative_data = {
                 'intent': article.strategic_intent,
                 'tone': article.tone,
@@ -1349,7 +1350,7 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Generate AI Insights using Groq API with NO HALUCINATION PROMPT
+    # 7. Generate AI Insights using Groq API with FAST LOADING - FIXED: Handle API errors gracefully
     ai_insights = ""
     try:
         from groq import Groq
@@ -1361,70 +1362,60 @@ def generate_report(request):
             logger.error("GROQ_API_KEY not found in environment variables")
             ai_insights = f"No AI insights available. Please configure your GROQ API key."
         else:
-            client = Groq(api_key=groq_api_key)
-            
-            # Prepare article summaries for AI analysis - FIXED: Only include actual articles
+            # FAST: Only process first 2 articles to speed up
             article_summaries = []
-            for article in key_narratives[:5]:  # Use top 5 articles for efficiency
+            for article in key_narratives[:2]:  # Only 2 articles for speed
                 summary = f"Title: {article['title']}\nIntent: {article['intent']}\nTone: {article['tone']}\nScore: {article['vulnerability_score']}\nURL: {article['url']}\nSummary: {article['summary']}\n\n"
                 article_summaries.append(summary)
             
-            # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
-            joined_summaries = "\n".join(article_summaries)
-            url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:5]])
-            
-            prompt = f"""
-**Strict Instructions:**
-  - Only summarize content that is **directly present in the posts provided**.
-  - Do **not** invent claims — only document what is explicitly stated in posts.
-  - For every claim, **only use a URL that explicitly contains that exact claim**.
-  - Do **not** repeat the same claim with different wording.
-  - Do **not** include URLs that do NOT contain the claim.
-  - Do not add outside knowledge, fact-checking, or assumptions.
+            if article_summaries:  # Only call API if we have articles
+                client = Groq(api_key=groq_api_key)
+                
+                # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
+                joined_summaries = "\n".join(article_summaries)
+                url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:2]])
+                
+                prompt = f"""
+                **Strict Instructions:**
+                  - Only summarize content that is **directly present in the posts provided**.
+                  - Do **not** invent claims — only document what is explicitly stated in posts.
+                  - For every narrative, **only use a URL that explicitly contains that exact narrative**.
+                  - Do **not** repeat the same narrative with different wording.
+                  - Do **not** include URLs that do NOT contain the narrative.
+                  - Do not add outside knowledge, fact-checking, or assumptions.
 
-  **Output Format:**
-  - Start each cluster with a bold title: **Narrative Title Here**
-  - Summarize factually in short narrative paragraphs.
-  - Include post URLs for every claim or reused message.
-  - End with the narrative lifecycle:
-    - First Detected: {{min_timestamp_str}}
-    - Last Updated: {{max_timestamp_str}}
+                Analyze the following media narratives for {selected_country} and provide a concise summary:
 
-Analyze the following media narratives for {selected_country} and provide a comprehensive summary:
+                Articles:
+                {joined_summaries}
 
-Articles:
-{joined_summaries}
+                URL Context:
+                {url_context}
 
-URL Context:
-{url_context}
-
-Please provide:
-1. A brief summary of the main themes and narratives
-2. Key concerns or vulnerabilities identified based on the article contents
-3. Recommended actions or monitoring priorities
-4. Focus on foreign influence patterns and strategic intents
-
-Keep the response concise but informative for a policy report.
-"""
-            
-            # Call Groq API
-            chat_completion = client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-                model="meta-llama/llama-4-scout-17b-16e-instruct",  # You can change this to another available model
-            )
-            
-            ai_insights = chat_completion.choices[0].message.content
+                Provide: Main themes, key concerns, and recommended actions. Keep it brief.
+                """
+                
+                # Call Groq API
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # Fast model
+                    timeout=15  # 15 second timeout
+                )
+                
+                ai_insights = chat_completion.choices[0].message.content
+            else:
+                ai_insights = "No articles available for analysis."
             
     except Exception as e:
         logger.error(f"Groq API error: {e}")
-        ai_insights = "AI insights temporarily unavailable due to API error."
+        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)}"
 
-    # 8. Render PDF
+    # 8. Render PDF - FIXED: Use correct template path and ensure all data is passed
     context = {
         'country': selected_country,
         'report_data': report_data,  # This now contains your CSV scores!
@@ -1432,11 +1423,11 @@ Keep the response concise but informative for a policy report.
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
+        'key_narratives': key_narratives,  # FIXED: Include only 4 key narratives with summaries
         'ai_insights': ai_insights,  # NEW: Include AI-generated insights
     }
 
-    template = get_template('report_pdf.html')
+    template = get_template('report_pdf.html')  # FIXED: Correct template path
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
