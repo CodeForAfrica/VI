@@ -650,7 +650,7 @@ def generate_report(request):
             'african_countries': COUNTRIES,
             'foreign_actors': FOREIGN_ACTORS,
         }
-        return render(request, 'dashboard/report_form.html', context)
+        return render(request, 'dashboard/report_pdf.html', context)
 
     # 2. Setup Data & Normalization
     actor_map = {"US": "UnitedStates"}
@@ -751,7 +751,7 @@ def generate_report(request):
     try:
         # FIXED: Get actual articles count for this country from database - EXCLUDE SPORTS
         articles_count = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
+            target_country__icontains=selected_country.lower().replace(" ", "").replace("'", "").replace("é", "e")
         ).exclude(
             article_text__icontains='football'
         ).exclude(
@@ -1599,7 +1599,7 @@ def generate_report(request):
             'african_countries': COUNTRIES,
             'foreign_actors': FOREIGN_ACTORS,
         }
-        return render(request, 'dashboard/report_form.html', context)
+        return render(request, 'dashboard/report_pdf.html', context)
 
     # 2. Setup Data & Normalization
     actor_map = {"US": "UnitedStates"}
