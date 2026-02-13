@@ -749,7 +749,7 @@ def generate_report(request):
     # 4. Get Key Narratives with URLs for the selected country - FIXED: Accurate counting and data
     key_narratives = []
     try:
-        # FIXED: Get actual articles count for this country from database - EXCLUDE SPORTS
+        # FIXED: Get actual articles count for this country from database - MINIMAL EXCLUSIONS
         articles_count = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -760,131 +760,9 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
         ).count()
         
-        # Get top articles for this country - FIXED: Exclude sports articles
+        # Get top articles for this country - MINIMAL EXCLUSIONS (only sports)
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -895,128 +773,6 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
@@ -1050,128 +806,6 @@ def generate_report(request):
         article_text__icontains='sport'
     ).exclude(
         article_text__icontains='sports'
-    ).exclude(
-        article_text__icontains='match'
-    ).exclude(
-        article_text__icontains='game'
-    ).exclude(
-        article_text__icontains='tournament'
-    ).exclude(
-        article_text__icontains='championship'
-    ).exclude(
-        article_text__icontains='olympic'
-    ).exclude(
-        article_text__icontains='cricket'
-    ).exclude(
-        article_text__icontains='basketball'
-    ).exclude(
-        article_text__icontains='tennis'
-    ).exclude(
-        article_text__icontains='golf'
-    ).exclude(
-        article_text__icontains='athletics'
-    ).exclude(
-        article_text__icontains='rugby'
-    ).exclude(
-        article_text__icontains='boxing'
-    ).exclude(
-        article_text__icontains='mma'
-    ).exclude(
-        article_text__icontains='fight'
-    ).exclude(
-        article_text__icontains='league'
-    ).exclude(
-        article_text__icontains='team'
-    ).exclude(
-        article_text__icontains='player'
-    ).exclude(
-        article_text__icontains='coach'
-    ).exclude(
-        article_text__icontains='stadium'
-    ).exclude(
-        article_text__icontains='score'
-    ).exclude(
-        article_text__icontains='win'
-    ).exclude(
-        article_text__icontains='loss'
-    ).exclude(
-        article_text__icontains='victory'
-    ).exclude(
-        article_text__icontains='defeat'
-    ).exclude(
-        article_text__icontains='champion'
-    ).exclude(
-        article_text__icontains='winner'
-    ).exclude(
-        article_text__icontains='loser'
-    ).exclude(
-        article_text__icontains='medal'
-    ).exclude(
-        article_text__icontains='trophy'
-    ).exclude(
-        article_text__icontains='cup'
-    ).exclude(
-        article_text__icontains='final'
-    ).exclude(
-        article_text__icontains='semi-final'
-    ).exclude(
-        article_text__icontains='quarter-final'
-    ).exclude(
-        article_text__icontains='penalty'
-    ).exclude(
-        article_text__icontains='goal'
-    ).exclude(
-        article_text__icontains='try'
-    ).exclude(
-        article_text__icontains='touchdown'
-    ).exclude(
-        article_text__icontains='home run'
-    ).exclude(
-        article_text__icontains='strike'
-    ).exclude(
-        article_text__icontains='serve'
-    ).exclude(
-        article_text__icontains='ace'
-    ).exclude(
-        article_text__icontains='set'
-    ).exclude(
-        article_text__icontains='race'
-    ).exclude(
-        article_text__icontains='time'
-    ).exclude(
-        article_text__icontains='record'
-    ).exclude(
-        article_text__icontains='athlete'
-    ).exclude(
-        article_text__icontains='referee'
-    ).exclude(
-        article_text__icontains='umpire'
-    ).exclude(
-        article_text__icontains='manager'
-    ).exclude(
-        article_text__icontains='captain'
-    ).exclude(
-        article_text__icontains='substitute'
-    ).exclude(
-        article_text__icontains='injury'
-    ).exclude(
-        article_text__icontains='transfer'
-    ).exclude(
-        article_text__icontains='contract'
-    ).exclude(
-        article_text__icontains='salary'
-    ).exclude(
-        article_text__icontains='sponsor'
-    ).exclude(
-        article_text__icontains='endorsement'
-    ).exclude(
-        article_text__icontains='adidas'
-    ).exclude(
-        article_text__icontains='nike'
-    ).exclude(
-        article_text__icontains='puma'
-    ).exclude(
-        article_text__icontains='under armour'
     ).values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
@@ -1195,7 +829,7 @@ def generate_report(request):
     # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        # Get top strategic intents for this country - FIXED: Exclude sports
+        # Get top strategic intents for this country - MINIMAL EXCLUSIONS
         intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -1206,128 +840,6 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).values('strategic_intent').annotate(
@@ -1350,17 +862,17 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Generate AI Insights using Groq API with FAST LOADING - FIXED: Handle API errors gracefully
+    # 7. Generate AI Insights using Groq API from Django settings - FIXED: Get from settings
     ai_insights = ""
     try:
         from groq import Groq
-        import os
+        from django.conf import settings  # Import Django settings
         
-        # Get Groq API key from environment
-        groq_api_key = os.environ.get('GROQ_API_KEY')
+        # Get Groq API key from Django settings
+        groq_api_key = getattr(settings, 'GROQ_API_KEY', None)
         if not groq_api_key:
-            logger.error("GROQ_API_KEY not found in environment variables")
-            ai_insights = f"No AI insights available. Please configure your GROQ API key."
+            logger.error("GROQ_API_KEY not found in Django settings")
+            ai_insights = f"No AI insights available. Please configure your GROQ API key in settings."
         else:
             # FAST: Only process first 2 articles to speed up
             article_summaries = []
@@ -1379,9 +891,9 @@ def generate_report(request):
                 **Strict Instructions:**
                   - Only summarize content that is **directly present in the posts provided**.
                   - Do **not** invent claims — only document what is explicitly stated in posts.
-                  - For every narrative, **only use a URL that explicitly contains that exact narrative**.
-                  - Do **not** repeat the same narrative with different wording.
-                  - Do **not** include URLs that do NOT contain the narrative.
+                  - For every claim, **only use a URL that explicitly contains that exact claim**.
+                  - Do **not** repeat the same claim with different wording.
+                  - Do **not** include URLs that do NOT contain the claim.
                   - Do not add outside knowledge, fact-checking, or assumptions.
 
                 Analyze the following media narratives for {selected_country} and provide a concise summary:
@@ -1403,7 +915,7 @@ def generate_report(request):
                             "content": prompt,
                         }
                     ],
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # Fast model
+                    model="llama3-8b-8192",  # Fast model
                     timeout=15  # 15 second timeout
                 )
                 
@@ -1413,7 +925,7 @@ def generate_report(request):
             
     except Exception as e:
         logger.error(f"Groq API error: {e}")
-        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)}"
+        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)[:100]}..."  # Shortened error
 
     # 8. Render PDF - FIXED: Use correct template path and ensure all data is passed
     context = {
