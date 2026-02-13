@@ -685,7 +685,7 @@ def generate_report(request):
         
         df = pd.read_csv(csv_file)
         
-        # Normalize country names - FIXED: Use exact format from CSV
+        # Normalize country names
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal", 
@@ -746,7 +746,7 @@ def generate_report(request):
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Get Key Narratives with URLs for the selected country - FIXED: Accurate counting and data
+    # 4. Get Key Narratives with URLs for the selected country - FIXED: Organized by intent, fewer exclusions
     key_narratives = []
     try:
         # FIXED: Get actual articles count for this country from database - MINIMAL EXCLUSIONS
@@ -759,10 +759,10 @@ def generate_report(request):
         ).exclude(
             article_text__icontains='sport'
         ).exclude(
-            article_text__icontains='sports'
+            strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).count()
         
-        # Get top articles for this country - MINIMAL EXCLUSIONS (only sports)
+        # Get top articles for this country - MINIMAL EXCLUSIONS (only basic sports)
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -772,13 +772,13 @@ def generate_report(request):
         ).exclude(
             article_text__icontains='sport'
         ).exclude(
-            article_text__icontains='sports'
-        ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
         
-        # FIXED: Only take first 4 articles for the report
-        for article in country_articles[:4]:  # Only 4 articles for the report
+        for article in country_articles:
+            # FIXED: Create narrative summary from article content
+            article_summary = article.article_text[:200] + "..." if len(article.article_text) > 200 else article.article_text
+            
             narrative_data = {
                 'intent': article.strategic_intent,
                 'tone': article.tone,
@@ -787,7 +787,7 @@ def generate_report(request):
                 'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article.article_text[:200] + "..." if len(article.article_text) > 200 else article.article_text
+                'summary': article_summary  # FIXED: Include narrative summary
             }
             key_narratives.append(narrative_data)
     except Exception as e:
@@ -804,8 +804,6 @@ def generate_report(request):
         article_text__icontains='soccer'
     ).exclude(
         article_text__icontains='sport'
-    ).exclude(
-        article_text__icontains='sports'
     ).values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
 
     volume_chart_base64 = ""
@@ -839,8 +837,6 @@ def generate_report(request):
         ).exclude(
             article_text__icontains='sport'
         ).exclude(
-            article_text__icontains='sports'
-        ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).values('strategic_intent').annotate(
             count=Count('id')
@@ -872,7 +868,7 @@ def generate_report(request):
         groq_api_key = getattr(settings, 'GROQ_API_KEY', None)
         if not groq_api_key:
             logger.error("GROQ_API_KEY not found in Django settings")
-            ai_insights = f"No AI insights available. Please configure your GROQ API key in settings."
+            ai_insights = f"No AI insights available. Please configure your GROQ_API key in settings."
         else:
             # FAST: Only process first 2 articles to speed up
             article_summaries = []
@@ -889,11 +885,11 @@ def generate_report(request):
                 
                 prompt = f"""
                 **Strict Instructions:**
-                  - Only summarize content that is **directly present in the posts provided**.
-                  - Do **not** invent claims — only document what is explicitly stated in posts.
-                  - For every claim, **only use a URL that explicitly contains that exact claim**.
-                  - Do **not** repeat the same claim with different wording.
-                  - Do **not** include URLs that do NOT contain the claim.
+                  - Only summarize narratives that is **directly present in the posts provided**.
+                  - Do **not** invent narratives — only document what is explicitly stated in posts.
+                  - For every narratives, **only use a URL that explicitly contains that exact narratives**.
+                  - Do **not** repeat the same narratives with different wording.
+                  - Do **not** include URLs that do NOT contain the narratives.
                   - Do not add outside knowledge, fact-checking, or assumptions.
 
                 Analyze the following media narratives for {selected_country} and provide a concise summary:
@@ -915,7 +911,7 @@ def generate_report(request):
                             "content": prompt,
                         }
                     ],
-                    model="llama3-8b-8192",  # Fast model
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # Fast model
                     timeout=15  # 15 second timeout
                 )
                 
@@ -927,7 +923,7 @@ def generate_report(request):
         logger.error(f"Groq API error: {e}")
         ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)[:100]}..."  # Shortened error
 
-    # 8. Render PDF - FIXED: Use correct template path and ensure all data is passed
+    # 8. Render PDF
     context = {
         'country': selected_country,
         'report_data': report_data,  # This now contains your CSV scores!
@@ -935,11 +931,11 @@ def generate_report(request):
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # FIXED: Include only 4 key narratives with summaries
+        'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
         'ai_insights': ai_insights,  # NEW: Include AI-generated insights
     }
 
-    template = get_template('report_pdf.html')  # FIXED: Correct template path
+    template = get_template('dashboard/report_pdf.html')
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
