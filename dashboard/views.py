@@ -454,6 +454,7 @@ def countries(request):
     if top_publishers.exists():
         df = pd.DataFrame(list(top_publishers))
         df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
+        df = df.reset_index(drop=True)
         df = df.sort_values('Articles')
         
         fig = px.bar(
@@ -481,6 +482,7 @@ def countries(request):
     if top_subjects.exists():
         df = pd.DataFrame(list(top_subjects))
         df = df.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
+        df = df.reset_index(drop=True)
         df = df.sort_values('Mentions')
         
         fig = px.bar(
@@ -517,7 +519,7 @@ def countries(request):
             'strategic_intent': 'Intent',
             'count': 'Count'
         })
-        
+        df_intent = df_intent.reset_index(drop=True)
         # Create a combined label for visualization
         df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
         
@@ -553,6 +555,7 @@ def countries(request):
     
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
+    sports_keywords = ['sport', 'sports', 'match', 'tournament', 'olympics', 'fifa']
     qs = MediaNarrative.objects.all().order_by('-posting_time')
     if journalist_name: qs = qs.filter(journalist_fk__name__iexact=journalist_name)
     
@@ -734,71 +737,71 @@ def generate_report(request):
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
     # 4. Get Key Narratives & AI Insights
+    # 4. Get Key Narratives & AI Insights
     key_narratives = []
     ai_insights = ""
     try:
-        # Shortened Exclude List
         exclude_list = ['football', 'soccer', 'sport', 'sports', 'match', 'game', 'tournament', 'championship']
-        
-        # Base Query
         base_query = MediaNarrative.objects.filter(target_country__iexact=selected_country)
         for term in exclude_list:
             base_query = base_query.exclude(article_text__icontains=term)
 
         articles_count = base_query.count()
         
-        # Top 4 for Display (Sorted by strategic_intent)
         display_articles = base_query.exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('strategic_intent')[:4]
+        ).order_by('-posting_time')[:4] # Order by newest first
         
         for article in display_articles:
             key_narratives.append({
                 'intent': article.strategic_intent,
                 'tone': article.tone,
-                #'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
                 'url': article.url,
-                'title': article.article_text, # Full Context
+                'title': article.article_text[:100] + "...", 
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article.article_text # Full Context
+                'summary': article.article_text
             })
 
-        # Generate AI Insights from ALL articles
+        # IMPROVED AI CONTEXT LOGIC
         from groq import Groq
         groq_api_key = os.environ.get('GROQ_API_KEY')
         
-        all_articles_for_ai = base_query.exclude(article_text__isnull=True)
+        # Limit to the top 15 most relevant articles to avoid context overflow/timeouts
+        all_articles_for_ai = base_query.exclude(article_text__isnull=True).order_by('-posting_time')[:15]
         full_context_data = []
         for art in all_articles_for_ai:
-            full_context_data.append(f"Source: {art.media_outlet} | Intent: {art.strategic_intent}\nContent: {art.article_text}\n")
+            # Only take the first 500 characters of each article to keep the prompt manageable
+            clean_text = art.article_text[:500].replace('\n', ' ')
+            full_context_data.append(f"Source: {art.media_outlet} | Intent: {art.strategic_intent} | Content: {clean_text}")
         
         all_text_context = "\n---\n".join(full_context_data)
 
         if groq_api_key and all_text_context:
-            client = Groq(api_key=groq_api_key)
+            # Set a explicit timeout of 20 seconds
+            client = Groq(api_key=groq_api_key, timeout=20.0) 
+            
             prompt = f"""
-            Analyze ALL the following media narratives for {selected_country}.
-            These represent the entire dataset for this country. 
+            Analyze the following representative media narratives for {selected_country}.
+            Summarize main themes, key actors, and recommended risk-mitigation actions.
 
             DATASET:
             {all_text_context}
-
-            Provide a comprehensive summary of main themes, key events, key actors and recommended actions based on the FULL context provided above.
             """
-            # No timeout, No character limits
+            
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="meta-llama/llama-4-scout-17b-16e-instruct"
             )
             ai_insights = chat_completion.choices[0].message.content
         else:
-            ai_insights = "No articles found to analyze or API key missing."
+            ai_insights = "No sufficient article data found to generate AI insights."
 
     except Exception as e:
-        logger.error(f"Narrative/AI error: {e}")
-        ai_insights = "AI insights temporarily unavailable."
-
+        # This will now log the EXACT error (e.g., Rate Limit or Context Length)
+        logger.error(f"Narrative/AI error: {str(e)}")
+        ai_insights = f"AI analysis could not be completed at this time. (Error: {str(e)[:50]})"
+        
     # 5. Generate Narrative Volume Chart
     volume_chart_base64 = ""
     try:
