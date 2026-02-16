@@ -508,7 +508,7 @@ def countries(request):
         strategic_intent__in=['', 'Unknown', None]
     ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
         count=Count('id')
-    ).order_by('-count')[:20]  # Top 20 combinations
+    ).order_by('-count')[:10]  # Top 20 combinations
 
     intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data by country and actor</p>"
     if target_country_actor_intents.exists():
@@ -545,13 +545,13 @@ def countries(request):
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
-        'intent_country_actor_chart': intent_country_actor_chart,  # NEW: Include the new chart
+        'intent_country_actor_chart': intent_country_actor_chart,  # Include the new chart
         'coverage_table': coverage_table,
         'sample_articles': sample_articles,
         'selected_country': selected_country or "All Countries",
         'african_countries': COUNTRIES,
     }
-    return render(request, 'countries.html', context)
+    return render(request, 'dashboard/countries.html', context)  #  template path
     
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
