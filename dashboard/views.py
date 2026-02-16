@@ -777,7 +777,7 @@ def generate_report(request):
         
         for article in country_articles:
             # FIXED: Create narrative summary from article content
-            article_summary = article.article_text[:200] + "..." if len(article.article_text) > 200 else article.article_text
+            article_summary = article.article_text[:500] + "..." if len(article.article_text) > 200 else article.article_text
             
             narrative_data = {
                 'intent': article.strategic_intent,
