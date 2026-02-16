@@ -747,52 +747,118 @@ def generate_report(request):
 # =========================
 
 def countries(request):
-    # 1. Setup Data & Normalization
-    actor_map = {"US": "UnitedStates"}
+    selected_country = request.GET.get('country', '').strip()
 
-    # 2. Get Top Publishers by Country
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+
+    if selected_country:
+        qs = qs.filter(target_country__iexact=selected_country)
+
+    # 1. Top African countries by total articles (target_country)
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
         article_count=Count('id')
     ).order_by('-article_count')[:10]
 
-    # 3. FIXED: Get Top Strategic Intents with actor-country relationships
-    top_strategic_intents = MediaNarrative.objects.exclude(
-        strategic_intent__in=['', None]
+    publisher_chart = "<p class='text-center py-5 text-muted fs-3'>No publishing data</p>"
+    if top_publishers.exists():
+        df = pd.DataFrame(list(top_publishers))
+        df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
+        df = df.sort_values('Articles')
+        
+        fig = px.bar(
+            df,
+            x='Articles',
+            y='Country',
+            orientation='h',
+            title='Top African Countries by Articles Published',
+            text='Articles',
+            color='Country',
+            color_discrete_sequence=px.colors.qualitative.Bold
+        )
+        fig.update_traces(textposition='outside')
+        fig.update_layout(height=500, showlegend=False, template="plotly_white")
+        publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # 2. Top subjects mentioned (inferred_actor)
+    top_subjects = MediaNarrative.objects.exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).values('inferred_actor').annotate(
+        mention_count=Count('id')
+    ).order_by('-mention_count')[:10]
+
+    subject_chart = "<p class='text-center py-5 text-muted fs-3'>No subject data</p>"
+    if top_subjects.exists():
+        df = pd.DataFrame(list(top_subjects))
+        df = df.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
+        df = df.sort_values('Mentions')
+        
+        fig = px.bar(
+            df,
+            x='Mentions',
+            y='Actor',
+            orientation='h',
+            title='Top Foreign Actors Mentioned in Articles',
+            text='Mentions',
+            color='Actor',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig.update_traces(textposition='outside')
+        fig.update_layout(height=500, showlegend=False, template="plotly_white")
+        subject_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # 3. NEW: Top Strategic Intents by Target Country and Actor
+    target_country_actor_intents = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
     ).exclude(
         inferred_actor__in=['', 'Unknown', None]
     ).exclude(
-        target_country__in=['', 'Unknown', None]
-    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
-        total=Count('id')
-    ).order_by('-total')[:10]
+        strategic_intent__in=['', 'Unknown', None]
+    ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]  # Top 20 combinations
 
-    # 4. Generate Publisher Chart
-    publisher_chart = ""
-    if top_publishers:
-        df = pd.DataFrame(list(top_publishers))
-        fig = px.bar(df, x='article_count', y='target_country', orientation='h', 
-                     color_discrete_sequence=['#6366f1'])
-        fig.update_layout(height=400)
-        publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data by country and actor</p>"
+    if target_country_actor_intents.exists():
+        df_intent = pd.DataFrame(list(target_country_actor_intents))
+        df_intent = df_intent.rename(columns={
+            'target_country': 'Country', 
+            'inferred_actor': 'Actor', 
+            'strategic_intent': 'Intent',
+            'count': 'Count'
+        })
+        
+        # Create a combined label for visualization
+        df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
+        
+        fig_intent = px.bar(
+            df_intent,
+            x='Count',
+            y='Combined',
+            orientation='h',
+            title='Top Strategic Intents by Target Country and Actor',
+            text='Count',
+            color='Intent',
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        fig_intent.update_traces(textposition='outside')
+        fig_intent.update_layout(height=600, showlegend=True, template="plotly_white")
+        intent_country_actor_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 5. Generate Strategic Intents Chart (FIXED: Renamed from "Subject Chart")
-    strategic_intents_chart = ""  # FIXED: Renamed variable
-    if top_strategic_intents:
-        df_s = pd.DataFrame(list(top_strategic_intents))
-        df_s['combined'] = df_s['strategic_intent'] + ' (' + df_s['inferred_actor'] + '→' + df_s['target_country'] + ')'
-        fig_s = px.pie(df_s, values='total', names='combined', hole=.3)
-        fig_s.update_layout(height=400)
-        strategic_intents_chart = fig_s.to_html(full_html=False, include_plotlyjs='cdn')  # FIXED: Use renamed variable
+    # Simple table of top publishers (since target coverage is 0)
+    coverage_table = list(top_publishers)
 
-    # 6. Context
+    sample_articles = qs[:5]
+
     context = {
         'publisher_chart': publisher_chart,
-        'subject_chart': strategic_intents_chart,  # FIXED: Keep the variable name for template compatibility
-        'coverage_table': top_publishers,
-        'top_strategic_intents': top_strategic_intents,
-        'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
+        'subject_chart': subject_chart,
+        'intent_country_actor_chart': intent_country_actor_chart,  # NEW: Include the new chart
+        'coverage_table': coverage_table,
+        'sample_articles': sample_articles,
+        'selected_country': selected_country or "All Countries",
+        'african_countries': COUNTRIES,
     }
     return render(request, 'countries.html', context)
     
@@ -851,7 +917,7 @@ def intents(request):
         'top_intents': top_intents,
         'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
     }
-    return render(request, 'dashboard/intents.html', context)
+    return render(request, 'intents.html', context)
     
 def all_articles(request):
     qs = MediaNarrative.objects.all().order_by('-posting_time')
@@ -880,8 +946,8 @@ def all_articles(request):
         'start_date': start_date,
         'end_date': end_date,
     }
-    return render(request, 'dashboard/all_articles.html', context)
-
+    return render(request, 'all_articles.html', context)
+    
 def generate_report(request):
     selected_country = request.GET.get('country')
     selected_actors = request.GET.getlist('actors')
@@ -898,15 +964,13 @@ def generate_report(request):
     actor_map = {"US": "UnitedStates"}
     report_data = []
 
-    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data for REPORT
+    # 3. Calculate CVI Risk Scores from CSV
     try:
         import pandas as pd
         import os
         
-        # Load the CSV file - FIXED: Check multiple possible locations
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Try different possible file locations
         possible_paths = [
             os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv'),
             os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
@@ -927,12 +991,11 @@ def generate_report(request):
         
         df = pd.read_csv(csv_file)
         
-        # Normalize country names - FIXED: Use exact format from CSV
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal", 
             "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",  # This is the exact format in your CSV
+            "cote d'ivoire": "CoteIvoire",
             "cote ivoire": "CoteIvoire",
             "ivory coast": "CoteIvoire",
             "ethiopia": "Ethiopia"
@@ -941,7 +1004,7 @@ def generate_report(request):
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
-            "france": "France",         # This matches your CSV
+            "france": "France",
             "us": "UnitedStates",
             "united states": "UnitedStates",
             "russia": "Russia",
@@ -955,32 +1018,25 @@ def generate_report(request):
         
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
-            
-            # Get scores from CSV for this specific country-actor pair - FIXED: Use your exact data
             matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
             
             if not matching_rows.empty:
-                # Get the highest score across all intents for this country-actor - FROM YOUR CSV
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
                 
                 risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
                 
-                # FIXED: This should now show the correct score from your CSV
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(max_score), 3),  # This is from your CSV! Shows 0.610, not 0.0
+                    'cvi_score': round(float(max_score), 3),
                     'risk_level': risk_level,
                     'primary_threat': max_intent
                 })
-                
-                logger.info(f"Report: {formatted_country}-{formatted_actor} = {max_score} ({max_intent})")
             else:
-                logger.warning(f"No data found in CSV for {formatted_country}-{formatted_actor}")
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': 0.0,  # This appears when no data found
+                    'cvi_score': 0.0,
                     'risk_level': "N/A",
                     'primary_threat': "No Data"
                 })
@@ -988,592 +1044,101 @@ def generate_report(request):
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Get Key Narratives with URLs for the selected country - FIXED: Accurate counting and data
+    # 4. Get Key Narratives & AI Insights
     key_narratives = []
+    ai_insights = ""
     try:
-        # FIXED: Get actual articles count for this country from database - EXCLUDE SPORTS
-        articles_count = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
-        ).count()
+        # Shortened Exclude List
+        exclude_list = ['football', 'soccer', 'sport', 'sports', 'match', 'game', 'tournament', 'championship']
         
-        # Get top articles for this country - FIXED: Exclude sports articles
-        country_articles = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
-        ).exclude(
+        # Base Query
+        base_query = MediaNarrative.objects.filter(target_country__iexact=selected_country)
+        for term in exclude_list:
+            base_query = base_query.exclude(article_text__icontains=term)
+
+        articles_count = base_query.count()
+        
+        # Top 4 for Display (Sorted by strategic_intent)
+        display_articles = base_query.exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
+        ).order_by('strategic_intent')[:4]
         
-        for article in country_articles:
-            narrative_data = {
+        for article in display_articles:
+            key_narratives.append({
                 'intent': article.strategic_intent,
                 'tone': article.tone,
-                'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
+                #'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
                 'url': article.url,
-                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
+                'title': article.article_text, # Full Context
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article.article_text[:200] + "..." if len(article.article_text) > 200 else article.article_text
-            }
-            key_narratives.append(narrative_data)
+                'summary': article.article_text # Full Context
+            })
+
+        # Generate AI Insights from ALL articles
+        from groq import Groq
+        groq_api_key = os.environ.get('GROQ_API_KEY')
+        
+        all_articles_for_ai = base_query.exclude(article_text__isnull=True)
+        full_context_data = []
+        for art in all_articles_for_ai:
+            full_context_data.append(f"Source: {art.media_outlet} | Intent: {art.strategic_intent}\nContent: {art.article_text}\n")
+        
+        all_text_context = "\n---\n".join(full_context_data)
+
+        if groq_api_key and all_text_context:
+            client = Groq(api_key=groq_api_key)
+            prompt = f"""
+            Analyze ALL the following media narratives for {selected_country}.
+            These represent the entire dataset for this country. 
+
+            DATASET:
+            {all_text_context}
+
+            Provide a comprehensive summary of main themes, key events, key actors and recommended actions based on the FULL context provided above.
+            """
+            # No timeout, No character limits
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="meta-llama/llama-4-scout-17b-16e-instruct"
+            )
+            ai_insights = chat_completion.choices[0].message.content
+        else:
+            ai_insights = "No articles found to analyze or API key missing."
+
     except Exception as e:
-        logger.error(f"Key narratives error: {e}")
-        key_narratives = []
-        articles_count = 0
+        logger.error(f"Narrative/AI error: {e}")
+        ai_insights = "AI insights temporarily unavailable."
 
     # 5. Generate Narrative Volume Chart
-    volume_data = MediaNarrative.objects.filter(
-        target_country__iexact=selected_country
-    ).exclude(
-        article_text__icontains='football'
-    ).exclude(
-        article_text__icontains='soccer'
-    ).exclude(
-        article_text__icontains='sport'
-    ).exclude(
-        article_text__icontains='sports'
-    ).exclude(
-        article_text__icontains='match'
-    ).exclude(
-        article_text__icontains='game'
-    ).exclude(
-        article_text__icontains='tournament'
-    ).exclude(
-        article_text__icontains='championship'
-    ).exclude(
-        article_text__icontains='olympic'
-    ).exclude(
-        article_text__icontains='cricket'
-    ).exclude(
-        article_text__icontains='basketball'
-    ).exclude(
-        article_text__icontains='tennis'
-    ).exclude(
-        article_text__icontains='golf'
-    ).exclude(
-        article_text__icontains='athletics'
-    ).exclude(
-        article_text__icontains='rugby'
-    ).exclude(
-        article_text__icontains='boxing'
-    ).exclude(
-        article_text__icontains='mma'
-    ).exclude(
-        article_text__icontains='fight'
-    ).exclude(
-        article_text__icontains='league'
-    ).exclude(
-        article_text__icontains='team'
-    ).exclude(
-        article_text__icontains='player'
-    ).exclude(
-        article_text__icontains='coach'
-    ).exclude(
-        article_text__icontains='stadium'
-    ).exclude(
-        article_text__icontains='score'
-    ).exclude(
-        article_text__icontains='win'
-    ).exclude(
-        article_text__icontains='loss'
-    ).exclude(
-        article_text__icontains='victory'
-    ).exclude(
-        article_text__icontains='defeat'
-    ).exclude(
-        article_text__icontains='champion'
-    ).exclude(
-        article_text__icontains='winner'
-    ).exclude(
-        article_text__icontains='loser'
-    ).exclude(
-        article_text__icontains='medal'
-    ).exclude(
-        article_text__icontains='trophy'
-    ).exclude(
-        article_text__icontains='cup'
-    ).exclude(
-        article_text__icontains='final'
-    ).exclude(
-        article_text__icontains='semi-final'
-    ).exclude(
-        article_text__icontains='quarter-final'
-    ).exclude(
-        article_text__icontains='penalty'
-    ).exclude(
-        article_text__icontains='goal'
-    ).exclude(
-        article_text__icontains='try'
-    ).exclude(
-        article_text__icontains='touchdown'
-    ).exclude(
-        article_text__icontains='home run'
-    ).exclude(
-        article_text__icontains='strike'
-    ).exclude(
-        article_text__icontains='serve'
-    ).exclude(
-        article_text__icontains='ace'
-    ).exclude(
-        article_text__icontains='set'
-    ).exclude(
-        article_text__icontains='race'
-    ).exclude(
-        article_text__icontains='time'
-    ).exclude(
-        article_text__icontains='record'
-    ).exclude(
-        article_text__icontains='athlete'
-    ).exclude(
-        article_text__icontains='referee'
-    ).exclude(
-        article_text__icontains='umpire'
-    ).exclude(
-        article_text__icontains='manager'
-    ).exclude(
-        article_text__icontains='captain'
-    ).exclude(
-        article_text__icontains='substitute'
-    ).exclude(
-        article_text__icontains='injury'
-    ).exclude(
-        article_text__icontains='transfer'
-    ).exclude(
-        article_text__icontains='contract'
-    ).exclude(
-        article_text__icontains='salary'
-    ).exclude(
-        article_text__icontains='sponsor'
-    ).exclude(
-        article_text__icontains='endorsement'
-    ).exclude(
-        article_text__icontains='adidas'
-    ).exclude(
-        article_text__icontains='nike'
-    ).exclude(
-        article_text__icontains='puma'
-    ).exclude(
-        article_text__icontains='under armour'
-    ).values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
-
     volume_chart_base64 = ""
-    if volume_data.exists():
-        df_vol = pd.DataFrame(list(volume_data))
-        df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-        df_vol = df_vol.dropna(subset=['date']).sort_values('date')
+    try:
+        volume_data = base_query.values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
+        if volume_data.exists():
+            df_vol = pd.DataFrame(list(volume_data))
+            df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+            df_vol = df_vol.dropna(subset=['date']).sort_values('date')
 
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
-        ax.set_title(f'Narrative Volume Over Time - {selected_country}')
-        ax.grid(True, linestyle='--', alpha=0.7)
-        plt.xticks(rotation=45)
-        
-        img_buffer = BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight')
-        img_buffer.seek(0)
-        volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-        plt.close(fig)
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
+            ax.set_title(f'Narrative Volume Over Time - {selected_country}')
+            ax.grid(True, linestyle='--', alpha=0.7)
+            plt.xticks(rotation=45)
+            
+            img_buffer = BytesIO()
+            plt.savefig(img_buffer, format='png', bbox_inches='tight')
+            img_buffer.seek(0)
+            volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+            plt.close(fig)
+    except Exception as e:
+        logger.error(f"Volume chart error: {e}")
 
     # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        # Get top strategic intents for this country - FIXED: Exclude sports
-        intent_counts = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            article_text__icontains='sports'
-        ).exclude(
-            article_text__icontains='match'
-        ).exclude(
-            article_text__icontains='game'
-        ).exclude(
-            article_text__icontains='tournament'
-        ).exclude(
-            article_text__icontains='championship'
-        ).exclude(
-            article_text__icontains='olympic'
-        ).exclude(
-            article_text__icontains='cricket'
-        ).exclude(
-            article_text__icontains='basketball'
-        ).exclude(
-            article_text__icontains='tennis'
-        ).exclude(
-            article_text__icontains='golf'
-        ).exclude(
-            article_text__icontains='athletics'
-        ).exclude(
-            article_text__icontains='rugby'
-        ).exclude(
-            article_text__icontains='boxing'
-        ).exclude(
-            article_text__icontains='mma'
-        ).exclude(
-            article_text__icontains='fight'
-        ).exclude(
-            article_text__icontains='league'
-        ).exclude(
-            article_text__icontains='team'
-        ).exclude(
-            article_text__icontains='player'
-        ).exclude(
-            article_text__icontains='coach'
-        ).exclude(
-            article_text__icontains='stadium'
-        ).exclude(
-            article_text__icontains='score'
-        ).exclude(
-            article_text__icontains='win'
-        ).exclude(
-            article_text__icontains='loss'
-        ).exclude(
-            article_text__icontains='victory'
-        ).exclude(
-            article_text__icontains='defeat'
-        ).exclude(
-            article_text__icontains='champion'
-        ).exclude(
-            article_text__icontains='winner'
-        ).exclude(
-            article_text__icontains='loser'
-        ).exclude(
-            article_text__icontains='medal'
-        ).exclude(
-            article_text__icontains='trophy'
-        ).exclude(
-            article_text__icontains='cup'
-        ).exclude(
-            article_text__icontains='final'
-        ).exclude(
-            article_text__icontains='semi-final'
-        ).exclude(
-            article_text__icontains='quarter-final'
-        ).exclude(
-            article_text__icontains='penalty'
-        ).exclude(
-            article_text__icontains='goal'
-        ).exclude(
-            article_text__icontains='try'
-        ).exclude(
-            article_text__icontains='touchdown'
-        ).exclude(
-            article_text__icontains='home run'
-        ).exclude(
-            article_text__icontains='strike'
-        ).exclude(
-            article_text__icontains='serve'
-        ).exclude(
-            article_text__icontains='ace'
-        ).exclude(
-            article_text__icontains='set'
-        ).exclude(
-            article_text__icontains='race'
-        ).exclude(
-            article_text__icontains='time'
-        ).exclude(
-            article_text__icontains='record'
-        ).exclude(
-            article_text__icontains='athlete'
-        ).exclude(
-            article_text__icontains='referee'
-        ).exclude(
-            article_text__icontains='umpire'
-        ).exclude(
-            article_text__icontains='manager'
-        ).exclude(
-            article_text__icontains='captain'
-        ).exclude(
-            article_text__icontains='substitute'
-        ).exclude(
-            article_text__icontains='injury'
-        ).exclude(
-            article_text__icontains='transfer'
-        ).exclude(
-            article_text__icontains='contract'
-        ).exclude(
-            article_text__icontains='salary'
-        ).exclude(
-            article_text__icontains='sponsor'
-        ).exclude(
-            article_text__icontains='endorsement'
-        ).exclude(
-            article_text__icontains='adidas'
-        ).exclude(
-            article_text__icontains='nike'
-        ).exclude(
-            article_text__icontains='puma'
-        ).exclude(
-            article_text__icontains='under armour'
-        ).exclude(
+        intent_counts = base_query.exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).values('strategic_intent').annotate(
-            count=Count('id')
-        ).order_by('-count')[:5]
+        ).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
         
         if intent_counts.exists():
             df_f = pd.DataFrame(list(intent_counts))
@@ -1591,84 +1156,19 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Generate AI Insights using Groq API with FAST LOADING
-    ai_insights = ""
-    try:
-        from groq import Groq
-        import os
-        
-        # Get Groq API key from environment
-        groq_api_key = os.environ.get('GROQ_API_KEY')
-        if not groq_api_key:
-            logger.error("GROQ_API_KEY not found in environment variables")
-            ai_insights = f"No AI insights available. Please configure your GROQ API key."
-        else:
-            # FAST: Only process first 2 articles to speed up
-            article_summaries = []
-            for article in key_narratives[:2]:  # Only 2 articles for speed
-                summary = f"Title: {article['title']}\nIntent: {article['intent']}\nTone: {article['tone']}\nScore: {article['vulnerability_score']}\nURL: {article['url']}\nSummary: {article['summary']}\n\n"
-                article_summaries.append(summary)
-            
-            if article_summaries:  # Only call API if we have articles
-                client = Groq(api_key=groq_api_key)
-                
-                # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
-                joined_summaries = "\n".join(article_summaries)
-                url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:2]])
-                
-                prompt = f"""
-                **Strict Instructions:**
-                  - Only summarize content that is **directly present in the posts provided**.
-                  - Do **not** invent claims — only document what is explicitly stated in posts.
-                  - For every claim, **only use a URL that explicitly contains that exact claim**.
-                  - Do **not** repeat the same claim with different wording.
-                  - Do **not** include URLs that do NOT contain the claim.
-                  - Do not add outside knowledge, fact-checking, or assumptions.
-
-                Analyze the following media narratives for {selected_country} and provide a concise summary:
-
-                Articles:
-                {joined_summaries}
-
-                URL Context:
-                {url_context}
-
-                Provide: Main themes, key concerns, and recommended actions. Keep it brief.
-                """
-                
-                # Call Groq API
-                chat_completion = client.chat.completions.create(
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        }
-                    ],
-                    model="llama3-8b-8192",  # Fast model
-                    timeout=15  # 15 second timeout
-                )
-                
-                ai_insights = chat_completion.choices[0].message.content
-            else:
-                ai_insights = "No articles available for analysis."
-            
-    except Exception as e:
-        logger.error(f"Groq API error: {e}")
-        ai_insights = "AI insights temporarily unavailable due to API error."
-
-    # 8. Render PDF - FIXED: Use correct template path and ensure all data is passed
+    # 8. Render PDF
     context = {
         'country': selected_country,
-        'report_data': report_data,  # This now contains your CSV scores!
-        'articles_count': articles_count,  # This should now show correct count
+        'report_data': report_data,
+        'articles_count': articles_count,
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
-        'ai_insights': ai_insights,  # NEW: Include AI-generated insights
+        'key_narratives': key_narratives,
+        'ai_insights': ai_insights,
     }
 
-    template = get_template('report_pdf.html')  # FIXED: Correct template path
+    template = get_template('report_pdf.html')
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
