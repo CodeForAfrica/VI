@@ -266,106 +266,43 @@ def overview(request):
     country_list = []
     top_subjects = []
     cvi_score = None
-    cvi_intent = None  # NEW: Store the intent with highest score
+    cvi_intent = None
     
     # 2. Capture Inputs
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
+    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()  # NEW: Added Intent Filter
     
-    # 3. Get total count first (without limit)
-    total_articles = MediaNarrative.objects.exclude(
-        article_text__icontains='football'
-    ).exclude(
-        article_text__icontains='soccer'
-    ).exclude(
-        article_text__icontains='sport'
-    ).exclude(
-        article_text__icontains='sports'
-    ).exclude(
-        article_text__icontains='match'
-    ).exclude(
-        article_text__icontains='game'
-    ).exclude(
-        article_text__icontains='tournament'
-    ).exclude(
-        article_text__icontains='championship'
-    ).exclude(
-        article_text__icontains='olympic'
-    ).exclude(
-        article_text__icontains='cricket'
-    ).exclude(
-        article_text__icontains='basketball'
-    ).exclude(
-        article_text__icontains='tennis'
-    ).exclude(
-        article_text__icontains='golf'
-    ).exclude(
-        article_text__icontains='athletics'
-    ).exclude(
-        article_text__icontains='rugby'
-    ).exclude(
-        article_text__icontains='boxing'
-    ).exclude(
-        article_text__icontains='mma'
-    ).count()  # This gets all non-sport articles (15,166)
-    
-    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display - EXCLUDE SPORTS
-    full_stats_qs = MediaNarrative.objects.exclude(
-        article_text__icontains='football'
-    ).exclude(
-        article_text__icontains='soccer'
-    ).exclude(
-        article_text__icontains='sport'
-    ).exclude(
-        article_text__icontains='sports'
-    ).exclude(
-        article_text__icontains='match'
-    ).exclude(
-        article_text__icontains='game'
-    ).exclude(
-        article_text__icontains='tournament'
-    ).exclude(
-        article_text__icontains='championship'
-    ).exclude(
-        article_text__icontains='olympic'
-    ).exclude(
-        article_text__icontains='cricket'
-    ).exclude(
-        article_text__icontains='basketball'
-    ).exclude(
-        article_text__icontains='tennis'
-    ).exclude(
-        article_text__icontains='golf'
-    ).exclude(
-        article_text__icontains='athletics'
-    ).exclude(
-        article_text__icontains='rugby'
-    ).exclude(
-        article_text__icontains='boxing'
-    ).exclude(
-        article_text__icontains='mma'
-    ).exclude(
-        article_text__icontains='fight'
-    ).exclude(
-        article_text__icontains='league'
-    ).exclude(
-        article_text__icontains='team'
-    ).exclude(
-        article_text__icontains='player'
-    ).exclude(
-        article_text__icontains='coach'
-    ).exclude(
-        article_text__icontains='stadium'
-    ).order_by('-posting_time')
+    # Shortened Exclude List for maintenance and speed
+    exclude_keywords = [
+        'football', 'soccer', 'sport', 'sports', 'match', 'game', 
+        'tournament', 'championship', 'olympic', 'cricket', 'basketball', 
+        'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight', 
+        'league', 'team', 'player', 'coach', 'stadium'
+    ]
 
-    # 5. Apply calculator filters only if both parameters are provided
+    # 3. Get total count first (without limit) - REDUCED EXCLUDE LIST
+    base_qs = MediaNarrative.objects.all()
+    for word in exclude_keywords:
+        base_qs = base_qs.exclude(article_text__icontains=word)
+    
+    total_articles = base_qs.count()
+    
+    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) - EXCLUDE SPORTS
+    full_stats_qs = base_qs.order_by('-posting_time')
+
+    # 5. Apply calculator filters - UPDATED: Logic for Strategic Intent
     if calc_target_country and calc_foreign_actor:
-        # Skip ML inference and use direct CSV lookup
-        cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
+        # Pass the selected intent to the score function if provided
+        cvi_score, cvi_intent = calculate_contextual_score(
+            calc_target_country, 
+            calc_foreign_actor, 
+            intent_filter=calc_strategic_intent
+        )
     else:
-        # When no calculator parameters, show all articles
         calc_target_country = ""
         calc_foreign_actor = ""
+        calc_strategic_intent = ""
 
     # 6. Apply calculator filters to main queryset for display if needed
     if calc_target_country and calc_foreign_actor:
@@ -373,6 +310,9 @@ def overview(request):
             target_country__iexact=calc_target_country,
             inferred_actor__iexact=calc_foreign_actor
         )
+        # Further narrow display results if user filtered by intent
+        if calc_strategic_intent:
+            full_stats_qs = full_stats_qs.filter(strategic_intent__iexact=calc_strategic_intent)
 
     # 7. Global Stats (optimized)
     irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
@@ -382,12 +322,9 @@ def overview(request):
     avg_vulnerability = 0.0
     avg_confidence = 0.0
     
-    # 9. Optimized volume chart - Use limited data for performance
+    # 9. Optimized volume chart
     try:
-        limited_for_chart = full_stats_qs.exclude(
-            posting_time__isnull=True
-        )[:500]
-        
+        limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
         if limited_for_chart.exists():
             df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
             df = df.dropna(subset=['posting_time'])
@@ -400,12 +337,11 @@ def overview(request):
     except Exception as e:
         logger.error(f"Volume Chart Error: {e}")
 
-    # 10. Optimized lists - Use counts without limits
+    # 10. Optimized lists
     country_list = full_stats_qs.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
     
-    # FIXED: Top Strategic Intents with actor-country relationships
     top_subjects = full_stats_qs.exclude(
         strategic_intent__in=['', None]
     ).exclude(
@@ -416,8 +352,8 @@ def overview(request):
         total=Count('id')
     ).order_by('-total')[:5]
 
-    # 11. Optimized pagination - Increase page size for more articles per page
-    paginator = Paginator(full_stats_qs, 10)  # Increased from 5 to 10
+    # 11. Pagination
+    paginator = Paginator(full_stats_qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -435,15 +371,26 @@ def overview(request):
             )
             article.vulnerability_index = float(vi_score) if vi_score else 0.0
         else:
-            article.vulnerability_index = float(article.vulnerability_index) if article.vulnerability_index is not None else 0.0
+            article.vulnerability_index = float(article.vulnerability_index)
         articles_with_vi.append(article)
     page_obj.object_list = articles_with_vi
 
-    # 13. Context - Use the actual total count
+    # NEW: Methodology Description (Fancy version)
+    vulnerability_methodology = (
+        "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
+        "a target country is to influence from a selected foreign actor on a specific strategic factor. "
+        "The score combines: (1) a content signal — how much collected media and posts say the actor is pushing "
+        "strategic intents corresponding to a specific factor (corrected using human labels via Prediction-powered Inference, PPI), "
+        "and (2) a contextual signal — measurable country-level or actor×country factors (debt exposure, military presence, "
+        "resource ties, election timing, etc...) that make the country more susceptible. Higher values indicate greater "
+        "potential influence risk and suggested priority for investigation."
+    )
+
+    # 13. Context
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,  # non-sport articles count
+        'total_articles': total_articles,
         'unique_outlets': full_stats_qs.values('media_outlet').distinct().count(),
         'unique_intents': full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
         'unique_actors': full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
@@ -454,294 +401,15 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'cvi_intent': cvi_intent,  # Pass the intent to template
+        'cvi_intent': cvi_intent,
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
+        'selected_intent': calc_strategic_intent,
+        'vulnerability_description': vulnerability_methodology, # Pass to template
     }
     return render(request, 'overview.html', context)
         
-def generate_report(request):
-    selected_country = request.GET.get('country')
-    selected_actors = request.GET.getlist('actors')
-
-    # 1. Handle Form Display
-    if not selected_country or not selected_actors:
-        context = {
-            'african_countries': COUNTRIES,
-            'foreign_actors': FOREIGN_ACTORS,
-        }
-        return render(request, 'dashboard/report_form.html', context)
-
-    # 2. Setup Data & Normalization
-    actor_map = {"US": "UnitedStates"}
-    report_data = []
-
-    # 3. Calculate CVI Risk Scores 
-    try:
-        import pandas as pd
-        import os
-        
-        # Load the CSV file Check multiple possible locations
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # Try different possible file locations
-        possible_paths = [
-            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv'),
-            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
-            os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv'),
-            os.path.join(current_dir, '..', '..', 'final_risk_by_actor_intent_country (1).csv'),
-        ]
-        
-        csv_file = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                csv_file = path
-                logger.info(f"Found CSV file at: {path}")
-                break
-        
-        if csv_file is None:
-            logger.error(f"CSV file not found in any of these locations: {possible_paths}")
-            return HttpResponse("CSV file not found in any expected location", status=500)
-        
-        df = pd.read_csv(csv_file)
-        
-        # Normalize country names
-        country_mapping = {
-            "south africa": "South Africa",
-            "senegal": "Senegal", 
-            "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",  
-            "cote ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire",
-            "ethiopia": "Ethiopia"
-        }
-        
-        actor_mapping = {
-            "uae": "UAE",
-            "china": "China",
-            "france": "France",          
-            "us": "UnitedStates",
-            "united states": "UnitedStates",
-            "russia": "Russia",
-            "saudi": "Saudi",
-            "turkey": "Turkey",
-            "israel": "Israel",
-            "iran": "Iran"
-        }
-        
-        formatted_country = country_mapping.get(selected_country.lower(), selected_country)
-        
-        for actor in selected_actors:
-            formatted_actor = actor_mapping.get(actor.lower(), actor)
-            
-            # Get scores from  country-actor pair 
-            matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
-            
-            if not matching_rows.empty:
-                # Get the highest score across all intents for this country-actor 
-                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
-                max_score = max_row['FinalRisk']
-                max_intent = max_row['intent']
-                
-                risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
-                
-                # scores
-                report_data.append({
-                    'actor': actor,
-                    'cvi_score': round(float(max_score), 3),  
-                    'risk_level': risk_level,
-                    'primary_threat': max_intent
-                })
-                
-                logger.info(f"Report: {formatted_country}-{formatted_actor} = {max_score} ({max_intent})")
-            else:
-                logger.warning(f"No data found in CSV for {formatted_country}-{formatted_actor}")
-                report_data.append({
-                    'actor': actor,
-                    'cvi_score': 0.0,  # This appears when no data found
-                    'risk_level': "N/A",
-                    'primary_threat': "No Data"
-                })
-    except Exception as e:
-        logger.error(f"CVI calculation error: {e}")
-        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
-
-    # 4. Get Key Narratives (FIXED: Slicing to exactly 4 and removing truncation for AI context)
-    key_narratives = []
-    try:
-        articles_count = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).count()
-        
-        country_articles = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-intent')[:4]  # STICK TO 4 SAMPLES
-        
-        for article in country_articles:
-            # FIXED: Removed the 500 character limit for 'summary' to provide full context to AI
-            full_context = article.article_text if article.article_text else ""
-            
-            narrative_data = {
-                'intent': article.strategic_intent,
-                'tone': article.tone,
-                #'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
-                'url': article.url,
-                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
-                'media_outlet': article.media_outlet,
-                'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': full_context  # USE FULL ARTICLE FOR ANALYTICAL DEPTH
-            }
-            key_narratives.append(narrative_data)
-    except Exception as e:
-        logger.error(f"Key narratives error: {e}")
-        key_narratives = []
-        articles_count = 0
-
-    # 5. Generate Narrative Volume Chart
-    volume_data = MediaNarrative.objects.filter(
-        target_country__iexact=selected_country
-    ).exclude(
-        article_text__icontains='football'
-    ).exclude(
-        article_text__icontains='soccer'
-    ).exclude(
-        article_text__icontains='sport'
-    ).values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
-
-    volume_chart_base64 = ""
-    if volume_data.exists():
-        df_vol = pd.DataFrame(list(volume_data))
-        df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-        df_vol = df_vol.dropna(subset=['date']).sort_values('date')
-
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
-        ax.set_title(f'Narrative Volume Over Time - {selected_country}')
-        ax.grid(True, linestyle='--', alpha=0.7)
-        plt.xticks(rotation=45)
-        
-        img_buffer = BytesIO()
-        plt.savefig(img_buffer, format='png', bbox_inches='tight')
-        img_buffer.seek(0)
-        volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-        plt.close(fig)
-
-    # 6. Generate Factor Contribution Chart
-    factor_chart_base64 = ""
-    try:
-        intent_counts = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
-        ).exclude(
-            article_text__icontains='football'
-        ).exclude(
-            article_text__icontains='soccer'
-        ).exclude(
-            article_text__icontains='sport'
-        ).exclude(
-            strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).values('strategic_intent').annotate(
-            count=Count('id')
-        ).order_by('-count')[:5]
-        
-        if intent_counts.exists():
-            df_f = pd.DataFrame(list(intent_counts))
-            df_f = df_f.rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
-            
-            fig, ax = plt.subplots(figsize=(7, 5))
-            ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
-            ax.set_title(f'Top Strategic Intents - {selected_country}')
-            
-            img_buffer = BytesIO()
-            plt.savefig(img_buffer, format='png', bbox_inches='tight')
-            img_buffer.seek(0)
-            factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-            plt.close(fig)
-    except Exception as e:
-        logger.error(f"Factor chart error: {e}")
-
-    # 7. Generate AI Insights (FIXED: Using full context, exactly 4 articles, and robust key retrieval)
-    ai_insights = ""
-    try:
-        from groq import Groq
-        import os
-        
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        if not groq_api_key:
-            ai_insights = "Please configure your GROQ_API key in environment variables."
-        elif key_narratives:
-            client = Groq(api_key=groq_api_key)
-            
-            # Using the full article context for the 4 retrieved articles
-            article_summaries = []
-            for article in key_narratives:
-                summary = f"Title: {article['title']}\nIntent: {article['intent']}\nFull Context: {article['summary'][:3000]}\n\n"
-                article_summaries.append(summary)
-            
-            joined_summaries = "\n".join(article_summaries)
-            
-            prompt = f"""
-            Analyze the following 4 media narratives for {selected_country} and provide a concise summary.
-            Strictly document main themes, key actors, and recommended actions based only on the provided text.
-            
-            Articles:
-            {joined_summaries}
-            """
-            
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="meta-llama/llama-4-scout-17b-16e-instruct",  
-                timeout=25  # Increased timeout for full text processing
-            )
-            
-            ai_insights = chat_completion.choices[0].message.content
-        else:
-            ai_insights = "No articles available for analysis."
-            
-    except Exception as e:
-        logger.error(f"Groq API error: {e}")
-        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)}"
-    
-    # 8. Render PDF
-    context = {
-        'country': selected_country,
-        'report_data': report_data,
-        'articles_count': articles_count,
-        'date_generated': datetime.now().strftime("%B %d, %Y"),
-        'volume_chart_base64': volume_chart_base64,
-        'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,
-        'ai_insights': ai_insights,
-    }
-    
-    template = get_template('report_pdf.html')
-    html = template.render(context)
-    result = BytesIO()
-    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
-    
-    if not pdf.err:
-        response = HttpResponse(result.getvalue(), content_type='application/pdf')
-        filename = f"CVI_Report_{selected_country}_{datetime.now().strftime('%Y%m%d')}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
-    
-    return HttpResponse("Error generating PDF.", status=500)
-    
+   
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
@@ -883,7 +551,7 @@ def articles_view(request):
     if search_query:
         articles = articles.filter(article_text__icontains=search_query)
 
-    paginator = Paginator(articles, 5)  # ✅ 5 articles per page
+    paginator = Paginator(articles, 10)  # 10 articles per page
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
