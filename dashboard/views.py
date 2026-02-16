@@ -773,7 +773,7 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-vulnerability_index')[:10]  # Top 10 articles by vulnerability score
+        ).order_by('-vulnerability_index')[:4]  # Top 10 articles by vulnerability score
         
         for article in country_articles:
             # FIXED: Create narrative summary from article content
