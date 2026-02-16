@@ -117,27 +117,45 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">Strategic Intent (Optional Filter)</label>
+                <select name="calc_strategic_intent" class="form-select">
+                    <option value="">-- All Intents --</option>
+                    <option value="Economic" {% if selected_intent == 'Economic' %}selected{% endif %}>Economic</option>
+                    <option value="Election Interference" {% if selected_intent == 'Election Interference' %}selected{% endif %}>Election Interference</option>
+                    <option value="Social Fragility" {% if selected_intent == 'Social Fragility' %}selected{% endif %}>Social Fragility</option>
+                    <option value="Sovereignty" {% if selected_intent == 'Sovereignty' %}selected{% endif %}>Sovereignty</option>
+                    <option value="LGBTQ" {% if selected_intent == 'LGBTQ' %}selected{% endif %}>LGBTQ</option>
+                </select>
+            </div>
             <button type="submit" class="btn w-100 fw-bold text-white" style="background-color: var(--action-blue);">
                 Calculate & Filter
             </button>
+            <a href="." class="btn btn-sm btn-link w-100 mt-2 text-muted">Reset Filters</a>
         </form>
     </div>
     <div class="cvi-right text-center">
         {% if selected_country and selected_actor %}
-            <!-- Always show the calculated score -->
             <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
             <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
-            {% if cvi_intent %}
-                <p class="small text-muted">Primary Threat: <strong>{{ cvi_intent }}</strong></p>
+            
+            {% if vulnerability_description %}
+            <div class="mt-3 p-3 text-start border-top bg-white" style="border-radius: 8px; max-width: 90%;">
+                <p style="font-size: 0.8rem; line-height: 1.4; color: #64748b; font-style: italic;">
+                    <i class="fas fa-info-circle text-primary me-1"></i>
+                    {{ vulnerability_description }}
+                </p>
+            </div>
             {% endif %}
-            <p class="small text-muted">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
+
+            <p class="small text-muted mt-2">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
             {% if cvi_score == 0.0 %}
             <p class="small text-warning">Note: Low vulnerability detected</p>
             {% endif %}
         {% else %}
             <div class="text-muted opacity-50">
                 <i class="fas fa-calculator fa-3x mb-3"></i>
-                <p>Select parameters and click calculate</p>
+                <p>Select parameters to view calculations</p>
             </div>
         {% endif %}
     </div>
@@ -200,15 +218,13 @@
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}">Previous</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent }}{% endif %}">Previous</a>
             </li>
         {% endif %}
-        
         <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}">Next</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent }}{% endif %}">Next</a>
             </li>
         {% endif %}
     </ul>
@@ -244,53 +260,51 @@
         chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
     }
 
-    // FIXED: Chatbot Send Logic
-    document.getElementById('send-btn').addEventListener('click', function() {
-    const input = document.getElementById('chat-input');
-    const box = document.getElementById('chat-box');
-    const userText = input.value.trim();
-    
-    if (userText !== "") {
-        // 1. Add User Bubble
-        box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
-        input.value = "";
-        
-        // 2. Add Loading Indicator
-        const loadingId = "loading-" + Date.now();
-        box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
-        box.scrollTop = box.scrollHeight;
-
-        // 3. Fetch from Django (UPDATED URL)
-        fetch('/chatbot-response/', {  // <--- CHANGED THIS LINE
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({ message: userText })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error('Network error');
-            return response.json();
-        })
-        .then(data => {
-            document.getElementById(loadingId).remove();
-            box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
-            box.scrollTop = box.scrollHeight;
-        })
-        .catch(error => {
-            const loader = document.getElementById(loadingId);
-            if(loader) loader.innerHTML = `<span class="text-danger small">Connection error.</span>`;
+    // Auto-submit CVI Form on Dropdown Change
+    document.querySelectorAll('.cvi-left select').forEach(select => {
+        select.addEventListener('change', function() {
+            this.closest('form').submit();
         });
-    }
-});
+    });
 
-// Allow "Enter" key to send message
-document.getElementById('chat-input').addEventListener('keypress', function (e) {
-    if (e.key === 'Enter') {
-        document.getElementById('send-btn').click();
-    }
-});
+    document.getElementById('send-btn').addEventListener('click', function() {
+        const input = document.getElementById('chat-input');
+        const box = document.getElementById('chat-box');
+        const userText = input.value.trim();
+        
+        if (userText !== "") {
+            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
+            input.value = "";
+            const loadingId = "loading-" + Date.now();
+            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
+            box.scrollTop = box.scrollHeight;
+
+            fetch('/chatbot-response/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ message: userText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById(loadingId).remove();
+                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
+                box.scrollTop = box.scrollHeight;
+            })
+            .catch(error => {
+                const loader = document.getElementById(loadingId);
+                if(loader) loader.innerHTML = `<span class="text-danger small">Connection error.</span>`;
+            });
+        }
+    });
+
+    document.getElementById('chat-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            document.getElementById('send-btn').click();
+        }
+    });
 </script>
 
 {% endblock %}
