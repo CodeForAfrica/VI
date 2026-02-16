@@ -872,7 +872,7 @@ def generate_report(request):
         else:
             # FAST: Only process first 2 articles to speed up
             article_summaries = []
-            for article in key_narratives[:2]:  # Only 2 articles for speed
+            for article in key_narratives[:10]:  # Only 2 articles for speed
                 summary = f"Title: {article['title']}\nIntent: {article['intent']}\nTone: {article['tone']}\nScore: {article['vulnerability_score']}\nURL: {article['url']}\nSummary: {article['summary']}\n\n"
                 article_summaries.append(summary)
             
