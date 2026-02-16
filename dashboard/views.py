@@ -176,7 +176,7 @@ def chatbot_response(request):
             'success': False
         })
 
-def calculate_contextual_score(target_country, foreign_actor):
+def calculate_contextual_score(target_country, foreign_actor, intent_filter=None): 
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
     try:
         import pandas as pd
@@ -227,7 +227,14 @@ def calculate_contextual_score(target_country, foreign_actor):
         matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
         
         if not matching_rows.empty:
-            # Find the row with the HIGHEST FinalRisk score for this country-actor combination
+            # 1. If user selected an intent, try to find that specific one
+            if intent_filter:
+                specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
+                if not specific_match.empty:
+                    row = specific_match.iloc[0]
+                    return float(row['FinalRisk']), row['intent']
+
+            # 2. Fallback: Find the row with the HIGHEST score 
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             max_score = max_row['FinalRisk']
             max_intent = max_row['intent']
@@ -242,6 +249,13 @@ def calculate_contextual_score(target_country, foreign_actor):
             ]
             
             if not matching_rows.empty:
+                # Apply intent filter logic even in case-insensitive fallback
+                if intent_filter:
+                    specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
+                    if not specific_match.empty:
+                        row = specific_match.iloc[0]
+                        return float(row['FinalRisk']), row['intent']
+
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
@@ -293,12 +307,19 @@ def overview(request):
 
     # 5. Apply calculator filters - UPDATED: Logic for Strategic Intent
     if calc_target_country and calc_foreign_actor:
-        # Pass the selected intent to the score function if provided
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country, 
             calc_foreign_actor, 
             intent_filter=calc_strategic_intent
         )
+        
+        # Filter the article display list based on calculation params
+        full_stats_qs = full_stats_qs.filter(
+            target_country__iexact=calc_target_country,
+            inferred_actor__iexact=calc_foreign_actor
+        )
+        if calc_strategic_intent:
+            full_stats_qs = full_stats_qs.filter(strategic_intent__iexact=calc_strategic_intent)
     else:
         calc_target_country = ""
         calc_foreign_actor = ""
