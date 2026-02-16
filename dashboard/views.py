@@ -784,7 +784,7 @@ def generate_report(request):
                 'tone': article.tone,
                 'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
                 'url': article.url,
-                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
+                'title': article.article_text[:500] + "..." if len(article.article_text) > 100 else article.article_text,
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
                 'summary': article_summary  # Include narrative summary
