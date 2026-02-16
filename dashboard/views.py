@@ -307,102 +307,6 @@ def overview(request):
         article_text__icontains='boxing'
     ).exclude(
         article_text__icontains='mma'
-    ).exclude(
-        article_text__icontains='fight'
-    ).exclude(
-        article_text__icontains='league'
-    ).exclude(
-        article_text__icontains='team'
-    ).exclude(
-        article_text__icontains='player'
-    ).exclude(
-        article_text__icontains='coach'
-    ).exclude(
-        article_text__icontains='stadium'
-    ).exclude(
-        article_text__icontains='score'
-    ).exclude(
-        article_text__icontains='win'
-    ).exclude(
-        article_text__icontains='loss'
-    ).exclude(
-        article_text__icontains='victory'
-    ).exclude(
-        article_text__icontains='defeat'
-    ).exclude(
-        article_text__icontains='champion'
-    ).exclude(
-        article_text__icontains='winner'
-    ).exclude(
-        article_text__icontains='loser'
-    ).exclude(
-        article_text__icontains='medal'
-    ).exclude(
-        article_text__icontains='trophy'
-    ).exclude(
-        article_text__icontains='cup'
-    ).exclude(
-        article_text__icontains='final'
-    ).exclude(
-        article_text__icontains='semi-final'
-    ).exclude(
-        article_text__icontains='quarter-final'
-    ).exclude(
-        article_text__icontains='penalty'
-    ).exclude(
-        article_text__icontains='goal'
-    ).exclude(
-        article_text__icontains='try'
-    ).exclude(
-        article_text__icontains='touchdown'
-    ).exclude(
-        article_text__icontains='home run'
-    ).exclude(
-        article_text__icontains='strike'
-    ).exclude(
-        article_text__icontains='serve'
-    ).exclude(
-        article_text__icontains='ace'
-    ).exclude(
-        article_text__icontains='set'
-    ).exclude(
-        article_text__icontains='race'
-    ).exclude(
-        article_text__icontains='time'
-    ).exclude(
-        article_text__icontains='record'
-    ).exclude(
-        article_text__icontains='athlete'
-    ).exclude(
-        article_text__icontains='referee'
-    ).exclude(
-        article_text__icontains='umpire'
-    ).exclude(
-        article_text__icontains='manager'
-    ).exclude(
-        article_text__icontains='captain'
-    ).exclude(
-        article_text__icontains='substitute'
-    ).exclude(
-        article_text__icontains='injury'
-    ).exclude(
-        article_text__icontains='transfer'
-    ).exclude(
-        article_text__icontains='contract'
-    ).exclude(
-        article_text__icontains='salary'
-    ).exclude(
-        article_text__icontains='sponsor'
-    ).exclude(
-        article_text__icontains='endorsement'
-    ).exclude(
-        article_text__icontains='adidas'
-    ).exclude(
-        article_text__icontains='nike'
-    ).exclude(
-        article_text__icontains='puma'
-    ).exclude(
-        article_text__icontains='under armour'
     ).count()  # This gets all non-sport articles (15,166)
     
     # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) for display - EXCLUDE SPORTS
@@ -452,90 +356,6 @@ def overview(request):
         article_text__icontains='coach'
     ).exclude(
         article_text__icontains='stadium'
-    ).exclude(
-        article_text__icontains='score'
-    ).exclude(
-        article_text__icontains='win'
-    ).exclude(
-        article_text__icontains='loss'
-    ).exclude(
-        article_text__icontains='victory'
-    ).exclude(
-        article_text__icontains='defeat'
-    ).exclude(
-        article_text__icontains='champion'
-    ).exclude(
-        article_text__icontains='winner'
-    ).exclude(
-        article_text__icontains='loser'
-    ).exclude(
-        article_text__icontains='medal'
-    ).exclude(
-        article_text__icontains='trophy'
-    ).exclude(
-        article_text__icontains='cup'
-    ).exclude(
-        article_text__icontains='final'
-    ).exclude(
-        article_text__icontains='semi-final'
-    ).exclude(
-        article_text__icontains='quarter-final'
-    ).exclude(
-        article_text__icontains='penalty'
-    ).exclude(
-        article_text__icontains='goal'
-    ).exclude(
-        article_text__icontains='try'
-    ).exclude(
-        article_text__icontains='touchdown'
-    ).exclude(
-        article_text__icontains='home run'
-    ).exclude(
-        article_text__icontains='strike'
-    ).exclude(
-        article_text__icontains='serve'
-    ).exclude(
-        article_text__icontains='ace'
-    ).exclude(
-        article_text__icontains='set'
-    ).exclude(
-        article_text__icontains='race'
-    ).exclude(
-        article_text__icontains='time'
-    ).exclude(
-        article_text__icontains='record'
-    ).exclude(
-        article_text__icontains='athlete'
-    ).exclude(
-        article_text__icontains='referee'
-    ).exclude(
-        article_text__icontains='umpire'
-    ).exclude(
-        article_text__icontains='manager'
-    ).exclude(
-        article_text__icontains='captain'
-    ).exclude(
-        article_text__icontains='substitute'
-    ).exclude(
-        article_text__icontains='injury'
-    ).exclude(
-        article_text__icontains='transfer'
-    ).exclude(
-        article_text__icontains='contract'
-    ).exclude(
-        article_text__icontains='salary'
-    ).exclude(
-        article_text__icontains='sponsor'
-    ).exclude(
-        article_text__icontains='endorsement'
-    ).exclude(
-        article_text__icontains='adidas'
-    ).exclude(
-        article_text__icontains='nike'
-    ).exclude(
-        article_text__icontains='puma'
-    ).exclude(
-        article_text__icontains='under armour'
     ).order_by('-posting_time')
 
     # 5. Apply calculator filters only if both parameters are provided
@@ -699,7 +519,7 @@ def generate_report(request):
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
-            "france": "France",         
+            "france": "France",          
             "us": "UnitedStates",
             "united states": "UnitedStates",
             "russia": "Russia",
@@ -746,10 +566,9 @@ def generate_report(request):
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Get Key Narratives with URLs for the selected country - FIXED: Organized by intent, fewer exclusions
+    # 4. Get Key Narratives (FIXED: Slicing to exactly 4 and removing truncation for AI context)
     key_narratives = []
     try:
-        # FIXED: Get actual articles count for this country from database 
         articles_count = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -762,7 +581,6 @@ def generate_report(request):
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).count()
         
-        # Get top articles for this country - 
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -773,21 +591,21 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-vulnerability_index')[:4]  # Top 4 articles by vulnerability score
+        ).order_by('-intent')[:4]  # STICK TO 4 SAMPLES
         
         for article in country_articles:
-            # FIXED: Create narrative summary from article content
-            article_summary = article.article_text[:500] + "..." if len(article.article_text) > 200 else article.article_text
+            # FIXED: Removed the 500 character limit for 'summary' to provide full context to AI
+            full_context = article.article_text if article.article_text else ""
             
             narrative_data = {
                 'intent': article.strategic_intent,
                 'tone': article.tone,
-                'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
+                #'vulnerability_score': round(float(article.vulnerability_index or 0), 3),
                 'url': article.url,
-                'title': article.article_text[:500] + "..." if len(article.article_text) > 100 else article.article_text,
+                'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article_summary  # Include narrative summary
+                'summary': full_context  # USE FULL ARTICLE FOR ANALYTICAL DEPTH
             }
             key_narratives.append(narrative_data)
     except Exception as e:
@@ -827,7 +645,6 @@ def generate_report(request):
     # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        # Get top strategic intents for this country - 
         intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -858,84 +675,61 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Generate AI Insights using Groq API with FAST LOADING
+    # 7. Generate AI Insights (FIXED: Using full context, exactly 4 articles, and robust key retrieval)
     ai_insights = ""
     try:
         from groq import Groq
         import os
         
-        # Get Groq API key from environment variables 
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
-            logger.error("GROQ_API_KEY not found in environment variables")
-            ai_insights = f"No AI insights available. Please configure your GROQ_API key in environment variables."
-        else:
-            # FAST: Only process first 2 articles to speed up
+            ai_insights = "Please configure your GROQ_API key in environment variables."
+        elif key_narratives:
+            client = Groq(api_key=groq_api_key)
+            
+            # Using the full article context for the 4 retrieved articles
             article_summaries = []
-            for article in key_narratives[:10]:  # Only 2 articles for speed
-                summary = f"Title: {article['title']}\nIntent: {article['intent']}\nTone: {article['tone']}\nScore: {article['vulnerability_score']}\nURL: {article['url']}\nSummary: {article['summary']}\n\n"
+            for article in key_narratives:
+                summary = f"Title: {article['title']}\nIntent: {article['intent']}\nFull Context: {article['summary'][:3000]}\n\n"
                 article_summaries.append(summary)
             
-            if article_summaries:  # Only call API if we have articles
-                client = Groq(api_key=groq_api_key)  # Use the key from environment
-                
-                # Prompt
-                joined_summaries = "\n".join(article_summaries)
-                url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:2]])
-                
-                prompt = f"""
-                **Strict Instructions:**
-                  - Only summarize content that is **directly present in the posts provided**.
-                  - Do **not** invent narratives — only document what is explicitly stated in posts.
-                  - For every narratives, **only use a URL that explicitly contains that exact narratives**.
-                  - Do **not** repeat the same narratives with different wording.
-                  - Do **not** include URLs that do NOT contain the narratives.
-                  - Do not add outside knowledge, fact-checking, or assumptions.
-    
-                Analyze the following media narratives for {selected_country} and provide a concise summary:
-    
-                Articles:
-                {joined_summaries}
-    
-                URL Context:
-                {url_context}
-    
-                Provide: Main themes, key actors, and recommended actions. Keep it brief.
-                """
-                
-                # Call Groq API
-                chat_completion = client.chat.completions.create(
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        }
-                    ],
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",  
-                    timeout=15  # 15 second timeout
-                )
-                
-                ai_insights = chat_completion.choices[0].message.content  # Fixed variable name
-            else:
-                ai_insights = "No articles available for analysis."
+            joined_summaries = "\n".join(article_summaries)
+            
+            prompt = f"""
+            Analyze the following 4 media narratives for {selected_country} and provide a concise summary.
+            Strictly document main themes, key actors, and recommended actions based only on the provided text.
+            
+            Articles:
+            {joined_summaries}
+            """
+            
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="meta-llama/llama-4-scout-17b-16e-instruct",  
+                timeout=25  # Increased timeout for full text processing
+            )
+            
+            ai_insights = chat_completion.choices[0].message.content
+        else:
+            ai_insights = "No articles available for analysis."
             
     except Exception as e:
         logger.error(f"Groq API error: {e}")
-        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)[:100]}..."  # Shortened error
+        ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)}"
     
     # 8. Render PDF
     context = {
         'country': selected_country,
-        'report_data': report_data,  # This now contains your CSV scores!
-        'articles_count': articles_count,  # This should now show correct count
+        'report_data': report_data,
+        'articles_count': articles_count,
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # Include key narratives with summaries
-        'ai_insights': ai_insights,  #  AI-generated insights
+        'key_narratives': key_narratives,
+        'ai_insights': ai_insights,
     }
     
-    template = get_template('report_pdf.html')  # template path
+    template = get_template('report_pdf.html')
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
