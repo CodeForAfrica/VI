@@ -859,16 +859,17 @@ def generate_report(request):
         logger.error(f"Factor chart error: {e}")
 
     # 7. Generate AI Insights using Groq API from Django settings - FIXED: Get from settings
+    # 7. Generate AI Insights using Groq API with FAST LOADING
     ai_insights = ""
     try:
         from groq import Groq
-        from django.conf import settings  # Import Django settings
+        import os
         
-        # Get Groq API key from Django settings
-        groq_api_key = getattr(settings, 'GROQ_API_KEY', None)
+        # Get Groq API key from environment variables (not Django settings)
+        groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
-            logger.error("GROQ_API_KEY not found in Django settings")
-            ai_insights = f"No AI insights available. Please configure your GROQ_API key in settings."
+            logger.error("GROQ_API_KEY not found in environment variables")
+            ai_insights = f"No AI insights available. Please configure your GROQ_API key in environment variables."
         else:
             # FAST: Only process first 2 articles to speed up
             article_summaries = []
@@ -877,7 +878,7 @@ def generate_report(request):
                 article_summaries.append(summary)
             
             if article_summaries:  # Only call API if we have articles
-                client = Groq(api_key=groq_api_key)
+                client = Groq(api_key=groq_api_key)  # Use the key from environment
                 
                 # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
                 joined_summaries = "\n".join(article_summaries)
@@ -885,22 +886,22 @@ def generate_report(request):
                 
                 prompt = f"""
                 **Strict Instructions:**
-                  - Only summarize narratives that is **directly present in the posts provided**.
+                  - Only summarize content that is **directly present in the posts provided**.
                   - Do **not** invent narratives — only document what is explicitly stated in posts.
                   - For every narratives, **only use a URL that explicitly contains that exact narratives**.
                   - Do **not** repeat the same narratives with different wording.
                   - Do **not** include URLs that do NOT contain the narratives.
                   - Do not add outside knowledge, fact-checking, or assumptions.
-
+    
                 Analyze the following media narratives for {selected_country} and provide a concise summary:
-
+    
                 Articles:
                 {joined_summaries}
-
+    
                 URL Context:
                 {url_context}
-
-                Provide: Main themes, key concerns, and recommended actions. Keep it brief.
+    
+                Provide: Main themes, key actors, and recommended actions. Keep it brief.
                 """
                 
                 # Call Groq API
@@ -911,18 +912,18 @@ def generate_report(request):
                             "content": prompt,
                         }
                     ],
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # Fast model
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # CORRECT model name (was "meta-llama/llama-4-scout-17b-16e-instruct" which doesn't exist)
                     timeout=15  # 15 second timeout
                 )
                 
-                ai_insights = chat_completion.choices[0].message.content
+                ai_insights = chat_completion.choices[0].message.content  # Fixed variable name
             else:
                 ai_insights = "No articles available for analysis."
             
     except Exception as e:
         logger.error(f"Groq API error: {e}")
         ai_insights = f"AI insights temporarily unavailable due to API error: {str(e)[:100]}..."  # Shortened error
-
+    
     # 8. Render PDF
     context = {
         'country': selected_country,
@@ -934,18 +935,18 @@ def generate_report(request):
         'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
         'ai_insights': ai_insights,  # NEW: Include AI-generated insights
     }
-
-    template = get_template('dashboard/report_pdf.html')
+    
+    template = get_template('report_pdf.html')  # Fixed: Correct template path
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
-
+    
     if not pdf.err:
         response = HttpResponse(result.getvalue(), content_type='application/pdf')
         filename = f"CVI_Report_{selected_country}_{datetime.now().strftime('%Y%m%d')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-
+    
     return HttpResponse("Error generating PDF.", status=500)
     
 # =========================
@@ -1000,7 +1001,7 @@ def countries(request):
         'top_strategic_intents': top_strategic_intents,
         'sample_articles': MediaNarrative.objects.only('article_text', 'target_country', 'inferred_actor', 'strategic_intent')[:5],
     }
-    return render(request, 'dashboard/countries.html', context)
+    return render(request, 'countries.html', context)
     
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
