@@ -111,4 +111,4 @@ S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 
 # API Keys - SECURE: All from environment
 MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
-GROQ_API_KEY = os.getenv("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")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
