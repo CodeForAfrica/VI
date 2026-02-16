@@ -540,7 +540,7 @@ def overview(request):
 
     # 5. Apply calculator filters only if both parameters are provided
     if calc_target_country and calc_foreign_actor:
-        # FIX: Skip ML inference and use direct CSV lookup
+        # Skip ML inference and use direct CSV lookup
         cvi_score, cvi_intent = calculate_contextual_score(calc_target_country, calc_foreign_actor)
     else:
         # When no calculator parameters, show all articles
@@ -623,7 +623,7 @@ def overview(request):
     context = {
         'chart': chart,
         'page_obj': page_obj,
-        'total_articles': total_articles,  # Now shows non-sport articles count
+        'total_articles': total_articles,  # non-sport articles count
         'unique_outlets': full_stats_qs.values('media_outlet').distinct().count(),
         'unique_intents': full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
         'unique_actors': full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
@@ -634,7 +634,7 @@ def overview(request):
         'country_list': country_list,
         'top_subjects': top_subjects,
         'cvi_score': cvi_score,
-        'cvi_intent': cvi_intent,  # NEW: Pass the intent to template
+        'cvi_intent': cvi_intent,  # Pass the intent to template
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
     }
@@ -656,12 +656,12 @@ def generate_report(request):
     actor_map = {"US": "UnitedStates"}
     report_data = []
 
-    # 3. Calculate CVI Risk Scores - FIXED: Use actual CSV data for REPORT
+    # 3. Calculate CVI Risk Scores 
     try:
         import pandas as pd
         import os
         
-        # Load the CSV file - FIXED: Check multiple possible locations
+        # Load the CSV file Check multiple possible locations
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Try different possible file locations
@@ -690,7 +690,7 @@ def generate_report(request):
             "south africa": "South Africa",
             "senegal": "Senegal", 
             "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",  # This is the exact format in your CSV
+            "cote d'ivoire": "CoteIvoire",  
             "cote ivoire": "CoteIvoire",
             "ivory coast": "CoteIvoire",
             "ethiopia": "Ethiopia"
@@ -699,7 +699,7 @@ def generate_report(request):
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
-            "france": "France",         # This matches your CSV
+            "france": "France",         
             "us": "UnitedStates",
             "united states": "UnitedStates",
             "russia": "Russia",
@@ -714,21 +714,21 @@ def generate_report(request):
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
             
-            # Get scores from CSV for this specific country-actor pair - FIXED: Use your exact data
+            # Get scores from  country-actor pair 
             matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
             
             if not matching_rows.empty:
-                # Get the highest score across all intents for this country-actor - FROM YOUR CSV
+                # Get the highest score across all intents for this country-actor 
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
                 
                 risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
                 
-                # FIXED: This should now show the correct score from your CSV
+                # scores
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(max_score), 3),  # This is from your CSV! Shows 0.610, not 0.0
+                    'cvi_score': round(float(max_score), 3),  
                     'risk_level': risk_level,
                     'primary_threat': max_intent
                 })
@@ -749,7 +749,7 @@ def generate_report(request):
     # 4. Get Key Narratives with URLs for the selected country - FIXED: Organized by intent, fewer exclusions
     key_narratives = []
     try:
-        # FIXED: Get actual articles count for this country from database - MINIMAL EXCLUSIONS
+        # FIXED: Get actual articles count for this country from database 
         articles_count = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -762,7 +762,7 @@ def generate_report(request):
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).count()
         
-        # Get top articles for this country - MINIMAL EXCLUSIONS (only basic sports)
+        # Get top articles for this country - 
         country_articles = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -773,7 +773,7 @@ def generate_report(request):
             article_text__icontains='sport'
         ).exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-vulnerability_index')[:4]  # Top 10 articles by vulnerability score
+        ).order_by('-vulnerability_index')[:4]  # Top 4 articles by vulnerability score
         
         for article in country_articles:
             # FIXED: Create narrative summary from article content
@@ -787,7 +787,7 @@ def generate_report(request):
                 'title': article.article_text[:100] + "..." if len(article.article_text) > 100 else article.article_text,
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article_summary  # FIXED: Include narrative summary
+                'summary': article_summary  # Include narrative summary
             }
             key_narratives.append(narrative_data)
     except Exception as e:
@@ -827,7 +827,7 @@ def generate_report(request):
     # 6. Generate Factor Contribution Chart
     factor_chart_base64 = ""
     try:
-        # Get top strategic intents for this country - MINIMAL EXCLUSIONS
+        # Get top strategic intents for this country - 
         intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country
         ).exclude(
@@ -858,14 +858,13 @@ def generate_report(request):
     except Exception as e:
         logger.error(f"Factor chart error: {e}")
 
-    # 7. Generate AI Insights using Groq API from Django settings - FIXED: Get from settings
     # 7. Generate AI Insights using Groq API with FAST LOADING
     ai_insights = ""
     try:
         from groq import Groq
         import os
         
-        # Get Groq API key from environment variables (not Django settings)
+        # Get Groq API key from environment variables 
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key:
             logger.error("GROQ_API_KEY not found in environment variables")
@@ -880,7 +879,7 @@ def generate_report(request):
             if article_summaries:  # Only call API if we have articles
                 client = Groq(api_key=groq_api_key)  # Use the key from environment
                 
-                # Create prompt for AI with NO HALUCINATION INSTRUCTIONS
+                # Prompt
                 joined_summaries = "\n".join(article_summaries)
                 url_context = "\n".join([f"URL: {article['url']}" for article in key_narratives[:2]])
                 
@@ -912,7 +911,7 @@ def generate_report(request):
                             "content": prompt,
                         }
                     ],
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",  # CORRECT model name (was "meta-llama/llama-4-scout-17b-16e-instruct" which doesn't exist)
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",  
                     timeout=15  # 15 second timeout
                 )
                 
@@ -932,11 +931,11 @@ def generate_report(request):
         'date_generated': datetime.now().strftime("%B %d, %Y"),
         'volume_chart_base64': volume_chart_base64,
         'factor_chart_base64': factor_chart_base64,
-        'key_narratives': key_narratives,  # FIXED: Include key narratives with summaries
-        'ai_insights': ai_insights,  # NEW: Include AI-generated insights
+        'key_narratives': key_narratives,  # Include key narratives with summaries
+        'ai_insights': ai_insights,  #  AI-generated insights
     }
     
-    template = get_template('report_pdf.html')  # Fixed: Correct template path
+    template = get_template('report_pdf.html')  # template path
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
