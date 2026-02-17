@@ -741,7 +741,7 @@ def generate_report(request):
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
-    # 4. Get Key Narratives & AI Insights
+    
     # 4. Get Key Narratives & AI Insights
     key_narratives = []
     ai_insights = ""
@@ -750,14 +750,34 @@ def generate_report(request):
         base_query = MediaNarrative.objects.filter(target_country__iexact=selected_country)
         for term in exclude_list:
             base_query = base_query.exclude(article_text__icontains=term)
-
+    
         articles_count = base_query.count()
         
         display_articles = base_query.exclude(
             strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).order_by('-posting_time')[:4] # Order by newest first
+        ).order_by('-posting_time')[:4]
+    
+        from groq import Groq
+        groq_api_key = os.environ.get('GROQ_API_KEY')
+        client = Groq(api_key=groq_api_key, timeout=20.0) if groq_api_key else None
         
+        # ---: INDIVIDUAL AI SUMMARIES FOR EACH NARRATIVE ---
         for article in display_articles:
+            ai_summary = article.article_text[:300] + "..." # Default fallback
+            
+            if client:
+                try:
+                    # Prompting for a specific, short AI summary per article
+                    sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:1500]}"
+                    sum_response = client.chat.completions.create(
+                        messages=[{"role": "user", "content": sum_prompt}],
+                        model="meta-llama/llama-4-scout-17b-16e-instruct", 
+                        max_tokens=100
+                    )
+                    ai_summary = sum_response.choices[0].message.content.strip()
+                except Exception as e:
+                    logger.error(f"Article summary error: {e}")
+    
             key_narratives.append({
                 'intent': article.strategic_intent,
                 'tone': article.tone,
@@ -765,115 +785,104 @@ def generate_report(request):
                 'title': article.article_text[:100] + "...", 
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': article.article_text
+                'summary': ai_summary # Now using the AI-generated summary
             })
-
-        # IMPROVED AI CONTEXT LOGIC
-        from groq import Groq
-        groq_api_key = os.environ.get('GROQ_API_KEY')
-        
-        # Limit to the top 15 most relevant articles to avoid context overflow/timeouts
+    
+        # --- EXECUTIVE AI INSIGHTS ---
         all_articles_for_ai = base_query.exclude(article_text__isnull=True).order_by('-posting_time')[:15]
-        full_context_data = []
-        for art in all_articles_for_ai:
-            # Only take the first 500 characters of each article to keep the prompt manageable
-            clean_text = art.article_text[:500].replace('\n', ' ')
-            full_context_data.append(f"Source: {art.media_outlet} | Intent: {art.strategic_intent} | Content: {clean_text}")
-        
+        full_context_data = [f"Source: {art.media_outlet} | Intent: {art.strategic_intent} | Content: {art.article_text[:500]}" for art in all_articles_for_ai]
         all_text_context = "\n---\n".join(full_context_data)
-
-        if groq_api_key and all_text_context:
-            # Set a explicit timeout of 20 seconds
-            client = Groq(api_key=groq_api_key, timeout=20.0) 
+    
+        if client and all_text_context:
+            insight_prompt = f"""
+            Analyze the following media narratives for {selected_country} as a Senior Geopolitical Analyst.
+            Your objective is to evaluate these articles for signs of foreign influence and structural vulnerability.
+        
+            FORMATTING RULES:
+            - Use '###' for clear section headers.
+            - Use bold '*' for key terms, actors, and specific intents.
+            - Use bullet points for readability.
+        
+            STRUCTURE:
+            ### 📊 Narrative Summary
+            (Provide a high-level summary of the media volume, dominant sentiment, and primary themes found in the dataset.)
+        
+            ### 🛡️ Key Actors & Influence
+            (List the primary foreign actors mentioned and their apparent strategic goals or intents as inferred from the narratives.)
+        
+            ### ⚠️ Influence Threat Analysis
+            (Assess the overall likelihood and severity of the influence threat to {selected_country}. Consider if narratives are exploiting local divisions, economic ties, or social fragility.)
             
-            prompt = f"""
-            Analyze the following representative media narratives for {selected_country}.
-            Summarize main themes, key actors, and recommended risk-mitigation actions.
-
             DATASET:
             {all_text_context}
             """
             
             chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": insight_prompt}],
                 model="meta-llama/llama-4-scout-17b-16e-instruct"
             )
             ai_insights = chat_completion.choices[0].message.content
         else:
-            ai_insights = "No sufficient article data found to generate AI insights."
-
+            ai_insights = "Insufficient data for AI analysis."
+    
     except Exception as e:
-        # This will now log the EXACT error (e.g., Rate Limit or Context Length)
         logger.error(f"Narrative/AI error: {str(e)}")
-        ai_insights = f"AI analysis could not be completed at this time. (Error: {str(e)[:50]})"
+        ai_insights = f"AI analysis could not be completed. (Error: {str(e)[:50]})"
         
-    # 5. Generate Narrative Volume Chart
+    # ---  ENSURE CHARTS RENDER IN PDF ---
     volume_chart_base64 = ""
+    factor_chart_base64 = ""
+        
     try:
+        # VOLUME CHART
         volume_data = base_query.values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
         if volume_data.exists():
-            df_vol = pd.DataFrame(list(volume_data))
-            df_vol = df_vol.rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-            df_vol = df_vol.dropna(subset=['date']).sort_values('date')
-
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='royalblue')
-            ax.set_title(f'Narrative Volume Over Time - {selected_country}')
-            ax.grid(True, linestyle='--', alpha=0.7)
+            df_vol = pd.DataFrame(list(volume_data)).rename(columns={'posting_time__date': 'date', 'count': 'articles'})
+            df_vol = df_vol.dropna(subset=['date']).sort_values('date').reset_index(drop=True) # THE RESET INDEX FIX
+            
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='#2563eb')
             plt.xticks(rotation=45)
             
-            img_buffer = BytesIO()
-            plt.savefig(img_buffer, format='png', bbox_inches='tight')
-            img_buffer.seek(0)
-            volume_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+            buf = BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            volume_chart_base64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
             plt.close(fig)
-    except Exception as e:
-        logger.error(f"Volume chart error: {e}")
 
-    # 6. Generate Factor Contribution Chart
-    factor_chart_base64 = ""
-    try:
-        intent_counts = base_query.exclude(
-            strategic_intent__in=['', None, 'Unknown', 'unknown']
-        ).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
-        
+        # FACTOR CHART
+        intent_counts = base_query.exclude(strategic_intent__in=['', None, 'Unknown']).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
         if intent_counts.exists():
-            df_f = pd.DataFrame(list(intent_counts))
-            df_f = df_f.rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
+            df_f = pd.DataFrame(list(intent_counts)).rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
+            df_f = df_f.sort_values('Val', ascending=True).reset_index(drop=True) # THE RESET INDEX FIX
             
-            fig, ax = plt.subplots(figsize=(7, 5))
-            ax.barh(df_f['Factor'], df_f['Val'], color='skyblue')
-            ax.set_title(f'Top Strategic Intents - {selected_country}')
+            fig, ax = plt.subplots(figsize=(7, 4))
+            ax.barh(df_f['Factor'], df_f['Val'], color='#38bdf8')
             
-            img_buffer = BytesIO()
-            plt.savefig(img_buffer, format='png', bbox_inches='tight')
-            img_buffer.seek(0)
-            factor_chart_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+            buf = BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            factor_chart_base64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
             plt.close(fig)
     except Exception as e:
-        logger.error(f"Factor chart error: {e}")
+        print(f"Chart Error: {e}")
 
-    # 8. Render PDF
     context = {
         'country': selected_country,
-        'report_data': report_data,
+        'primary_intent': primary_intent,
         'articles_count': articles_count,
-        'date_generated': datetime.now().strftime("%B %d, %Y"),
-        'volume_chart_base64': volume_chart_base64,
-        'factor_chart_base64': factor_chart_base64,
+        'volume_chart': volume_chart_base64,
+        'factor_chart': factor_chart_base64,
         'key_narratives': key_narratives,
         'ai_insights': ai_insights,
+        'date_generated': datetime.now().strftime("%B %d, %Y"),
     }
 
+    # Render PDF logic
     template = get_template('report_pdf.html')
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
-
     if not pdf.err:
         response = HttpResponse(result.getvalue(), content_type='application/pdf')
-        filename = f"CVI_Report_{selected_country}_{datetime.now().strftime('%Y%m%d')}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Disposition'] = f'attachment; filename="CVI_Report_{selected_country}.pdf"'
         return response
-
-    return HttpResponse("Error generating PDF.", status=500)
+    return HttpResponse("Error", status=500)
