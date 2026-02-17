@@ -244,7 +244,7 @@
         <div class="section-title">Narrative Volume Over Time</div>
         <div class="chart-container">
             {% if volume_chart_base64 %}
-            <img src="image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%; max-width: 600px;">
+            <img src="data:image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%; max-width: 600px;">
             {% else %}
             <p>No narrative volume data available for this country.</p>
             {% endif %}
@@ -255,7 +255,7 @@
         <div class="section-title">Top Strategic Intents</div>
         <div class="chart-container">
             {% if factor_chart_base64 %}
-            <img src="image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%; max-width: 600px;">
+            <img src="data:image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%; max-width: 600px;">
             {% else %}
             <p>No chart data available.</p>
             {% endif %}
