@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% load custom_filters %}
-{% block content %}
-<!-- Two Charts Side by Side -->
 
+{% block content %}
 <div class="row mb-5">
     <div class="col-lg-6">
         <div class="card shadow-sm h-100">
@@ -20,16 +19,15 @@
                 <h4>Top Strategic Intents by Actor-Country</h4>
             </div>
             <div class="card-body">
-                {{ subject_chart|safe }}
+                {{ intent_country_actor_chart|safe }}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Simple Table -->
 <div class="card shadow-sm mb-5">
     <div class="card-header bg-light text-center">
-        <h4>Top Strategic Intents Mentioned</h4>  <!-- FIXED: Changed title -->
+        <h4>Top Strategic Intents Mentioned</h4>
     </div>
     <div class="card-body">
         <table class="table table-hover">
@@ -42,12 +40,12 @@
                 </tr>
             </thead>
             <tbody>
-                {% for intent in top_strategic_intents %}
+                {% for intent in top_intents %}
                 <tr>
                     <td><strong>{{ intent.strategic_intent|title }}</strong></td>
                     <td>{{ intent.inferred_actor }}</td>
                     <td>{{ intent.target_country }}</td>
-                    <td>{{ intent.total }}</td>
+                    <td>{{ intent.article_count }}</td>
                 </tr>
                 {% empty %}
                 <tr><td colspan="4" class="text-center text-muted">No strategic intent data</td></tr>
@@ -57,7 +55,6 @@
     </div>
 </div>
 
-<!-- Sample Articles (keep or remove if you want) -->
 <div class="row">
     <div class="col-12">
         <div class="card shadow-sm">
@@ -67,9 +64,13 @@
             <div class="card-body">
                 {% for article in sample_articles %}
                 <div class="mb-3 pb-3 border-bottom">
-                    <h6>{{ article.article_text|truncatewords:10 }}</h6>
-                    <p class="small text-muted mb-1">Country: {{ article.target_country }}, Actor: {{ article.inferred_actor }}, Intent: {{ article.strategic_intent }}</p>
-                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary">Read Article</a>
+                    <h6>{{ article.article_text|truncatewords:15 }}</h6>
+                    <p class="small text-muted mb-1">
+                        <strong>Country:</strong> {{ article.target_country }} | 
+                        <strong>Actor:</strong> {{ article.inferred_actor }} | 
+                        <strong>Intent:</strong> {{ article.strategic_intent }}
+                    </p>
+                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-2">Read Article</a>
                 </div>
                 {% empty %}
                 <p class="text-muted text-center py-3">No sample articles available.</p>
