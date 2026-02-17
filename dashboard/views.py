@@ -682,11 +682,8 @@ def generate_report(request):
         }
         
         formatted_country = country_mapping.get(selected_country.lower(), selected_country)
-        
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
-            
-            # Use .str.lower() to ensure "Senegal" matches "senegal" in the CSV
             matching_rows = df[
                 (df['country'].str.lower() == formatted_country.lower()) & 
                 (df['actor'].str.lower() == formatted_actor.lower())
@@ -695,31 +692,26 @@ def generate_report(request):
             if not matching_rows.empty:
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
-                max_intent = max_row['intent']
-                
-                risk_level = "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low"
-                
                 report_data.append({
                     'actor': actor,
                     'cvi_score': round(float(max_score), 3),
-                    'risk_level': risk_level,
-                    'primary_threat': max_intent
+                    'risk_level': "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low",
+                    'primary_threat': max_row['intent']
                 })
             else:
                 report_data.append({
-                    'actor': actor,
-                    'cvi_score': 0.0,
-                    'risk_level': "N/A",
-                    'primary_threat': "No Data"
+                    'actor': actor, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "No Data"
                 })
         
-        # 
+        # Sort so highest risk is first
         report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
-
+        
     except Exception as e:
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
 
+    # --- Extract Highest Risk Actor ---
+    highest_risk_actor = report_data[0]['actor'] if report_data and report_data[0]['cvi_score'] > 0 else "No data available"
     
     # 4. Get Key Narratives & AI Insights
     key_narratives = []
@@ -826,6 +818,7 @@ def generate_report(request):
             
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)  
             volume_chart_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             plt.close(fig)
 
@@ -845,6 +838,7 @@ def generate_report(request):
             
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)  
             factor_chart_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             plt.close(fig)
 
