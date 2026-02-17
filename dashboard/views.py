@@ -435,6 +435,14 @@ def overview(request):
 # OTHER PAGES (Countries, Authors, Media, Intents)
 # =========================
 
+from django.shortcuts import render
+from django.db.models import Count
+from django.core.paginator import Paginator
+import pandas as pd
+import plotly.express as px
+# Assuming COUNTRIES is imported from your constants/utils
+# from .utils import COUNTRIES 
+
 def countries(request):
     selected_country = request.GET.get('country', '').strip()
 
@@ -443,7 +451,7 @@ def countries(request):
     if selected_country:
         qs = qs.filter(target_country__iexact=selected_country)
 
-    # 1. Top African countries by total articles (target_country)
+    # --- 1. Top African countries by total articles ---
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
@@ -456,9 +464,8 @@ def countries(request):
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
             
-            # CRITICAL FIX ORDER: Sort first, THEN reset index
-            df = df.sort_values('Articles', ascending=True)
-            df = df.reset_index(drop=True) 
+            # THE FIX: Sort first, THEN reset index, THEN pass to Plotly
+            df = df.sort_values('Articles', ascending=True).reset_index(drop=True)
             
             fig = px.bar(
                 df,
@@ -474,7 +481,7 @@ def countries(request):
             fig.update_layout(height=500, showlegend=False, template="plotly_white")
             publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 2. Top subjects mentioned (inferred_actor)
+    # --- 2. Top subjects mentioned (inferred_actor) ---
     top_subjects = MediaNarrative.objects.exclude(
         inferred_actor__in=['', 'Unknown', None]
     ).values('inferred_actor').annotate(
@@ -483,16 +490,15 @@ def countries(request):
 
     subject_chart = "<p class='text-center py-5 text-muted fs-3'>No subject data</p>"
     if top_subjects.exists():
-        df = pd.DataFrame(list(top_subjects))
-        if not df.empty:
-            df = df.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
+        df_sub = pd.DataFrame(list(top_subjects))
+        if not df_sub.empty:
+            df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
             
             # Apply same fix: Sort then Reset
-            df = df.sort_values('Mentions', ascending=True)
-            df = df.reset_index(drop=True)
+            df_sub = df_sub.sort_values('Mentions', ascending=True).reset_index(drop=True)
             
-            fig = px.bar(
-                df,
+            fig_sub = px.bar(
+                df_sub,
                 x='Mentions',
                 y='Actor',
                 orientation='h',
@@ -501,14 +507,16 @@ def countries(request):
                 color='Actor',
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            fig.update_traces(textposition='outside')
-            fig.update_layout(height=500, showlegend=False, template="plotly_white")
-            subject_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+            fig_sub.update_traces(textposition='outside')
+            fig_sub.update_layout(height=500, showlegend=False, template="plotly_white")
+            subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 3. Top Strategic Intents by Target Country and Actor
+    # --- 3. Top Strategic Intents by Target Country and Actor ---
     target_country_actor_intents = MediaNarrative.objects.exclude(
-        target_country__in=['', 'Unknown', None],
-        inferred_actor__in=['', 'Unknown', None],
+        target_country__in=['', 'Unknown', None]
+    ).exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).exclude(
         strategic_intent__in=['', 'Unknown', None]
     ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
         count=Count('id')
@@ -527,8 +535,7 @@ def countries(request):
             df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
             
             # Apply same fix: Sort then Reset
-            df_intent = df_intent.sort_values('Count', ascending=True)
-            df_intent = df_intent.reset_index(drop=True)
+            df_intent = df_intent.sort_values('Count', ascending=True).reset_index(drop=True)
             
             fig_intent = px.bar(
                 df_intent,
@@ -544,14 +551,18 @@ def countries(request):
             fig_intent.update_layout(height=600, showlegend=True, template="plotly_white")
             intent_country_actor_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
+    # --- Context Preparation ---
+    coverage_table = list(top_publishers)
+    sample_articles = qs[:5]
+
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'intent_country_actor_chart': intent_country_actor_chart,
-        'coverage_table': list(top_publishers),
-        'sample_articles': qs[:5],
+        'coverage_table': coverage_table,
+        'sample_articles': sample_articles,
         'selected_country': selected_country or "All Countries",
-        'african_countries': COUNTRIES, # Ensure COUNTRIES is imported/defined
+        'african_countries': COUNTRIES,
     }
     return render(request, 'dashboard/countries.html', context)
     
