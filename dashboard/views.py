@@ -622,113 +622,127 @@ def generate_report(request):
     # 1. Handle Form Display
     if not selected_country or not selected_actors:
         context = {
-            'african_countries': COUNTRIES,
+            'african_countries': COUNTRIES, 
             'foreign_actors': FOREIGN_ACTORS,
         }
         return render(request, 'report_form.html', context)
 
-    # 2. Setup Data & Normalization
-    actor_map = {"US": "UnitedStates"}
-    report_data = []
+    # 2. Setup Mapping Logics
+    csv_country_map = {
+        "ethiopia": "Ethiopia", "senegal": "Senegal", "drc": "DRC",
+        "democratic republic of the congo": "DRC", "cote d'ivoire": "CoteIvoire",
+        "coteivoire": "CoteIvoire", "ivory coast": "CoteIvoire", "south africa": "South Africa"
+    }
+    csv_actor_map = {
+        "us": "UnitedStates", "unitedstates": "UnitedStates", "saudi": "Saudi",
+        "saudi arabia": "Saudi", "uae": "UAE", "russia": "Russia", "france": "France",
+        "china": "China", "rwanda": "Rwanda", "turkey": "Turkey", "israel": "Israel", 
+        "iran": "Iran", "nonstate": "NonState"
+    }
+    db_country_map = {
+        "coteivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
+        "drc": "DRC", "ethiopia": "Ethiopia", "senegal": "Senegal", "south africa": "South Africa"
+    }
+    db_actor_map = {
+        "unitedstates": "US", "us": "US", "saudi": "Saudi Arabia",
+        "saudi arabia": "Saudi Arabia", "uae": "UAE", "russia": "Russia",
+        "france": "France", "china": "China", "rwanda": "Rwanda",
+        "turkey": "Turkey", "israel": "Israel", "iran": "Iran"
+    }
 
-    # 3. Calculate CVI Risk Scores from CSV
+    report_data = []
+    
+    # --- 3. Process Data ---
     try:
-        import pandas as pd
-        import os
-        
         current_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
         
-        possible_paths = [
-            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv'),
-            os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
-            os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv'),
-            os.path.join(current_dir, '..', '..', 'final_risk_by_actor_intent_country (1).csv'),
-        ]
-        
-        csv_file = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                csv_file = path
-                logger.info(f"Found CSV file at: {path}")
-                break
-        
-        if csv_file is None:
-            logger.error(f"CSV file not found in any of these locations: {possible_paths}")
-            return HttpResponse("CSV file not found in any expected location", status=500)
-        
-        df = pd.read_csv(csv_file)
-        
-        # Keys must be lowercase; Values must match the CSV EXACTLY
-        country_mapping = {
-            "ethiopia": "Ethiopia",
-            "senegal": "Senegal",
-            "drc": "DRC",
-            "democratic republic of the congo": "DRC",
-            "cote d'ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire"
-        }
-        
-        actor_mapping = {
-            "us": "UnitedStates",
-            "united states": "UnitedStates",
-            "uae": "UAE",
-            "united arab emirates": "UAE",
-            "russia": "Russia",
-            "france": "France",
-            "china": "China",
-            "rwanda": "Rwanda",
-            "saudi": "Saudi",
-            "turkey": "Turkey",
-            "israel": "Israel",
-            "iran": "Iran",
-            "nonstate": "NonState"
-        }
-        
-        # 1. Get the mapped name, but keep it in the casing the CSV expects
-        # If selected_country is "ethiopia", mapping makes it "Ethiopia"
-        formatted_country = country_mapping.get(selected_country.lower(), selected_country.title())
-        
-        for actor in selected_actors:
-            # 2. Map the actor name (e.g., "us" -> "UnitedStates")
-            formatted_actor = actor_mapping.get(actor.lower(), actor.title())
+        if not os.path.exists(csv_file):
+            # Fallback if the path is slightly different
+            csv_file = os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv')
             
-            # 3. FIX: Use .str.strip() to remove hidden spaces and match casing
+        df = pd.read_csv(csv_file)
+        search_country = csv_country_map.get(selected_country.lower(), selected_country.title())
+        db_country = db_country_map.get(selected_country.lower(), selected_country.title())
+
+        for actor in selected_actors:
+            # A. CSV Risk Score Logic
+            search_actor = csv_actor_map.get(actor.lower(), actor.title())
             matching_rows = df[
-                (df['country'].str.strip() == formatted_country) & 
-                (df['actor'].str.strip() == formatted_actor)
+                (df['country'].str.strip() == search_country) & 
+                (df['actor'].str.strip() == search_actor)
             ]
             
+            # B. Database Chart Logic for THIS specific actor
+            db_actor = db_actor_map.get(actor.lower(), actor)
+            chart_qs = MediaNarrative.objects.filter(
+                target_country__iexact=db_country,
+                inferred_actor__iexact=db_actor
+            )
+
+            volume_chart = None
+            if chart_qs.exists():
+                plt.figure(figsize=(10, 4))
+                df_chart = pd.DataFrame(list(chart_qs.values('posting_time')))
+                df_chart['date'] = pd.to_datetime(df_chart['posting_time']).dt.date
+                counts = df_chart['date'].value_counts().sort_index()
+                
+                plt.plot(counts.index, counts.values, color='#2563eb', marker='o')
+                plt.title(f"Volume: {actor} in {db_country}")
+                plt.grid(True, alpha=0.3)
+                
+                buf = BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                volume_chart = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close()
+
+            # C. Combine results
             if not matching_rows.empty:
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
-                max_score = max_row['FinalRisk']
                 report_data.append({
-                    'actor': actor, # Use the user's selected name for display
-                    'cvi_score': round(float(max_score), 3),
-                    'risk_level': "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low",
-                    'primary_threat': max_row['intent']
+                    'actor': actor,
+                    'cvi_score': round(float(max_row['FinalRisk']), 3),
+                    'risk_level': "High" if max_row['FinalRisk'] > 0.7 else "Medium" if max_row['FinalRisk'] > 0.4 else "Low",
+                    'primary_threat': max_row['intent'],
+                    'chart': volume_chart # Each actor gets their own chart
                 })
             else:
-                # If it still hits this, the CSV names don't match your mapping keys
                 report_data.append({
-                    'actor': actor, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "No Data"
+                    'actor': actor, 'cvi_score': 0.0, 'risk_level': "N/A", 
+                    'primary_threat': "No Data Found", 'chart': volume_chart
                 })
         
-        # Sort so highest risk is first
         report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
         
     except Exception as e:
-        logger.error(f"CVI calculation error: {e}")
-        report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
+        logger.error(f"Report Generation Error: {e}")
+        return HttpResponse(f"Error: {e}", status=500)
 
-    # --- Extract Highest Risk Actor ---
-    highest_risk_actor = report_data[0]['actor'] if report_data and report_data[0]['cvi_score'] > 0 else "No data available"
-    
+    # --- 4. Final Context ---
+    context = {
+        'country': db_country,
+        'report_data': report_data,
+        'highest_risk_actor': report_data[0]['actor'] if report_data else "None"
+    }    
     # 4. Get Key Narratives & AI Insights
     key_narratives = []
     ai_insights = ""
+    
+    # Identify the top actor to focus the narrative analysis
+    highest_risk_actor = report_data[0]['actor'] if report_data else "None"
+    # Map it to the DB name (e.g., 'UnitedStates' -> 'US')
+    top_db_actor = db_actor_map.get(highest_risk_actor.lower(), highest_risk_actor)
+
     try:
         exclude_list = ['football', 'soccer', 'sport', 'sports', 'match', 'game', 'tournament', 'championship']
-        base_query = MediaNarrative.objects.filter(target_country__iexact=selected_country)
+        
+        # FIX: Filter by mapped DB country AND the top actor found in Step 3
+        base_query = MediaNarrative.objects.filter(
+            target_country__iexact=db_country,
+            inferred_actor__iexact=top_db_actor
+        )
+        
         for term in exclude_list:
             base_query = base_query.exclude(article_text__icontains=term)
     
@@ -744,7 +758,7 @@ def generate_report(request):
         
         # ---: INDIVIDUAL AI SUMMARIES FOR EACH NARRATIVE ---
         for article in display_articles:
-            ai_summary = article.article_text[:100] + "..." # Default fallback
+            ai_summary = article.article_text[:300] + "..." # Default fallback
             
             if client:
                 try:
@@ -763,7 +777,7 @@ def generate_report(request):
                 'intent': article.strategic_intent,
                 'tone': article.tone,
                 'url': article.url,
-                'title': article.article_text[:100] + "...", 
+                'title': article.article_text, 
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
                 'summary': ai_summary # uses AI-generated summary
