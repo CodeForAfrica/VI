@@ -266,15 +266,7 @@
         <div class="section-title">Key Insights & Recommendations</div>
         <div class="recommendations">
             <ul>
-                <li><strong>Highest Risk Actor:</strong> 
-                    {% if report_data %}
-                        {% with highest_actor=report_data|first %}
-                            {{ highest_actor.actor }} ({{ highest_actor.cvi_score }} - {{ highest_actor.risk_level }} Risk)
-                        {% endwith %}
-                    {% else %}
-                        No data available
-                    {% endif %}
-                </li>
+                <li><strong>Highest Risk Actor:</strong> {{ highest_risk_actor }}</li>
                 <li><strong>Primary Vulnerability Areas:</strong> Based on strategic intent analysis from media narratives</li>
                 <li><strong>Recommendation:</strong> Monitor high-risk actors closely and track narrative trends for early warning indicators</li>
             </ul>
