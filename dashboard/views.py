@@ -26,6 +26,7 @@ from django.conf import settings
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
 import plotly.graph_objects as go
+import os
 
 logger = logging.getLogger(__name__)
 
