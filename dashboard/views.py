@@ -518,40 +518,6 @@ def countries(request):
             fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 3. Top Strategic Intents by Target Country and Actor ---
-    top_intents = MediaNarrative.objects.exclude(
-        target_country__in=['', 'Unknown', None]
-    ).exclude(
-        inferred_actor__in=['', 'Unknown', None]
-    ).exclude(
-        strategic_intent__in=['', 'Unknown', None]
-    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
-        article_count=Count('id')
-    ).order_by('-article_count')[:10]
-
-    intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data</p>"
-    if target_country_actor_intents.exists():
-        df_intent = pd.DataFrame(list(target_country_actor_intents))
-        if not df_intent.empty:
-            df_intent = df_intent.rename(columns={
-                'target_country': 'Country', 'inferred_actor': 'Actor', 
-                'strategic_intent': 'Intent', 'count': 'Count'
-            })
-            df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
-            df_intent = df_intent.sort_values('Count', ascending=True).reset_index(drop=True)
-            
-            fig_intent = px.bar(
-                df_intent,
-                x='Count',
-                y='Combined',
-                orientation='h',
-                title='Top Strategic Intents',
-                text='Count',
-                template="plotly_white"
-            )
-            fig_intent.update_traces(marker_color='#10b981', textposition='outside')
-            intent_country_actor_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
-
     # --- Context Preparation ---
     coverage_table = list(top_publishers)
     sample_articles = qs[:5]
@@ -856,7 +822,7 @@ def generate_report(request):
             
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
-            volume_chart_base64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+            volume_chart_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             plt.close(fig)
 
         # FACTOR CHART
@@ -875,7 +841,7 @@ def generate_report(request):
             
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
-            factor_chart_base64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+            factor_chart_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             plt.close(fig)
 
     except Exception as e:
