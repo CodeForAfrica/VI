@@ -6,45 +6,68 @@
         --navy-dark: #1a2a40; 
         --action-blue: #2563eb; 
         --soft-bg: #f8fafc;
+        --success-green: #10b981;
+        --warning-amber: #f59e0b;
     }
     
     /* Stats Styling */
-    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; }
+    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; transition: transform 0.2s; }
+    .stat-card:hover { transform: translateY(-3px); }
     .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
     
-    /* Badge Styling */
-    .badge-tone { background-color: #10b981 !important; color: white !important; padding: 5px 10px; }
-    .badge-intent { background-color: #f59e0b !important; color: white !important; padding: 5px 10px; }
-    
     /* CVI Calculator Panel */
-    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 250px; }
-    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
+    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 350px; }
+    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; position: relative; }
     .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
     
-    /* Floating Chatbot */
-    #chat-window { 
-        display: none; width: 350px; height: 450px; position: fixed; 
-        bottom: 90px; right: 20px; background: white; z-index: 1000; 
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
+    /* Methodology Box Styling */
+    .methodology-box {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 15px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+        width: 100%;
+        max-width: 95%;
     }
-    #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
-
-    /* Typing Animation */
-    .typing { font-style: italic; color: #888; font-size: 0.8rem; }
+    .signal-tag {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        display: inline-block;
+    }
+    .content-signal { background: #dbeafe; color: #1e40af; }
+    .context-signal { background: #fef3c7; color: #92400e; }
     
-    /* Larger chart sizes */
-    .plotly-graph-div { height: 500px !important; }
+    .calc-formula {
+        font-family: 'Courier New', Courier, monospace;
+        background: #f1f5f9;
+        padding: 12px;
+        border-radius: 6px;
+        text-align: center;
+        font-weight: bold;
+        color: #475569;
+        border: 1px dashed #cbd5e1;
+    }
 
-    /* Reset Link Styling */
+    /* Fixed Reset Button */
+    .reset-container { position: relative; z-index: 1050; padding-top: 15px; }
     .reset-link {
         transition: all 0.2s;
         display: inline-block;
         padding: 8px 16px;
+        cursor: pointer;
     }
-    .reset-link:hover {
-        background-color: #f1f5f9;
-        color: #1e293b !important;
-    }
+    .reset-link:hover { background-color: #fee2e2; color: #dc2626 !important; border-radius: 4px; }
+    
+    /* Badge Styling */
+    .badge-tone { background-color: var(--success-green) !important; color: white !important; padding: 5px 10px; }
+    .badge-intent { background-color: var(--warning-amber) !important; color: white !important; padding: 5px 10px; }
 </style>
 
 <div class="row g-3 mb-5">
@@ -55,13 +78,13 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #10b981;">
+        <div class="stat-card" style="border-bottom: 4px solid var(--success-green);">
             <div class="stat-label fw-bold text-muted small text-uppercase">Media Outlets</div>
             <div class="stat-value">{{ unique_outlets|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
+        <div class="stat-card" style="border-bottom: 4px solid var(--warning-amber);">
             <div class="stat-label fw-bold text-muted small text-uppercase">Narratives</div>
             <div class="stat-value">{{ unique_intents|default:"0" }}</div>
         </div>
@@ -74,39 +97,10 @@
     </div>
 </div>
 
-<div class="row g-4 mb-5">
-    <div class="col-lg-7">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
-            </div>
-            <div class="card-body p-0">
-                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents (Actor → Target)</h5>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for sub in top_subjects %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
-                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
+
+
+
 <div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
         <form method="get" action="." id="cvi-filter-form">
@@ -128,10 +122,10 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Strategic Intent (Optional Filter)</label>
+            <div class="mb-4">
+                <label class="fw-bold small text-muted">Strategic Intent (Factor Filter)</label>
                 <select name="calc_strategic_intent" class="form-select">
-                    <option value="">-- All Intents --</option>
+                    <option value="">-- Auto-Detect Primary Factor --</option>
                     <option value="Economic" {% if selected_intent == 'Economic' %}selected{% endif %}>Economic</option>
                     <option value="Election Interference" {% if selected_intent == 'Election Interference' %}selected{% endif %}>Election Interference</option>
                     <option value="Social Fragility" {% if selected_intent == 'Social Fragility' %}selected{% endif %}>Social Fragility</option>
@@ -139,86 +133,121 @@
                     <option value="LGBTQ" {% if selected_intent == 'LGBTQ' %}selected{% endif %}>LGBTQ</option>
                 </select>
             </div>
+            
             <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">
-                Calculate & Filter
+                <i class="fas fa-calculator me-2"></i>Calculate & Filter
             </button>
             
-            <div class="text-center border-top pt-2">
-                <a href="." class="reset-link text-decoration-none small text-muted fw-bold">
-                    <i class="fas fa-sync-alt me-1"></i> Reset Filters
+            <div class="text-center border-top reset-container">
+                <a href="{% url 'overview' %}" class="reset-link text-decoration-none small text-muted fw-bold">
+                    <i class="fas fa-sync-alt me-1"></i> Reset All Parameters
                 </a>
             </div>
         </form>
     </div>
-    <div class="cvi-right text-center">
+
+    <div class="cvi-right">
         {% if selected_country and selected_actor %}
             <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
-            <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
+            <div class="h5 fw-bold text-uppercase mt-2" style="letter-spacing: 1px;">Vulnerability Score</div>
             
-            {% if vulnerability_description %}
-            <div class="mt-3 p-3 text-start border-top bg-white" style="border-radius: 8px; max-width: 90%;">
-                <p style="font-size: 0.8rem; line-height: 1.4; color: #64748b; font-style: italic;">
-                    <i class="fas fa-info-circle text-primary me-1"></i>
-                    {{ vulnerability_description }}
+            <div class="methodology-box">
+                <h6 class="fw-bold mb-3" style="color: var(--navy-dark);">
+                    <i class="fas fa-microscope me-2 text-primary"></i>Methodology Breakdown
+                </h6>
+                
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6 border-end">
+                        <span class="signal-tag content-signal">1. Content Signal</span>
+                        <p class="small text-muted mb-0" style="line-height: 1.3;">
+                            Analyzes volume of narratives by <strong>{{ selected_actor }}</strong> targeting specific strategic intents, corrected via PPI human-labeling.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <span class="signal-tag context-signal">2. Contextual Signal</span>
+                        <p class="small text-muted mb-0" style="line-height: 1.3;">
+                            Factors in <strong>{{ selected_country }}</strong>'s debt exposure, military presence, resource ties, and social fragility.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="calc-formula small mb-2">
+                    (Content Signal + Contextual Signal) = Vulnerability Index
+                </div>
+
+                <p style="font-size: 0.72rem; color: #64748b; line-height: 1.4;">
+                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. 
+                    Current focus: <em>{{ primary_intent|default:selected_intent|default:"General Influence" }}</em>.
                 </p>
             </div>
-            {% endif %}
-
-            <p class="small text-muted mt-2">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
-            {% if cvi_score == 0.0 %}
-            <p class="small text-warning">Note: Low vulnerability detected</p>
-            {% endif %}
         {% else %}
-            <div class="text-muted opacity-50">
-                <i class="fas fa-calculator fa-3x mb-3"></i>
-                <p>Select parameters to view calculations</p>
+            <div class="text-muted opacity-50 text-center p-4">
+                <i class="fas fa-chart-line fa-4x mb-3"></i>
+                <p class="fw-bold h5">Ready for Analysis</p>
+                <p>Select parameters on the left to generate the Vulnerability Index.</p>
             </div>
         {% endif %}
     </div>
 </div>
 
-<div class="card shadow-sm border-0 mb-5">
-    <div class="card-header bg-white py-3 text-center border-bottom">
-        <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top African Countries Publishing</h5>
+<div class="row g-4 mb-5">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
+                <span class="badge bg-light text-dark">{{ selected_country }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
+            </div>
+        </div>
     </div>
-    <div class="table-responsive">
-        <table class="table mb-0 table-hover">
-            <thead class="table-light">
-                <tr><th class="ps-4">Country</th><th class="text-center">Articles Published</th></tr>
-            </thead>
-            <tbody>
-                {% for item in country_list %}
-                <tr>
-                    <td class="ps-4 fw-bold">{{ item.target_country }}</td>
-                    <td class="text-center"><span class="badge bg-secondary px-3">{{ item.total }}</span></td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="2" class="text-center py-4 text-muted">No data available</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for sub in top_subjects %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="fw-bold">{{ sub.strategic_intent|title }}</span><br>
+                            <small class="text-muted">{{ sub.inferred_actor }} → {{ sub.target_country }}</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center py-4 text-muted">No intent data found.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
     </div>
 </div>
 
-<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
-<div class="row g-4 mb-3">
+<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Narratives</h4>
+<div class="row g-4 mb-5">
     {% for article in page_obj %}
     <div class="col-12">
         <div class="card shadow-sm border-0">
             <div class="card-body">
-                <h6 class="fw-bold">
-                    <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
-                        {{ article.article_text|truncatewords:15 }}
-                    </a>
-                </h6>
-                <div class="mb-3 mt-2">
-                    <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
-                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="fw-bold mb-0">
+                        <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
+                            {{ article.article_text|truncatewords:12 }}
+                        </a>
+                    </h6>
+                    <span class="text-muted small">{{ article.posting_time|date:"M d, Y" }}</span>
                 </div>
-                <p class="small text-muted mb-3">{{ article.article_text|truncatewords:45 }}</p>
+                <div class="mb-3 mt-2">
+                    <span class="badge badge-tone">Tone: {{ article.tone|title }}</span>
+                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|title }}</span>
+                </div>
+                <p class="small text-muted mb-3">{{ article.article_text|truncatewords:40 }}</p>
                 <div class="d-flex justify-content-between align-items-center">
-                    <span class="small text-muted">{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</span>
-                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">Read Full Article →</a>
+                    <span class="small fw-bold text-dark">{{ article.media_outlet }}</span>
+                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-3">View Source</a>
                 </div>
             </div>
         </div>
@@ -226,72 +255,19 @@
     {% endfor %}
 </div>
 
-<div id="chatbot-bubble">
-    <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
-        <span style="font-size: 1.5rem;">💬</span>
-    </button>
-</div>
-
-<div id="chat-window" class="border">
-    <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center rounded-top">
-        <span class="fw-bold">AI Narrative Analyst</span>
-        <button class="btn-close btn-close-white" onclick="toggleChat()"></button>
-    </div>
-    <div id="chat-box" class="p-3 flex-grow-1 overflow-auto bg-light" style="font-size: 0.9rem;">
-        <div class="p-2 mb-2 bg-white border rounded">
-            Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores.
-        </div>
-    </div>
-    <div class="p-2 border-top bg-white rounded-bottom">
-        <div class="input-group">
-            <input type="text" id="chat-input" class="form-control form-control-sm" placeholder="Ask a question...">
-            <button class="btn btn-primary btn-sm" type="button" id="send-btn">Send</button>
-        </div>
-    </div>
-</div>
-
 <script>
-    function toggleChat() {
-        const chat = document.getElementById('chat-window');
-        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
-    }
-
-    // AUTO-SUBMIT dropdown logic
+    // 1. Auto-submit form when dropdowns change for a seamless UI
     document.querySelectorAll('.cvi-left select').forEach(dropdown => {
         dropdown.addEventListener('change', function() {
             this.closest('form').submit();
         });
     });
 
-    // Chatbot Logic
-    document.getElementById('send-btn').addEventListener('click', function() {
-        const input = document.getElementById('chat-input');
-        const box = document.getElementById('chat-box');
-        const userText = input.value.trim();
-        
-        if (userText !== "") {
-            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
-            input.value = "";
-            const loadingId = "loading-" + Date.now();
-            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing...</span></div>`;
-            box.scrollTop = box.scrollHeight;
-
-            fetch('/chatbot-response/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ message: userText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById(loadingId).remove();
-                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
-                box.scrollTop = box.scrollHeight;
-            });
-        }
-    });
+    // 2. Chatbot Visibility Toggle
+    function toggleChat() {
+        const chat = document.getElementById('chat-window');
+        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
+    }
 </script>
 
 {% endblock %}
