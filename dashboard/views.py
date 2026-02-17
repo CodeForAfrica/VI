@@ -675,7 +675,13 @@ def generate_report(request):
             "united arab emirates": "UAE",
             "russia": "Russia",
             "france": "France",
-            "china": "China"
+            "china": "China",
+            "rwanda": "Rwanda",
+            "saudi": "Saudi",
+            "turkey": "Turkey",
+            "israel": "Israel",
+            "iran": "Iran",
+            "nonstate": "NonState"
         }
         
         # 1. Get the mapped name, but keep it in the casing the CSV expects
