@@ -455,8 +455,9 @@ def countries(request):
         df = pd.DataFrame(list(top_publishers))
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
-            
-            # THE FIX: Sort first, THEN reset index, THEN pass to Plotly
+            df['Country'] = df['Country'].astype(str).str.strip() # Removes hidden spaces
+            df = df.dropna(subset=['Country'])
+            # Sort first, THEN reset index, THEN pass to Plotly
             df = df.sort_values('Articles', ascending=True).reset_index(drop=True)
             
             fig = px.bar(
