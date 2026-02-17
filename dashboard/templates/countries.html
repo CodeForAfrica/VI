@@ -2,79 +2,65 @@
 {% load custom_filters %}
 
 {% block content %}
-<div class="row mb-5">
-    <div class="col-lg-6">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light text-center">
-                <h4>Top African Countries by Articles Published</h4>
-            </div>
-            <div class="card-body">
-                {{ publisher_chart|safe }}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light text-center">
-                <h4>Top Strategic Intents by Actor-Country</h4>
-            </div>
-            <div class="card-body">
-                {{ intent_country_actor_chart|safe }}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card shadow-sm mb-5">
-    <div class="card-header bg-light text-center">
-        <h4>Top Strategic Intents Mentioned</h4>
-    </div>
-    <div class="card-body">
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th>Strategic Intent</th>
-                    <th>Foreign Actor</th>
-                    <th>Target Country</th>
-                    <th>Article Count</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for intent in top_intents %}
-                <tr>
-                    <td><strong>{{ intent.strategic_intent|title }}</strong></td>
-                    <td>{{ intent.inferred_actor }}</td>
-                    <td>{{ intent.target_country }}</td>
-                    <td>{{ intent.article_count }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="4" class="text-center text-muted">No strategic intent data</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="card shadow-sm">
-            <div class="card-header bg-light text-center">
-                <h4>Sample Articles</h4>
-            </div>
-            <div class="card-body">
-                {% for article in sample_articles %}
-                <div class="mb-3 pb-3 border-bottom">
-                    <h6>{{ article.article_text|truncatewords:15 }}</h6>
-                    <p class="small text-muted mb-1">
-                        <strong>Country:</strong> {{ article.target_country }} | 
-                        <strong>Actor:</strong> {{ article.inferred_actor }} | 
-                        <strong>Intent:</strong> {{ article.strategic_intent }}
-                    </p>
-                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-2">Read Article</a>
+<div class="container-fluid py-4">
+    <div class="row mb-5">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Top African Countries by Articles Published</h4>
                 </div>
-                {% empty %}
-                <p class="text-muted text-center py-3">No sample articles available.</p>
-                {% endfor %}
+                <div class="card-body">
+                    {{ publisher_chart|safe }}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Top Actor-Country Pairings</h4>
+                </div>
+                <div class="card-body">
+                    {{ actor_country_chart|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Sample Articles</h4>
+                </div>
+                <div class="card-body">
+                    {% for article in sample_articles %}
+                    <div class="mb-4 pb-3 border-bottom">
+                        <h5 class="fw-bold text-dark mb-3">{{ article.article_text|truncatewords:18 }}</h5>
+                        
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary px-3 py-2">
+                                <i class="bi bi-geo-alt-fill me-1"></i> {{ article.target_country }}
+                            </span>
+                            
+                            <span class="badge rounded-pill bg-warning bg-opacity-10 text-dark px-3 py-2">
+                                <i class="bi bi-person-fill me-1"></i> {{ article.inferred_actor }}
+                            </span>
+                            
+                            <span class="badge rounded-pill bg-info bg-opacity-10 text-info px-3 py-2">
+                                <i class="bi bi-shield-shaded me-1"></i> {{ article.strategic_intent|title }}
+                            </span>
+                        </div>
+
+                        <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-4 shadow-sm">
+                            Read Full Article
+                        </a>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5">
+                        <p class="text-muted fs-5">No sample articles available for the current selection.</p>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
