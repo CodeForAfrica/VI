@@ -855,6 +855,7 @@ def generate_report(request):
         'factor_chart': factor_chart_base64,
         'key_narratives': key_narratives,
         'ai_insights': ai_insights,
+        'highest_risk_actor': highest_risk_actor,
         'date_generated': datetime.now().strftime("%B %d, %Y"),
     }
 
