@@ -25,6 +25,7 @@ from groq import Groq
 from django.conf import settings
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
+import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,17 @@ logger = logging.getLogger(__name__)
 COUNTRIES = ["Senegal", "DRC", "CoteIvoire", "Ethiopia", "South Africa"]
 FOREIGN_ACTORS = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Arabia', 'Israel', 'Iran']
 TARGET_COUNTRIES = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi Arabia', 'Israel', 'Iran']
+
+
+INTENT_CHOICES = [
+    ('Democratic Interference', 'Democratic Interference'),
+    ('Cultural Hegemony', 'Cultural Hegemony'),
+    ('Reputation Damage', 'Reputation Damage'),
+    ('Economic Dependency', 'Economic Dependency'),
+    ('Security Dependency', 'Security Dependency'),
+    ('Trade Dominance', 'Trade Dominance'),
+    ('Social Fragility', 'Social Fragility'),
+]
 
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
