@@ -437,13 +437,12 @@ def overview(request):
 
 def countries(request):
     selected_country = request.GET.get('country', '').strip()
-
     qs = MediaNarrative.objects.all().order_by('-posting_time')
 
     if selected_country:
         qs = qs.filter(target_country__iexact=selected_country)
 
-    # --- 1. Top African countries by total articles ---
+    # --- 1. Top African countries by total articles (THE PROBLEM CHART) ---
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
@@ -451,27 +450,32 @@ def countries(request):
     ).order_by('-article_count')[:10]
 
     publisher_chart = "<p class='text-center py-5 text-muted fs-3'>No publishing data</p>"
+    
     if top_publishers.exists():
         df = pd.DataFrame(list(top_publishers))
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
-            df['Country'] = df['Country'].astype(str).str.strip() # Removes hidden spaces
-            df = df.dropna(subset=['Country'])
-            # Sort first, THEN reset index, THEN pass to Plotly
+            df['Country'] = df['Country'].astype(str).str.strip()
             df = df.sort_values('Articles', ascending=True).reset_index(drop=True)
-            
-            fig = px.bar(
-                df,
-                x='Articles',
-                y='Country',
+
+            # WE SWITCH TO GRAPH OBJECTS (go.Bar) TO AVOID THE KEYERROR
+            fig = go.Figure(go.Bar(
+                x=df['Articles'],
+                y=df['Country'],
                 orientation='h',
+                text=df['Articles'],
+                textposition='outside',
+                marker=dict(color='#2563eb') # Solid blue to avoid color-mapping crashes
+            ))
+            
+            fig.update_layout(
                 title='Top African Countries by Articles Published',
-                text='Articles',
-                color='Country',
-                color_discrete_sequence=px.colors.qualitative.Bold
+                height=500,
+                template="plotly_white",
+                xaxis_title="Articles",
+                yaxis_title="Country",
+                margin=dict(l=20, r=20, t=40, b=20)
             )
-            fig.update_traces(textposition='outside')
-            fig.update_layout(height=500, showlegend=False, template="plotly_white")
             publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     # --- 2. Top subjects mentioned (inferred_actor) ---
@@ -486,22 +490,20 @@ def countries(request):
         df_sub = pd.DataFrame(list(top_subjects))
         if not df_sub.empty:
             df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
-            
-            # Apply same fix: Sort then Reset
+            df_sub['Actor'] = df_sub['Actor'].astype(str).str.strip()
             df_sub = df_sub.sort_values('Mentions', ascending=True).reset_index(drop=True)
             
+            # Using Express here, but if this crashes too, switch it to go.Bar like above
             fig_sub = px.bar(
                 df_sub,
                 x='Mentions',
                 y='Actor',
                 orientation='h',
-                title='Top Foreign Actors Mentioned in Articles',
+                title='Top Foreign Actors Mentioned',
                 text='Mentions',
-                color='Actor',
-                color_discrete_sequence=px.colors.qualitative.Set3
+                template="plotly_white"
             )
-            fig_sub.update_traces(textposition='outside')
-            fig_sub.update_layout(height=500, showlegend=False, template="plotly_white")
+            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
     # --- 3. Top Strategic Intents by Target Country and Actor ---
@@ -513,21 +515,17 @@ def countries(request):
         strategic_intent__in=['', 'Unknown', None]
     ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
         count=Count('id')
-    ).order_by('-count')[:20]
+    ).order_by('-count')[:10]
 
     intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data</p>"
     if target_country_actor_intents.exists():
         df_intent = pd.DataFrame(list(target_country_actor_intents))
         if not df_intent.empty:
             df_intent = df_intent.rename(columns={
-                'target_country': 'Country', 
-                'inferred_actor': 'Actor', 
-                'strategic_intent': 'Intent',
-                'count': 'Count'
+                'target_country': 'Country', 'inferred_actor': 'Actor', 
+                'strategic_intent': 'Intent', 'count': 'Count'
             })
             df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
-            
-            # Apply same fix: Sort then Reset
             df_intent = df_intent.sort_values('Count', ascending=True).reset_index(drop=True)
             
             fig_intent = px.bar(
@@ -535,13 +533,11 @@ def countries(request):
                 x='Count',
                 y='Combined',
                 orientation='h',
-                title='Top Strategic Intents by Target Country and Actor',
+                title='Top Strategic Intents',
                 text='Count',
-                color='Intent',
-                color_discrete_sequence=px.colors.qualitative.Set2
+                template="plotly_white"
             )
-            fig_intent.update_traces(textposition='outside')
-            fig_intent.update_layout(height=600, showlegend=True, template="plotly_white")
+            fig_intent.update_traces(marker_color='#10b981', textposition='outside')
             intent_country_actor_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
     # --- Context Preparation ---
@@ -764,7 +760,7 @@ def generate_report(request):
         
         # ---: INDIVIDUAL AI SUMMARIES FOR EACH NARRATIVE ---
         for article in display_articles:
-            ai_summary = article.article_text[:300] + "..." # Default fallback
+            ai_summary = article.article_text[:100] + "..." # Default fallback
             
             if client:
                 try:
@@ -773,7 +769,7 @@ def generate_report(request):
                     sum_response = client.chat.completions.create(
                         messages=[{"role": "user", "content": sum_prompt}],
                         model="meta-llama/llama-4-scout-17b-16e-instruct", 
-                        max_tokens=100
+                        max_tokens=1024
                     )
                     ai_summary = sum_response.choices[0].message.content.strip()
                 except Exception as e:
@@ -786,7 +782,7 @@ def generate_report(request):
                 'title': article.article_text[:100] + "...", 
                 'media_outlet': article.media_outlet,
                 'posting_time': article.posting_time.strftime("%Y-%m-%d") if article.posting_time else "Unknown",
-                'summary': ai_summary # Now using the AI-generated summary
+                'summary': ai_summary # uses AI-generated summary
             })
     
         # --- EXECUTIVE AI INSIGHTS ---
@@ -833,13 +829,14 @@ def generate_report(request):
     # ---  ENSURE CHARTS RENDER IN PDF ---
     volume_chart_base64 = ""
     factor_chart_base64 = ""
-        
+    primary_intent = "General Influence"
+    
     try:
         # VOLUME CHART
         volume_data = base_query.values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
         if volume_data.exists():
             df_vol = pd.DataFrame(list(volume_data)).rename(columns={'posting_time__date': 'date', 'count': 'articles'})
-            df_vol = df_vol.dropna(subset=['date']).sort_values('date').reset_index(drop=True) # THE RESET INDEX FIX
+            df_vol = df_vol.dropna(subset=['date']).sort_values('date').reset_index(drop=True)
             
             fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(df_vol['date'], df_vol['articles'], marker='o', color='#2563eb')
@@ -851,10 +848,15 @@ def generate_report(request):
             plt.close(fig)
 
         # FACTOR CHART
-        intent_counts = base_query.exclude(strategic_intent__in=['', None, 'Unknown']).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
+        intent_counts = base_query.exclude(
+            strategic_intent__in=['', None, 'Unknown']
+        ).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]        
+        
         if intent_counts.exists():
+            primary_intent = intent_counts[0]['strategic_intent']
+            
             df_f = pd.DataFrame(list(intent_counts)).rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
-            df_f = df_f.sort_values('Val', ascending=True).reset_index(drop=True) # THE RESET INDEX FIX
+            df_f = df_f.sort_values('Val', ascending=True).reset_index(drop=True)
             
             fig, ax = plt.subplots(figsize=(7, 4))
             ax.barh(df_f['Factor'], df_f['Val'], color='#38bdf8')
@@ -863,9 +865,12 @@ def generate_report(request):
             plt.savefig(buf, format='png', bbox_inches='tight')
             factor_chart_base64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
             plt.close(fig)
-    except Exception as e:
-        print(f"Chart Error: {e}")
 
+    except Exception as e:
+        logger.error(f"Chart Generation Error: {e}")
+        # We don't return here; we let the function continue so the PDF is still made
+
+    # --- contexts ---
     context = {
         'country': selected_country,
         'primary_intent': primary_intent,
@@ -882,8 +887,10 @@ def generate_report(request):
     html = template.render(context)
     result = BytesIO()
     pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
+    
     if not pdf.err:
         response = HttpResponse(result.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="CVI_Report_{selected_country}.pdf"'
         return response
-    return HttpResponse("Error", status=500)
+    
+    return HttpResponse("Error generating PDF", status=500)
