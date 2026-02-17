@@ -519,15 +519,15 @@ def countries(request):
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
     # --- 3. Top Strategic Intents by Target Country and Actor ---
-    target_country_actor_intents = MediaNarrative.objects.exclude(
+    top_intents = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).exclude(
         inferred_actor__in=['', 'Unknown', None]
     ).exclude(
         strategic_intent__in=['', 'Unknown', None]
-    ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
-        count=Count('id')
-    ).order_by('-count')[:10]
+    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
+        article_count=Count('id')
+    ).order_by('-article_count')[:10]
 
     intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data</p>"
     if target_country_actor_intents.exists():
