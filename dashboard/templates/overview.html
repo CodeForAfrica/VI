@@ -244,7 +244,7 @@
                     <span class="badge badge-tone">Tone: {{ article.tone|title }}</span>
                     <span class="badge badge-intent">Intent: {{ article.strategic_intent|title }}</span>
                 </div>
-                <p class="small text-muted mb-3">{{ article.article_text|truncatewords:40 }}</p>
+                <p class="small text-muted mb-3">{{ article.article_text }}</p>
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="small fw-bold text-dark">{{ article.media_outlet }}</span>
                     <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-3">View Source</a>
