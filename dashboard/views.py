@@ -433,15 +433,7 @@ def overview(request):
    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
-# =========================
-
-from django.shortcuts import render
-from django.db.models import Count
-from django.core.paginator import Paginator
-import pandas as pd
-import plotly.express as px
-# Assuming COUNTRIES is imported from your constants/utils
-# from .utils import COUNTRIES 
+# ========================= 
 
 def countries(request):
     selected_country = request.GET.get('country', '').strip()
@@ -564,7 +556,7 @@ def countries(request):
         'selected_country': selected_country or "All Countries",
         'african_countries': COUNTRIES,
     }
-    return render(request, 'dashboard/countries.html', context)
+    return render(request, 'countries.html', context)
     
 def authors(request):
     journalist_name = request.GET.get('journalist', '').strip()
@@ -663,7 +655,7 @@ def generate_report(request):
             'african_countries': COUNTRIES,
             'foreign_actors': FOREIGN_ACTORS,
         }
-        return render(request, 'dashboard/report_form.html', context)
+        return render(request, 'report_form.html', context)
 
     # 2. Setup Data & Normalization
     actor_map = {"US": "UnitedStates"}
