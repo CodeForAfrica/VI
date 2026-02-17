@@ -454,7 +454,12 @@ def countries(request):
     if selected_country:
         qs = qs.filter(target_country__iexact=selected_country)
 
-    # --- 1. Top African countries by total articles (THE PROBLEM CHART) ---
+    # Initialize variables with "No Data" placeholders to avoid NameErrors
+    publisher_chart = "<p class='text-center py-5 text-muted fs-3'>No publishing data</p>"
+    subject_chart = "<p class='text-center py-5 text-muted fs-3'>No subject data</p>"
+    intent_country_actor_chart = "<p class='text-center py-5 text-muted fs-3'>No intent data</p>"
+    
+    # --- 1. Top African countries by total articles) ---
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
@@ -470,7 +475,7 @@ def countries(request):
             df['Country'] = df['Country'].astype(str).str.strip()
             df = df.sort_values('Articles', ascending=True).reset_index(drop=True)
 
-            # WE SWITCH TO GRAPH OBJECTS (go.Bar) TO AVOID THE KEYERROR
+            # WE SWITCH TO GRAPH OBJECTS (go.Bar) 
             fig = go.Figure(go.Bar(
                 x=df['Articles'],
                 y=df['Country'],
@@ -517,6 +522,42 @@ def countries(request):
             )
             fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
+    
+    # --- 3. Top Strategic Intents Logic
+    target_country_actor_intents = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).exclude(
+        strategic_intent__in=['', 'Unknown', None]
+    ).values('target_country', 'inferred_actor', 'strategic_intent').annotate(
+        count=Count('id')
+    ).order_by('-count')[:10]
+
+    if target_country_actor_intents.exists():
+        df_intent = pd.DataFrame(list(target_country_actor_intents))
+        if not df_intent.empty:
+            df_intent = df_intent.rename(columns={
+                'target_country': 'Country', 
+                'inferred_actor': 'Actor', 
+                'strategic_intent': 'Intent', 
+                'count': 'Count'
+            })
+            # Create a combined label for the chart Y-axis
+            df_intent['Combined'] = df_intent['Country'] + ' - ' + df_intent['Actor'] + ': ' + df_intent['Intent']
+            df_intent = df_intent.sort_values('Count', ascending=True).reset_index(drop=True)
+            
+            fig_intent = px.bar(
+                df_intent,
+                x='Count',
+                y='Combined',
+                orientation='h',
+                title='Top Strategic Intents',
+                text='Count',
+                template="plotly_white"
+            )
+            fig_intent.update_traces(marker_color='#10b981', textposition='outside')
+            intent_country_actor_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
     # --- Context Preparation ---
     coverage_table = list(top_publishers)
@@ -525,7 +566,7 @@ def countries(request):
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
-        'intent_country_actor_chart': intent_country_actor_chart,
+        'intent_country_actor_chart': intent_country_actor_chart, # Now defined!
         'coverage_table': coverage_table,
         'sample_articles': sample_articles,
         'selected_country': selected_country or "All Countries",
@@ -690,7 +731,12 @@ def generate_report(request):
         
         for actor in selected_actors:
             formatted_actor = actor_mapping.get(actor.lower(), actor)
-            matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
+            
+            # Use .str.lower() to ensure "Senegal" matches "senegal" in the CSV
+            matching_rows = df[
+                (df['country'].str.lower() == formatted_country.lower()) & 
+                (df['actor'].str.lower() == formatted_actor.lower())
+            ]
             
             if not matching_rows.empty:
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
@@ -712,6 +758,10 @@ def generate_report(request):
                     'risk_level': "N/A",
                     'primary_threat': "No Data"
                 })
+        
+        # 
+        report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
+
     except Exception as e:
         logger.error(f"CVI calculation error: {e}")
         report_data = [{'actor': a, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "Error"} for a in selected_actors]
