@@ -681,24 +681,31 @@ def generate_report(request):
             "iran": "Iran"
         }
         
-        formatted_country = country_mapping.get(selected_country.lower(), selected_country)
+        # 1. Get the mapped name, but keep it in the casing the CSV expects
+        # If selected_country is "ethiopia", mapping makes it "Ethiopia"
+        formatted_country = country_mapping.get(selected_country.lower(), selected_country.title())
+        
         for actor in selected_actors:
-            formatted_actor = actor_mapping.get(actor.lower(), actor)
+            # 2. Map the actor name (e.g., "us" -> "UnitedStates")
+            formatted_actor = actor_mapping.get(actor.lower(), actor.title())
+            
+            # 3. FIX: Use .str.strip() to remove hidden spaces and match casing
             matching_rows = df[
-                (df['country'].str.lower() == formatted_country.lower()) & 
-                (df['actor'].str.lower() == formatted_actor.lower())
+                (df['country'].str.strip() == formatted_country) & 
+                (df['actor'].str.strip() == formatted_actor)
             ]
             
             if not matching_rows.empty:
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 report_data.append({
-                    'actor': actor,
+                    'actor': actor, # Use the user's selected name for display
                     'cvi_score': round(float(max_score), 3),
                     'risk_level': "High" if max_score > 0.7 else "Medium" if max_score > 0.4 else "Low",
                     'primary_threat': max_row['intent']
                 })
             else:
+                # If it still hits this, the CSV names don't match your mapping keys
                 report_data.append({
                     'actor': actor, 'cvi_score': 0.0, 'risk_level': "N/A", 'primary_threat': "No Data"
                 })
@@ -819,7 +826,7 @@ def generate_report(request):
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)  
-            volume_chart_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            volume_chart_base64 = base64.b64encode(buf.read()).decode('utf-8')
             plt.close(fig)
 
         # FACTOR CHART
