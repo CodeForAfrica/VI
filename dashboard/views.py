@@ -658,27 +658,24 @@ def generate_report(request):
         
         df = pd.read_csv(csv_file)
         
+        # Keys must be lowercase; Values must match the CSV EXACTLY
         country_mapping = {
-            "south africa": "South Africa",
-            "senegal": "Senegal", 
+            "ethiopia": "Ethiopia",
+            "senegal": "Senegal",
             "drc": "DRC",
+            "democratic republic of the congo": "DRC",
             "cote d'ivoire": "CoteIvoire",
-            "cote ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire",
-            "ethiopia": "Ethiopia"
+            "ivory coast": "CoteIvoire"
         }
         
         actor_mapping = {
-            "uae": "UAE",
-            "china": "China",
-            "france": "France",
             "us": "UnitedStates",
             "united states": "UnitedStates",
+            "uae": "UAE",
+            "united arab emirates": "UAE",
             "russia": "Russia",
-            "saudi": "Saudi",
-            "turkey": "Turkey",
-            "israel": "Israel",
-            "iran": "Iran"
+            "france": "France",
+            "china": "China"
         }
         
         # 1. Get the mapped name, but keep it in the casing the CSV expects
