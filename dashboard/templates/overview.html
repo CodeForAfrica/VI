@@ -34,6 +34,17 @@
     
     /* Larger chart sizes */
     .plotly-graph-div { height: 500px !important; }
+
+    /* Reset Link Styling */
+    .reset-link {
+        transition: all 0.2s;
+        display: inline-block;
+        padding: 8px 16px;
+    }
+    .reset-link:hover {
+        background-color: #f1f5f9;
+        color: #1e293b !important;
+    }
 </style>
 
 <div class="row g-3 mb-5">
@@ -98,7 +109,7 @@
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
 <div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
-        <form method="get" action=".">
+        <form method="get" action="." id="cvi-filter-form">
             <div class="mb-3">
                 <label class="fw-bold small text-muted">Target African Country</label>
                 <select name="calc_target_country" class="form-select">
@@ -128,10 +139,15 @@
                     <option value="LGBTQ" {% if selected_intent == 'LGBTQ' %}selected{% endif %}>LGBTQ</option>
                 </select>
             </div>
-            <button type="submit" class="btn w-100 fw-bold text-white" style="background-color: var(--action-blue);">
+            <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">
                 Calculate & Filter
             </button>
-            <a href="." class="btn btn-sm btn-link w-100 mt-2 text-muted">Reset Filters</a>
+            
+            <div class="text-center border-top pt-2">
+                <a href="." class="reset-link text-decoration-none small text-muted fw-bold">
+                    <i class="fas fa-sync-alt me-1"></i> Reset Filters
+                </a>
+            </div>
         </form>
     </div>
     <div class="cvi-right text-center">
@@ -207,28 +223,8 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <p class="text-muted">No articles found matching your criteria.</p>
-    </div>
     {% endfor %}
 </div>
-
-<nav aria-label="Page navigation" class="mb-5">
-    <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent }}{% endif %}">Previous</a>
-            </li>
-        {% endif %}
-        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-        {% if page_obj.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent }}{% endif %}">Next</a>
-            </li>
-        {% endif %}
-    </ul>
-</nav>
 
 <div id="chatbot-bubble">
     <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
@@ -260,13 +256,14 @@
         chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
     }
 
-    // Auto-submit CVI Form on Dropdown Change
-    document.querySelectorAll('.cvi-left select').forEach(select => {
-        select.addEventListener('change', function() {
+    // AUTO-SUBMIT dropdown logic
+    document.querySelectorAll('.cvi-left select').forEach(dropdown => {
+        dropdown.addEventListener('change', function() {
             this.closest('form').submit();
         });
     });
 
+    // Chatbot Logic
     document.getElementById('send-btn').addEventListener('click', function() {
         const input = document.getElementById('chat-input');
         const box = document.getElementById('chat-box');
@@ -276,7 +273,7 @@
             box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
             input.value = "";
             const loadingId = "loading-" + Date.now();
-            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing narratives...</span></div>`;
+            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing...</span></div>`;
             box.scrollTop = box.scrollHeight;
 
             fetch('/chatbot-response/', {
@@ -292,17 +289,7 @@
                 document.getElementById(loadingId).remove();
                 box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
                 box.scrollTop = box.scrollHeight;
-            })
-            .catch(error => {
-                const loader = document.getElementById(loadingId);
-                if(loader) loader.innerHTML = `<span class="text-danger small">Connection error.</span>`;
             });
-        }
-    });
-
-    document.getElementById('chat-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            document.getElementById('send-btn').click();
         }
     });
 </script>
