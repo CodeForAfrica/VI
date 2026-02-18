@@ -8,7 +8,6 @@
             margin: 2cm;
         }
         body {
-            /* FIX 1: Web-safe fonts to prevent character corruption (the "SSSS" issue) */
             font-family: Arial, Helvetica, sans-serif;
             line-height: 1.6;
             color: #333;
@@ -20,7 +19,7 @@
             border-bottom: 3px solid #2563eb;
             padding-bottom: 20px;
             margin-bottom: 30px;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            background: #f0f9ff;
             padding: 20px;
             border-radius: 8px;
         }
@@ -45,23 +44,18 @@
             margin-bottom: 30px;
         }
         .section-title {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            background-color: #2563eb;
             color: white;
             padding: 12px 20px;
             font-weight: bold;
             font-size: 18px;
             margin-bottom: 15px;
             border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: hidden;
-            /* FIX 2: Ensures the table doesn't expand past the page width */
             table-layout: fixed;
         }
         th, td {
@@ -71,7 +65,7 @@
             word-wrap: break-word;
         }
         th {
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            background-color: #f1f5f9;
             font-weight: 600;
             color: #1a2a40;
         }
@@ -82,22 +76,16 @@
             color: #dc2626;
             font-weight: bold;
             background-color: #fef2f2;
-            padding: 2px 6px;
-            border-radius: 4px;
         }
         .risk-medium {
             color: #ea580c;
             font-weight: bold;
             background-color: #fffbeb;
-            padding: 2px 6px;
-            border-radius: 4px;
         }
         .risk-low {
             color: #16a34a;
             font-weight: bold;
             background-color: #f0fdf4;
-            padding: 2px 6px;
-            border-radius: 4px;
         }
         .narrative-item {
             margin-bottom: 15px;
@@ -105,12 +93,6 @@
             border-left: 4px solid #2563eb;
             background: #f8fafc;
             border-radius: 0 6px 6px 0;
-            page-break-inside: avoid;
-        }
-        .narrative-url {
-            color: #2563eb;
-            text-decoration: none;
-            font-weight: 500;
         }
         .chart-container {
             text-align: center;
@@ -145,18 +127,10 @@
             color: #64748b;
             font-size: 14px;
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 10px;
-        }
         .logo-text {
             font-size: 20px;
             font-weight: bold;
             color: #2563eb;
-        }
-        .insight-section {
-            white-space: pre-wrap;
-            line-height: 1.8;
         }
     </style>
 </head>
@@ -203,7 +177,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" style="text-align: center;">No assessment data found for the selected actors in {{ country }}.</td>
+                    <td colspan="4" style="text-align: center;">No assessment data found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -214,54 +188,49 @@
         <div class="section-title">Key Narratives and Articles</div>
         {% for narrative in key_narratives %}
         <div class="narrative-item">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                <div>
-                    <strong style="color: #2563eb;">{{ narrative.intent }}</strong> 
-                    <span style="color: #64748b;">- {{ narrative.tone }}</span>
-                    <span style="margin-left: 10px; background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-weight: bold;">Score: {{ narrative.vulnerability_score }}</span>
-                </div>
+            <div>
+                <strong style="color: #2563eb;">{{ narrative.intent }}</strong> 
+                <span style="color: #64748b;">- {{ narrative.tone }}</span>
             </div>
             <div style="margin-bottom: 5px;"><em>{{ narrative.title }}</em></div>
             <div style="font-size: 13px; color: #64748b; margin-bottom: 5px;">
                 Source: {{ narrative.media_outlet }} | Date: {{ narrative.posting_time }}
             </div>
             <div style="margin-bottom: 10px; padding: 10px; background: #f0f9ff; border-radius: 4px;">
-                <strong>Summary:</strong><br>{{ narrative.summary|striptags }}
+                <strong>Summary:</strong><br>{{ narrative.summary }}
             </div>
             <div>
-                <a href="{{ narrative.url }}" class="narrative-url">🔗 Read Full Article</a>
+                <a href="{{ narrative.url }}" style="color: #2563eb; text-decoration: none;">🔗 Read Full Article</a>
             </div>
         </div>
-        {% empty %}
-        <p>No key narratives found for {{ country }}.</p>
         {% endfor %}
     </div>
 
     <div class="section">
         <div class="section-title">AI-Generated Insights & Analysis</div>
         <div class="ai-insights">
-            <div class="insight-section">{{ ai_insights|linebreaks }}</div>
+            <div style="white-space: pre-wrap;">{{ ai_insights|linebreaks }}</div>
         </div>
     </div>
 
     <div class="section">
         <div class="section-title">Narrative Volume Over Time</div>
         <div class="chart-container">
-            {% if volume_chart_base64 %}
-            <img src="data:image/png;base64,{{ volume_chart_base64 }}" alt="Narrative Volume Chart" style="width: 100%; max-width: 600px;">
+            {% if volume_chart %}
+            <img src="data:image/png;base64,{{ volume_chart }}" style="width: 100%;">
             {% else %}
-            <p>No narrative volume data available for this country.</p>
+            <p>No volume chart data available.</p>
             {% endif %}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">Top Strategic Intents</div>
+        <div class="section-title">Factor Chart</div>
         <div class="chart-container">
-            {% if factor_chart_base64 %}
-            <img src="data:image/png;base64,{{ factor_chart_base64 }}" alt="Top Intents Chart" style="width: 100%; max-width: 600px;">
+            {% if factor_chart %}
+            <img src="data:image/png;base64,{{ factor_chart }}" style="width: 100%;">
             {% else %}
-            <p>No chart data available.</p>
+            <p>No factor chart data available.</p>
             {% endif %}
         </div>
     </div>
@@ -271,8 +240,8 @@
         <div class="recommendations">
             <ul>
                 <li><strong>Highest Risk Actor:</strong> {{ highest_risk_actor }}</li>
-                <li><strong>Primary Vulnerability Areas:</strong> Based on strategic intent analysis from media narratives</li>
-                <li><strong>Recommendation:</strong> Monitor high-risk actors closely and track narrative trends for early warning indicators</li>
+                <li><strong>Primary Vulnerability Areas:</strong> Identified via narrative analysis.</li>
+                <li><strong>Recommendation:</strong> Proactive narrative monitoring recommended for high-risk actors.</li>
             </ul>
         </div>
     </div>
@@ -280,7 +249,6 @@
     <div class="footer">
         <div class="logo-text">Code for Africa</div>
         <p>Data as of {{ date_generated }}</p>
-        <p>Generated by Media Vulnerability Dashboard</p>
     </div>
 </body>
 </html>
