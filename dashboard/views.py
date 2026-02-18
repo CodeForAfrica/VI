@@ -458,6 +458,7 @@ def overview(request):
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
+        'intent_choices': INTENT_CHOICES,
         'vulnerability_description': vulnerability_methodology,  
     }
     return render(request, 'overview.html', context)        
