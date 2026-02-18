@@ -385,7 +385,7 @@ def overview(request):
             return "Empty Article"
         for candidate in lines[:3]:
             is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
-            if not is_metadata and 5 <= len(candidate) <= 150:
+            if not is_metadata and 5 <= len(candidate) <= 300:
                 return candidate
         words = text.split()
         fallback = " ".join(words[:10])
@@ -401,9 +401,9 @@ def overview(request):
             article.display_summary = article.ai_summary
         else:
             text = article.article_text.replace('\n', ' ').strip()
-            if len(text) > 200:
-                cut = text[:200].rfind(' ')
-                article.display_summary = (text[:cut] + '…') if cut > 0 else text[:200] + '…'
+            if len(text) > 500:
+                cut = text[:500].rfind(' ')
+                article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
                 article.display_summary = text
 
