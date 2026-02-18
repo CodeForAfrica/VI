@@ -363,40 +363,42 @@ def overview(request):
     country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 8. Pagination
+        
+      # 8. Pagination & AI Summary Assignment
     qs = MediaNarrative.objects.all().order_by('-posting_time')
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Add LLM summaries
+    # Process each article for display title + summary
     for article in page_obj.object_list:
-        article.summary = get_summary(article.article_text)
-
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    #ml_service = MLInferenceService()
-    #for article in page_obj.object_list:
         # A. Clean Title Extraction
-     #   article.display_title = article.article_text.split('\n')[0].strip()
+        # Try: article.title first, then first line of article_text, then fallback
+        if article.title and article.title.strip():
+            article.display_title = article.title.strip()
+        else:
+            # Extract first non-empty line from article_text
+            lines = [line.strip() for line in article.article_text.split('\n') if line.strip()]
+            article.display_title = lines[0][:120].rstrip('…') + '…' if lines else "Untitled Article"
 
         # B. AI Summary Assignment
-      #  if hasattr(article, 'ai_summary') and article.ai_summary:
-      #      article.display_summary = article.ai_summary
-     #   else:
-     #       article.display_summary = article.article_text[:200] + "..."
-
-        # C. Individual Article Vulnerability Score
-      #  if article.vulnerability_index is None:
-       #     vi_score = ml_service.calculate_vulnerability_index(
-       #         article.strategic_intent or 'neutral',
-       #         article.tone or 'neutral',
-       #         article.target_country,
-       #         article.inferred_actor,
-       #         article.confidence or 0.5
-        #    )
-        #    article.vulnerability_index = float(vi_score) if vi_score else 0.0
-        #else:
-        #    article.vulnerability_index = float(article.vulnerability_index)
+        # Use get_summary() (assumed to return short summary, e.g. 1–2 sentences)
+        try:
+            ai_summ = get_summary(article.article_text)
+            if ai_summ and ai_summ.strip():
+                article.display_summary = ai_summ.strip()
+            else:
+                # Fallback: first ~200 chars, sentence-truncated
+                text = article.article_text.replace('\n', ' ').strip()
+                if len(text) > 200:
+                    # Truncate at last space before 200
+                    cut = text[:200].rfind(' ')
+                    article.display_summary = (text[:cut] + '…') if cut > 0 else text[:200] + '…'
+                else:
+                    article.display_summary = text
+        except Exception as e:
+            logger.warning(f"Failed to generate summary for article {article.id}: {e}")
+            article.display_summary = article.article_text[:200].replace('\n', ' ').rstrip() + '…'
 
     # 10. Methodology / Description (The logic you requested to keep)
     vulnerability_methodology = (
