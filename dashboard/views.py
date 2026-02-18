@@ -298,7 +298,7 @@ def overview(request):
     # 2. Capture Inputs
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
-    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()  # NEW: Added Intent Filter
+    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip() 
     
     # Shortened Exclude List for maintenance and speed
     exclude_keywords = [
@@ -395,6 +395,14 @@ def overview(request):
     ml_service = MLInferenceService()
     articles_with_vi = []
     for article in page_obj.object_list:
+        # --- TITLE EXTRACTION ---
+        article.display_title = article.article_text.split('\n')[0].strip()
+
+        # ---  SUMMARY LOGIC ---
+        if hasattr(article, 'ai_summary') and article.ai_summary:
+            article.display_summary = article.ai_summary
+        else:
+            article.display_summary = article.article_text[:200] + "..."
         if article.vulnerability_index is None:
             vi_score = ml_service.calculate_vulnerability_index(
                 article.strategic_intent or 'neutral',
