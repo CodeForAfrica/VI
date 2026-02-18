@@ -99,8 +99,6 @@
 
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
 
-
-
 <div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
         <form method="get" action="." id="cvi-filter-form">
@@ -176,7 +174,7 @@
                 </div>
 
                 <p style="font-size: 0.72rem; color: #64748b; line-height: 1.4;">
-                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. 
+                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>
                     Current focus: <em>{{ primary_intent|default:selected_intent|default:"General Influence" }}</em>.
                 </p>
             </div>
@@ -212,7 +210,8 @@
                     {% for sub in top_subjects %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
-                            <span class="fw-bold">{{ sub.strategic_intent|title }}</span><br>
+                            <span class="fw-bold">{{ sub.strategic_intent|title }}</span>
+                            <br>
                             <small class="text-muted">{{ sub.inferred_actor }} → {{ sub.target_country }}</small>
                         </div>
                         <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
@@ -235,8 +234,7 @@
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <h6 class="fw-bold mb-0">
                         <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
-                            {{ article.article_text }}
-                        </a>
+                            {{ article.display_title }} </a>
                     </h6>
                     <span class="text-muted small">{{ article.posting_time|date:"M d, Y" }}</span>
                 </div>
@@ -244,7 +242,7 @@
                     <span class="badge badge-tone">Tone: {{ article.tone|title }}</span>
                     <span class="badge badge-intent">Intent: {{ article.strategic_intent|title }}</span>
                 </div>
-                <p class="small text-muted mb-3">{{ article.article_text }}</p>
+                <p class="small text-muted mb-3">{{ article.display_summary }}</p> 
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="small fw-bold text-dark">{{ article.media_outlet }}</span>
                     <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-3">View Source</a>
@@ -256,14 +254,12 @@
 </div>
 
 <script>
-    // 1. Auto-submit form when dropdowns change for a seamless UI
     document.querySelectorAll('.cvi-left select').forEach(dropdown => {
         dropdown.addEventListener('change', function() {
             this.closest('form').submit();
         });
     });
 
-    // 2. Chatbot Visibility Toggle
     function toggleChat() {
         const chat = document.getElementById('chat-window');
         chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
