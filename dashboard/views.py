@@ -295,12 +295,12 @@ def overview(request):
     cvi_score = None
     cvi_intent = None
     
-    # 2. Capture Inputs
+    # 2. Capture Inputs (Intent, Actor, Country)
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip() 
     
-    # Shortened Exclude List for maintenance and speed
+    # 3. Global Exclusions (Sports/Maintenance)
     exclude_keywords = [
         'football', 'soccer', 'sport', 'sports', 'match', 'game', 
         'tournament', 'championship', 'olympic', 'cricket', 'basketball', 
@@ -308,17 +308,14 @@ def overview(request):
         'league', 'team', 'player', 'coach', 'stadium'
     ]
 
-    # 3. Get total count first (without limit) - REDUCED EXCLUDE LIST
     base_qs = MediaNarrative.objects.all()
     for word in exclude_keywords:
         base_qs = base_qs.exclude(article_text__icontains=word)
     
     total_articles = base_qs.count()
-    
-    # 4. FOR MAIN DISPLAY: Show ALL articles (no filter) - EXCLUDE SPORTS
     full_stats_qs = base_qs.order_by('-posting_time')
 
-    # 5. Apply calculator filters - UPDATED: Logic for Strategic Intent
+    # 4. CURRENT CALCULATOR LOGIC (Preserving your specific function)
     if calc_target_country and calc_foreign_actor:
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country, 
@@ -326,7 +323,7 @@ def overview(request):
             intent_filter=calc_strategic_intent
         )
         
-        # Filter the article display list based on calculation params
+        # Filter display list to match selection
         full_stats_qs = full_stats_qs.filter(
             target_country__iexact=calc_target_country,
             inferred_actor__iexact=calc_foreign_actor
@@ -338,71 +335,52 @@ def overview(request):
         calc_foreign_actor = ""
         calc_strategic_intent = ""
 
-    # 6. Apply calculator filters to main queryset for display if needed
-    if calc_target_country and calc_foreign_actor:
-        full_stats_qs = full_stats_qs.filter(
-            target_country__iexact=calc_target_country,
-            inferred_actor__iexact=calc_foreign_actor
-        )
-        # Further narrow display results if user filtered by intent
-        if calc_strategic_intent:
-            full_stats_qs = full_stats_qs.filter(strategic_intent__iexact=calc_strategic_intent)
-
-    # 7. Global Stats (optimized)
-    irrelevant_keywords = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'fashion']
+    # 5. Global Stats & Averages
+    from django.db.models import Avg, Count
+    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
+    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
+    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
     
-    # 8. Optimized averages
-    from django.db.models import Avg
-    avg_vulnerability = 0.0
-    avg_confidence = 0.0
+    avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
+    avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
+    avg_confidence = avg_stats['confidence__avg'] or 0.0
     
-    # 9. Optimized volume chart
+    # 6. Volume Chart
     try:
         limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
         if limited_for_chart.exists():
             df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
-            df = df.dropna(subset=['posting_time'])
             df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
             daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
             if not daily_counts.empty:
                 fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=500)
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
                 chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
     except Exception as e:
         logger.error(f"Volume Chart Error: {e}")
 
-    # 10. Optimized lists
-    country_list = full_stats_qs.exclude(
-        target_country__in=['', 'Unknown', None]
-    ).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
-    
-    top_subjects = full_stats_qs.exclude(
-        strategic_intent__in=['', None]
-    ).exclude(
-        inferred_actor__in=['', 'Unknown', None]
-    ).exclude(
-        target_country__in=['', 'Unknown', None]
-    ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(
-        total=Count('id')
-    ).order_by('-total')[:5]
+    # 7. Optimized Data Lists
+    country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
+    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 11. Pagination
+    # 8. Pagination
     paginator = Paginator(full_stats_qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 12. Process articles with vulnerability index
+    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
     ml_service = MLInferenceService()
-    articles_with_vi = []
     for article in page_obj.object_list:
-        # --- TITLE EXTRACTION ---
+        # A. Clean Title Extraction
         article.display_title = article.article_text.split('\n')[0].strip()
 
-        # ---  SUMMARY LOGIC ---
+        # B. AI Summary Assignment
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
         else:
             article.display_summary = article.article_text[:200] + "..."
+
+        # C. Individual Article Vulnerability Score
         if article.vulnerability_index is None:
             vi_score = ml_service.calculate_vulnerability_index(
                 article.strategic_intent or 'neutral',
@@ -414,30 +392,27 @@ def overview(request):
             article.vulnerability_index = float(vi_score) if vi_score else 0.0
         else:
             article.vulnerability_index = float(article.vulnerability_index)
-        articles_with_vi.append(article)
-    page_obj.object_list = articles_with_vi
 
-    # NEW: Methodology Description (Fancy version)
+    # 10. Methodology / Description (The logic you requested to keep)
     vulnerability_methodology = (
         "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
         "a target country is to influence from a selected foreign actor on a specific strategic factor. "
         "The score combines: (1) a content signal — how much collected media and posts say the actor is pushing "
         "strategic intents corresponding to a specific factor (corrected using human labels via Prediction-powered Inference, PPI), "
         "and (2) a contextual signal — measurable country-level or actor×country factors (debt exposure, military presence, "
-        "resource ties, election timing, etc...) that make the country more susceptible. Higher values indicate greater "
-        "potential influence risk and suggested priority for investigation."
+        "resource ties, election timing, etc...) that make the country more susceptible."
     )
 
-    # 13. Context
+    # 11. Context Assembly
     context = {
         'chart': chart,
         'page_obj': page_obj,
         'total_articles': total_articles,
-        'unique_outlets': full_stats_qs.values('media_outlet').distinct().count(),
-        'unique_intents': full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count(),
-        'unique_actors': full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count(),
-        'avg_vulnerability': round(avg_vulnerability, 3) if avg_vulnerability else 0,
-        'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
+        'unique_outlets': unique_outlets,
+        'unique_intents': unique_intents,
+        'unique_actors': unique_actors,
+        'avg_vulnerability': round(avg_vulnerability, 3),
+        'avg_confidence': round(avg_confidence, 3),
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
@@ -447,7 +422,7 @@ def overview(request):
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
-        'vulnerability_description': vulnerability_methodology, # Pass to template
+        'vulnerability_description': vulnerability_methodology, 
     }
     return render(request, 'overview.html', context)
         
