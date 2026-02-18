@@ -16,10 +16,10 @@
         }
         .header {
             text-align: center;
-            border-bottom: 3px solid #1e3a8a; /* Professional Navy */
+            border-bottom: 3px solid #1e3a8a; 
             padding-bottom: 20px;
             margin-bottom: 30px;
-            background: #f8fafc; /* Very light slate background */
+            background: #f8fafc; 
             padding: 20px;
             border-radius: 8px;
         }
@@ -200,7 +200,7 @@
                 Source: {{ narrative.media_outlet }} | Date: {{ narrative.posting_time }}
             </div>
             <div style="margin-bottom: 10px; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px;">
-                <strong style="color: #334155;">AI Summary:</strong><br>{{ narrative.summary }}
+                <strong style="color: #334155;">Summary:</strong><br>{{ narrative.summary }}
             </div>
             <div>
                 <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">🔗 Read Full Article</a>
@@ -210,7 +210,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title">AI-Generated Insights & Analysis</div>
+        <div class="section-title">Insights & Analysis</div>
         <div class="ai-insights">
             <div style="white-space: pre-wrap;">{{ ai_insights|linebreaks }}</div>
         </div>
