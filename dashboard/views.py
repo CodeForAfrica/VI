@@ -364,7 +364,7 @@ def overview(request):
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
     # 8. Pagination
-    # Pagination
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
