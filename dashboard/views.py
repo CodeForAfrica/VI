@@ -807,10 +807,11 @@ def generate_report(request):
             Analyze the following media narratives for {selected_country} as a Senior Geopolitical Analyst.
             Your objective is to evaluate these articles for signs of foreign influence and structural vulnerability.
         
-            FORMATTING RULES:
-            - Use '###' for clear section headers.
-            - Use bold for key terms, actors, and specific intents.
-            - Use bullet points for readability.
+            STRICT FORMATTING RULES:
+            - NO markdown symbols. DO NOT use '###' or '**'.
+            - Use plain text headers in ALL CAPS for sections.
+            - Use simple dashes (-) for bullet points.
+            - Keep the language formal and professional.
         
             STRUCTURE:
             ### 📊 Narrative Summary
