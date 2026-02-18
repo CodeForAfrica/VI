@@ -313,10 +313,9 @@ def overview(request):
     for word in exclude_keywords:
         base_qs = base_qs.exclude(article_text__icontains=word)
     
-    total_articles = base_qs.count()
     full_stats_qs = base_qs.order_by('-posting_time')
 
-    # 4. CURRENT CALCULATOR LOGIC (Preserving your specific function)
+    # 4. CALCULATOR LOGIC 
     if calc_target_country and calc_foreign_actor:
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country, 
@@ -324,17 +323,19 @@ def overview(request):
             intent_filter=calc_strategic_intent
         )
         
-        # Filter display list to match selection
+        # Filter display list to match selection actor and country selection 
         full_stats_qs = full_stats_qs.filter(
             target_country__iexact=calc_target_country,
             inferred_actor__iexact=calc_foreign_actor
         )
-        if calc_strategic_intent:
-            full_stats_qs = full_stats_qs.filter(strategic_intent__iexact=calc_strategic_intent)
+        
     else:
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
+
+    # total articles
+    total_articles = full_stats_qs.count()
 
     # 5. Global Stats & Averages
     from django.db.models import Avg, Count
@@ -346,7 +347,7 @@ def overview(request):
     avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
     avg_confidence = avg_stats['confidence__avg'] or 0.0
     
-    # 6. Volume Chart - FIXED: Use correct field names
+    # 6. Volume Chart 
     try:
         limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
         if limited_for_chart.exists():
@@ -364,9 +365,8 @@ def overview(request):
     country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 8. Pagination - FIXED: Use correct model and field names
-    qs = MediaNarrative.objects.all().order_by('-posting_time')  # FIXED: Use MediaNarrative
-    paginator = Paginator(qs, 10)
+    # 8. Pagination 
+    paginator = Paginator(full_stats_qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -386,21 +386,20 @@ def overview(request):
         
         for candidate in lines[:3]:
             is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
-            # INCREASED limit from 150 to 250 to catch longer headlines
+           
             if not is_metadata and 5 <= len(candidate) <= 250:
                 return candidate
         
         words = text.split()
-        # INCREASED from 10 to 20 words for the fallback
+        
         fallback = " ".join(words[:20])
         return f"{fallback}..." if len(words) > 20 else fallback
 
-    # --- NOW START THE LOOP ---
+    
     for article in page_obj.object_list:
-        # A. Clean Title Extraction
+        
         article.display_title = extract_title_from_text(article.article_text)
 
-        # B. AI Summary Assignment
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
         else:
@@ -424,7 +423,8 @@ def overview(request):
         else:
             article.vulnerability_index = float(article.vulnerability_index)
             
-    # 10. Methodology / Description (Using the CORRECT methodology you provided)
+    # 10. Methodology / Description
+    
     vulnerability_methodology = (
         "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
         "a target country is to influence from a selected foreign actor on a specific strategic factor. "
