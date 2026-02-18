@@ -380,25 +380,20 @@ def overview(request):
     def extract_title_from_text(text):
         if not text:
             return "No Content Available"
-    
-        # Split into lines and remove empty ones
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines:
             return "Empty Article"
-    
+        
         for candidate in lines[:3]:
-            # Filter out metadata
             is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
-            
-            # INCREASED logic: allow much longer titles (up to 500 chars)
-            # REMOVED the [:100] slice that was here previously
-            if not is_metadata and len(candidate) >= 5:
+            # INCREASED limit from 150 to 250 to catch longer headlines
+            if not is_metadata and 5 <= len(candidate) <= 250:
                 return candidate
-    
-        # FALLBACK: Take a much larger chunk of words if no title is found
+        
         words = text.split()
-        fallback = " ".join(words[:30])
-        return f"{fallback}..." if len(words) > 30 else fallback
+        # INCREASED from 10 to 20 words for the fallback
+        fallback = " ".join(words[:20])
+        return f"{fallback}..." if len(words) > 20 else fallback
 
     # --- NOW START THE LOOP ---
     for article in page_obj.object_list:
