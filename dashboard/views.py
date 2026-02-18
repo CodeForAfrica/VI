@@ -659,7 +659,6 @@ def generate_report(request):
         csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
         
         if not os.path.exists(csv_file):
-            # Fallback if the path is slightly different
             csv_file = os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv')
             
         df = pd.read_csv(csv_file)
@@ -706,7 +705,7 @@ def generate_report(request):
                     'cvi_score': round(float(max_row['FinalRisk']), 3),
                     'risk_level': "High" if max_row['FinalRisk'] > 0.7 else "Medium" if max_row['FinalRisk'] > 0.4 else "Low",
                     'primary_threat': max_row['intent'],
-                    'chart': volume_chart # Each actor gets their own chart
+                    'chart': volume_chart 
                 })
             else:
                 report_data.append({
@@ -759,7 +758,7 @@ def generate_report(request):
         
         # ---: INDIVIDUAL AI SUMMARIES FOR EACH NARRATIVE ---
         for article in display_articles:
-            ai_summary = article.article_text[:300] + "..." # Default fallback
+            ai_summary = article.article_text[:100] + "..." # Default fallback
             
             if client:
                 try:
@@ -796,12 +795,12 @@ def generate_report(request):
         
             FORMATTING RULES:
             - Use '###' for clear section headers.
-            - Use bold '*' for key terms, actors, and specific intents.
+            - Use bold for key terms, actors, and specific intents.
             - Use bullet points for readability.
         
             STRUCTURE:
             ### 📊 Narrative Summary
-            (Provide a high-level summary of the media volume, dominant sentiment, and primary themes found in the dataset.)
+            (Provide a high-level summary of the media volume, dominant sentiment, and primary themes/narratives found in the dataset.)
         
             ### 🛡️ Key Actors & Influence
             (List the primary foreign actors mentioned and their apparent strategic goals or intents as inferred from the narratives.)
@@ -825,13 +824,12 @@ def generate_report(request):
         logger.error(f"Narrative/AI error: {str(e)}")
         ai_insights = f"AI analysis could not be completed. (Error: {str(e)[:50]})"
         
-    # ---  ENSURE CHARTS RENDER IN PDF ---
+    ## --- CHARTS FOR PDF ---
     volume_chart_base64 = ""
     factor_chart_base64 = ""
     primary_intent = "General Influence"
     
     try:
-        # VOLUME CHART
         volume_data = base_query.values('posting_time__date').annotate(count=Count('id')).order_by('posting_time__date')
         if volume_data.exists():
             df_vol = pd.DataFrame(list(volume_data)).rename(columns={'posting_time__date': 'date', 'count': 'articles'})
@@ -847,14 +845,12 @@ def generate_report(request):
             volume_chart_base64 = base64.b64encode(buf.read()).decode('utf-8')
             plt.close(fig)
 
-        # FACTOR CHART
         intent_counts = base_query.exclude(
             strategic_intent__in=['', None, 'Unknown']
         ).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]        
         
         if intent_counts.exists():
             primary_intent = intent_counts[0]['strategic_intent']
-            
             df_f = pd.DataFrame(list(intent_counts)).rename(columns={'strategic_intent': 'Factor', 'count': 'Val'})
             df_f = df_f.sort_values('Val', ascending=True).reset_index(drop=True)
             
@@ -869,22 +865,21 @@ def generate_report(request):
 
     except Exception as e:
         logger.error(f"Chart Generation Error: {e}")
-        # We don't return here; we let the function continue so the PDF is still made
 
-    # --- contexts ---
+    # --- FINAL CONTEXT ---
     context = {
-        'country': selected_country,
+        'country': db_country,
         'primary_intent': primary_intent,
-        'articles_count': articles_count,
+        'articles_count': articles_count if 'articles_count' in locals() else 0,
         'volume_chart': volume_chart_base64,
         'factor_chart': factor_chart_base64,
+        'report_data': report_data,  # This contains the CSV scores
         'key_narratives': key_narratives,
         'ai_insights': ai_insights,
         'highest_risk_actor': highest_risk_actor,
         'date_generated': datetime.now().strftime("%B %d, %Y"),
     }
 
-    # Render PDF logic
     template = get_template('report_pdf.html')
     html = template.render(context)
     result = BytesIO()
