@@ -364,34 +364,39 @@ def overview(request):
     top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
     # 8. Pagination
-    paginator = Paginator(full_stats_qs, 10)
+    # Pagination
+    paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    ml_service = MLInferenceService()
+    # Add LLM summaries
     for article in page_obj.object_list:
+        article.summary = get_summary(article.article_text)
+
+    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
+    #ml_service = MLInferenceService()
+    #for article in page_obj.object_list:
         # A. Clean Title Extraction
-        article.display_title = article.article_text.split('\n')[0].strip()
+     #   article.display_title = article.article_text.split('\n')[0].strip()
 
         # B. AI Summary Assignment
-        if hasattr(article, 'ai_summary') and article.ai_summary:
-            article.display_summary = article.ai_summary
-        else:
-            article.display_summary = article.article_text[:200] + "..."
+      #  if hasattr(article, 'ai_summary') and article.ai_summary:
+      #      article.display_summary = article.ai_summary
+     #   else:
+     #       article.display_summary = article.article_text[:200] + "..."
 
         # C. Individual Article Vulnerability Score
-        if article.vulnerability_index is None:
-            vi_score = ml_service.calculate_vulnerability_index(
-                article.strategic_intent or 'neutral',
-                article.tone or 'neutral',
-                article.target_country,
-                article.inferred_actor,
-                article.confidence or 0.5
-            )
-            article.vulnerability_index = float(vi_score) if vi_score else 0.0
-        else:
-            article.vulnerability_index = float(article.vulnerability_index)
+      #  if article.vulnerability_index is None:
+       #     vi_score = ml_service.calculate_vulnerability_index(
+       #         article.strategic_intent or 'neutral',
+       #         article.tone or 'neutral',
+       #         article.target_country,
+       #         article.inferred_actor,
+       #         article.confidence or 0.5
+        #    )
+        #    article.vulnerability_index = float(vi_score) if vi_score else 0.0
+        #else:
+        #    article.vulnerability_index = float(article.vulnerability_index)
 
     # 10. Methodology / Description (The logic you requested to keep)
     vulnerability_methodology = (
