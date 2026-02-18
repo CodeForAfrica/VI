@@ -10,27 +10,27 @@
         body {
             font-family: Arial, Helvetica, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #334155;
             margin: 0;
             padding: 0;
         }
         .header {
             text-align: center;
-            border-bottom: 3px solid #2563eb;
+            border-bottom: 3px solid #1e3a8a; /* Professional Navy */
             padding-bottom: 20px;
             margin-bottom: 30px;
-            background: #f0f9ff;
+            background: #f8fafc; /* Very light slate background */
             padding: 20px;
             border-radius: 8px;
         }
         .header h1 {
-            color: #1a2a40;
+            color: #0f172a;
             font-size: 28px;
             margin: 0 0 10px 0;
             font-weight: bold;
         }
         .header h2 {
-            color: #2563eb;
+            color: #1e3a8a;
             font-size: 24px;
             margin: 0 0 10px 0;
             font-weight: 600;
@@ -44,7 +44,7 @@
             margin-bottom: 30px;
         }
         .section-title {
-            background-color: #2563eb;
+            background-color: #334155; /* Muted Slate Grey */
             color: white;
             padding: 12px 20px;
             font-weight: bold;
@@ -67,30 +67,33 @@
         th {
             background-color: #f1f5f9;
             font-weight: 600;
-            color: #1a2a40;
+            color: #1e3a8a;
         }
         tr:nth-child(even) {
             background-color: #f8fafc;
         }
         .risk-high {
-            color: #dc2626;
+            color: #991b1b;
             font-weight: bold;
-            background-color: #fef2f2;
+            background-color: #fee2e2;
+            padding: 2px 4px;
         }
         .risk-medium {
-            color: #ea580c;
+            color: #92400e;
             font-weight: bold;
-            background-color: #fffbeb;
+            background-color: #fef3c7;
+            padding: 2px 4px;
         }
         .risk-low {
-            color: #16a34a;
+            color: #166534;
             font-weight: bold;
-            background-color: #f0fdf4;
+            background-color: #dcfce7;
+            padding: 2px 4px;
         }
         .narrative-item {
             margin-bottom: 15px;
             padding: 15px;
-            border-left: 4px solid #2563eb;
+            border-left: 4px solid #1e3a8a;
             background: #f8fafc;
             border-radius: 0 6px 6px 0;
         }
@@ -102,35 +105,35 @@
             margin: 10px 0;
         }
         .executive-summary {
-            background: #f0f9ff;
+            background: #f1f5f9;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid #2563eb;
+            border-left: 4px solid #1e3a8a;
         }
         .ai-insights {
             background: #f0fdf4;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid #16a34a;
+            border-left: 4px solid #166534;
         }
         .recommendations {
-            background: #fef3c7;
+            background: #fefce8;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid #f59e0b;
+            border-left: 4px solid #ca8a04;
         }
         .footer {
             text-align: center;
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #e2e8f0;
-            color: #64748b;
+            color: #94a3b8;
             font-size: 14px;
         }
         .logo-text {
             font-size: 20px;
             font-weight: bold;
-            color: #2563eb;
+            color: #1e3a8a;
         }
     </style>
 </head>
@@ -189,18 +192,18 @@
         {% for narrative in key_narratives %}
         <div class="narrative-item">
             <div>
-                <strong style="color: #2563eb;">{{ narrative.intent }}</strong> 
+                <strong style="color: #1e3a8a;">{{ narrative.intent|upper }}</strong> 
                 <span style="color: #64748b;">- {{ narrative.tone }}</span>
             </div>
             <div style="margin-bottom: 5px;"><em>{{ narrative.title }}</em></div>
             <div style="font-size: 13px; color: #64748b; margin-bottom: 5px;">
                 Source: {{ narrative.media_outlet }} | Date: {{ narrative.posting_time }}
             </div>
-            <div style="margin-bottom: 10px; padding: 10px; background: #f0f9ff; border-radius: 4px;">
-                <strong>Summary:</strong><br>{{ narrative.summary }}
+            <div style="margin-bottom: 10px; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px;">
+                <strong style="color: #334155;">AI Summary:</strong><br>{{ narrative.summary }}
             </div>
             <div>
-                <a href="{{ narrative.url }}" style="color: #2563eb; text-decoration: none;">🔗 Read Full Article</a>
+                <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">🔗 Read Full Article</a>
             </div>
         </div>
         {% endfor %}
