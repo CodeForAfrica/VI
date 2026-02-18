@@ -656,7 +656,7 @@ def generate_report(request):
     # --- 3. Process Data ---
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
         
         if not os.path.exists(csv_file):
             # Fallback if the path is slightly different
