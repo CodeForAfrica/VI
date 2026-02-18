@@ -370,47 +370,46 @@ def overview(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary) - FIXED: Use correct import
-    import re  # Import regex module for title extraction
+    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
+    import re  
+    from dashboard.services.ml_inference_service import MLInferenceService  
     
-    # FIXED: Import from correct location
-    from dashboard.services.ml_inference_service import MLInferenceService  # FIXED: Correct import path
-    ml_service = MLInferenceService()  # FIXED: Initialize ml_service
-    
+    ml_service = MLInferenceService()  
+
+    # --- DEFINE FUNCTION ONCE BEFORE THE LOOP ---
+    def extract_title_from_text(text):
+        if not text:
+            return "No Content Available"
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return "Empty Article"
+        for candidate in lines[:3]:
+            is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
+            if not is_metadata and 5 <= len(candidate) <= 150:
+                return candidate
+        words = text.split()
+        fallback = " ".join(words[:10])
+        return f"{fallback}..." if len(words) > 10 else fallback
+
+    # --- NOW START THE LOOP ---
     for article in page_obj.object_list:
-        # A. Clean Title Extraction - FIXED: Use heuristic from article_text
-        def extract_title_from_text(text):
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if not lines:
-                return "Untitled Article"
-            candidate = lines[0]
-            # Skip if looks like metadata
-            if re.match(r'^(By|On|Updated|Source:|.*\d{4}-\d{2}-\d{2})', candidate, re.IGNORECASE):
-                candidate = lines[1] if len(lines) > 1 else "Untitled Article"
-            # Basic title heuristic
-            if 5 <= len(candidate) <= 100 and any(c.isupper() for c in candidate[:3]):
-                return candidate[:100]  # Truncate if too long
-            else:
-                return "Untitled Article"  # Fallback if heuristic fails
-        
-        article.display_title = extract_title_from_text(article.article_text)  # FIXED: Use heuristic
+        # A. Clean Title Extraction
+        article.display_title = extract_title_from_text(article.article_text)
 
         # B. AI Summary Assignment
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
         else:
-            # Use first 200 chars of article_text as summary (truncated sensibly)
             text = article.article_text.replace('\n', ' ').strip()
             if len(text) > 200:
-                # Truncate at last space before 200 to avoid breaking words
                 cut = text[:200].rfind(' ')
                 article.display_summary = (text[:cut] + '…') if cut > 0 else text[:200] + '…'
             else:
                 article.display_summary = text
 
-        # C. Individual Article Vulnerability Score - FIXED: Use initialized ml_service
+        # C. Individual Article Vulnerability Score
         if article.vulnerability_index is None:
-            vi_score = ml_service.calculate_vulnerability_index(  # FIXED: Use initialized ml_service
+            vi_score = ml_service.calculate_vulnerability_index(
                 article.strategic_intent or 'neutral',
                 article.tone or 'neutral',
                 article.target_country,
@@ -420,7 +419,7 @@ def overview(request):
             article.vulnerability_index = float(vi_score) if vi_score else 0.0
         else:
             article.vulnerability_index = float(article.vulnerability_index)
-
+            
     # 10. Methodology / Description (Using the CORRECT methodology you provided)
     vulnerability_methodology = (
         "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
