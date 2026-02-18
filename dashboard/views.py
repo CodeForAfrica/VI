@@ -40,12 +40,12 @@ TARGET_COUNTRIES = ['France', 'China', 'UAE', 'Russia', 'US', 'Turkey', 'Saudi A
 
 
 INTENT_CHOICES = [
-    ('Democratic Interference', 'Democratic Interference'),
-    ('Cultural Hegemony', 'Cultural Hegemony'),
-    ('Reputation Damage', 'Reputation Damage'),
-    ('Economic Dependency', 'Economic Dependency'),
-    ('Security Dependency', 'Security Dependency'),
-    ('Trade Dominance', 'Trade Dominance'),
+    ('Economic', 'Economic'),
+    ('Sovereignty', 'Sovereignty'),
+    ('LGBTQ', 'LGBTQ'),
+    ('Religious', 'Religious'),
+    ('Military presence', 'Military presence'),
+    ('Resource Dependency', 'Resource Dependency'),
     ('Social Fragility', 'Social Fragility'),
 ]
 
