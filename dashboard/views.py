@@ -417,7 +417,7 @@ def overview(request):
             article.vulnerability_index = float(article.vulnerability_index)
 
     # 10. Methodology / Description (The logic you requested to keep)
-     vulnerability_methodology = (
+    vulnerability_methodology = (
         "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
         "a target country is to influence from a selected foreign actor on a specific strategic factor. "
         "The score combines: (1) a content signal — how much collected media and posts say the actor is pushing "
@@ -448,8 +448,7 @@ def overview(request):
         'selected_intent': calc_strategic_intent,
         'vulnerability_description': vulnerability_methodology, 
     }
-    return render(request, 'overview.html', context)
-        
+    return render(request, 'overview.html', context)        
    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
