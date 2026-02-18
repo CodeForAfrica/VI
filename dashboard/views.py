@@ -370,36 +370,11 @@ def overview(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Add LLM summaries
-    for article in page_obj.object_list:
-        # FIXED: Use heuristic title extraction from article_text
-        def extract_title_from_text(text):
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if not lines:
-                return "Untitled Article"
-            candidate = lines[0]
-            # Skip if looks like metadata
-            if re.match(r'^(By|On|Updated|Source:|.*\d{4}-\d{2}-\d{2})', candidate, re.IGNORECASE):
-                candidate = lines[1] if len(lines) > 1 else "Untitled Article"
-            # Basic title heuristic
-            if 5 <= len(candidate) <= 100 and any(c.isupper() for c in candidate[:3]):
-                return candidate[:100]  # Truncate if too long
-            else:
-                return "Untitled Article"  # Fallback if heuristic fails
-        
-        article.display_title = extract_title_from_text(article.article_text)  # FIXED: Use heuristic
-
-        # FIXED: Use article_text for summary
-        text = article.article_text.replace('\n', ' ').strip()
-        if len(text) > 200:
-            # Truncate at last space before 200 to avoid breaking words
-            cut = text[:200].rfind(' ')
-            article.display_summary = (text[:cut] + '…') if cut > 0 else text[:200] + '…'
-        else:
-            article.display_summary = text
-
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary) - FIXED: Initialize ml_service
-    from dashboard.ml_inference import MLInferenceService  # FIXED: Import MLInferenceService
+    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary) - FIXED: Use correct import
+    import re  # Import regex module for title extraction
+    
+    # FIXED: Import from correct location
+    from dashboard.services.ml_inference_service import MLInferenceService  # FIXED: Correct import path
     ml_service = MLInferenceService()  # FIXED: Initialize ml_service
     
     for article in page_obj.object_list:
@@ -476,7 +451,7 @@ def overview(request):
         'selected_country': calc_target_country,
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
-        'vulnerability_description': vulnerability_methodology,  # FIXED: Use correct methodology
+        'vulnerability_description': vulnerability_methodology,  
     }
     return render(request, 'overview.html', context)        
    
