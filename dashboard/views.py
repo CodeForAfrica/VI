@@ -751,7 +751,7 @@ def generate_report(request):
             if client:
                 try:
                     # Prompting for a specific, short AI summary per article
-                    sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:1500]}"
+                    sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:200]}"
                     sum_response = client.chat.completions.create(
                         messages=[{"role": "user", "content": sum_prompt}],
                         model="meta-llama/llama-4-scout-17b-16e-instruct", 
