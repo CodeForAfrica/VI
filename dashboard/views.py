@@ -424,15 +424,19 @@ def overview(request):
             article.vulnerability_index = float(article.vulnerability_index)
             
     # 10. Methodology / Description
-    
+    actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
+    target_label = calc_target_country if calc_target_country else "[Target Country]"
+
     vulnerability_methodology = (
-        "The Vulnerability Index is a score between 0.00 and 1.00 that summarizes how vulnerable "
-        "a target country is to influence from a selected foreign actor on a specific strategic factor. "
-        "The score combines: (1) a content signal — how much collected media and posts say the actor is pushing "
-        "strategic intents corresponding to a specific factor (corrected using human labels via Prediction-powered Inference, PPI), "
-        "and (2) a contextual signal — measurable country-level or actor×country factors (debt exposure, military presence, "
-        "resource ties, election timing, etc...) that make the country more susceptible. Higher values indicate greater "
-        "potential influence risk and suggested priority for investigation."
+        f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
+        f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
+        "It is estimated using advanced ML models and statistically corrected using human labels via "
+        "Prediction-powered Inference (PPI) to ensure reliable measurement. \n\n"
+        
+        f"2. Contextual Signal: Captures the structural susceptibility of {target_label} to influence "
+        f"from {actor_label} on that specific factor. It incorporates measurable actor×country conditions "
+        "such as debt exposure, military presence, resource dependencies, election timing, or policy "
+        "environment that may increase vulnerability."
     )
 
     # 11. Context Assembly
