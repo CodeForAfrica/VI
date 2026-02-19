@@ -58,13 +58,19 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-# Lambda Function
+# Lambda Function for MediaCloud Ingestion
 resource "aws_lambda_function" "mediacloud_ingestion" {
   filename         = "lambda_function.zip"
   function_name    = "mediacloud-ingestion-function"
   role            = aws_iam_role.lambda_role.arn
   handler         = "lambda_function.lambda_handler"
   runtime         = "python3.9"
+  timeout         = 900  # 15 minutes (maximum for Lambda)
+  memory_size     = 3008  # Maximum memory for better performance
+
+  layers = [
+    aws_lambda_layer_version.dependencies.arn
+  ]
 
   environment {
     variables = {
@@ -73,15 +79,19 @@ resource "aws_lambda_function" "mediacloud_ingestion" {
       DB_NAME            = var.db_name
       DB_USER            = var.db_user
       DB_PASSWORD        = var.db_password
+      DB_PORT            = var.db_port
     }
   }
 
-  vpc_config {
-    subnet_ids         = var.subnet_ids
-    security_group_ids = var.security_group_ids
+  # CONDITIONAL VPC CONFIGURATION: Only include if both subnet_ids and security_group_ids are provided and not null
+  dynamic "vpc_config" {
+    for_each = var.subnet_ids != null && var.security_group_ids != null && length(var.subnet_ids) > 0 && length(var.security_group_ids) > 0 ? [true] : []
+    content {
+      subnet_ids         = var.subnet_ids
+      security_group_ids = var.security_group_ids
+    }
   }
 }
-
 # EventBridge Rule (Triggers Daily)
 resource "aws_cloudwatch_event_rule" "daily_ingestion" {
   name                = "daily-mediacloud-ingestion"
