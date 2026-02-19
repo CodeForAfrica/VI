@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+    :root {
+        --navy-dark: #1a2a40;
+        --action-blue: #2563eb;
+        --success-green: #10b981;
+        --warning-amber: #f59e0b;
+    }
+
+    .list-group-item.active {
+        background-color: var(--action-blue) !important;
+        border-color: var(--action-blue) !important;
+    }
+
+    .badge-tone-pos { background-color: var(--success-green); color: white; }
+    .badge-tone-neg { background-color: #ef4444; color: white; }
+    .badge-intent { background-color: var(--warning-amber); color: white; }
+    
+    .journalist-card {
+        transition: transform 0.2s;
+        border-radius: 8px;
+    }
+    
+    .journalist-card:hover {
+        transform: translateY(-3px);
+    }
+</style>
+
+<div class="container py-4">
+    <div class="card shadow-sm border-0 mb-5">
+        <div class="card-header bg-white text-center py-4 border-bottom">
+            <h3 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Journalists by Articles Published</h3>
+            <p class="text-muted mb-0">Analysis of the most prolific authors in the current dataset</p>
+        </div>
+        <div class="card-body p-0">
+            {% if authors_chart %}
+                {{ authors_chart|safe }}
+            {% else %}
+                <div class="p-5 text-center text-muted">
+                    <i class="fas fa-chart-bar fa-3x mb-3 opacity-25"></i>
+                    <p>No visualization data available.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm border-0 sticky-top" style="top: 20px; z-index: 10;">
+                <div class="card-header bg-white py-3">
+                    <h5 class="fw-bold mb-0">Select a Journalist</h5>
+                    <small class="text-muted">Click to view profile & articles</small>
+                </div>
+                <div class="list-group list-group-flush" style="max-height: 70vh; overflow-y: auto;">
+                    {% for journalist in top_journalists %}
+                    <a href="?journalist={{ journalist.name|urlencode }}" 
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 
+                              {% if selected_name == journalist.name %}active text-white{% endif %}">
+                        <span class="fw-bold">{{ journalist.name }}</span>
+                        <span class="badge {% if selected_name == journalist.name %}bg-white text-primary{% else %}bg-primary{% endif %} rounded-pill">
+                            {{ journalist.article_count }}
+                        </span>
+                    </a>
+                    {% empty %}
+                    <div class="p-4 text-center text-muted">No journalists found.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            {% if selected_journalist %}
+            <div class="card shadow-sm border-0 mb-4 animate__animated animate__fadeIn">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Journalist Profile: {{ selected_journalist.name }}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-7">
+                            <p class="mb-2"><strong><i class="fas fa-map-marker-alt me-2 text-muted"></i>City:</strong> {{ selected_journalist.city|default:"Not specified" }}</p>
+                            <p class="mb-2"><strong><i class="fas fa-globe me-2 text-muted"></i>Country Based:</strong> {{ selected_journalist.country_based|default:"Not specified" }}</p>
+                            <p class="mb-0"><strong><i class="fas fa-id-card me-2 text-muted"></i>Nationality:</strong> {{ selected_journalist.nationality|default:"Not specified" }}</p>
+                        </div>
+                        <div class="col-md-5 text-md-end mt-3 mt-md-0 border-start ps-4">
+                            <span class="fw-bold d-block mb-2 small text-uppercase text-muted">Digital Presence</span>
+                            <div class="d-flex flex-wrap justify-content-md-end gap-2">
+                                {% if selected_journalist.linkedin_profile %}
+                                <a href="{{ selected_journalist.linkedin_profile }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fab fa-linkedin"></i></a>
+                                {% endif %}
+                                {% if selected_journalist.facebook_profile %}
+                                <a href="{{ selected_journalist.facebook_profile }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fab fa-facebook"></i></a>
+                                {% endif %}
+                                {% if selected_journalist.x_profile %}
+                                <a href="{{ selected_journalist.x_profile }}" target="_blank" class="btn btn-sm btn-outline-dark"><i class="fab fa-x-twitter"></i></a>
+                                {% endif %}
+                                {% if selected_journalist.instagram_profile %}
+                                <a href="{{ selected_journalist.instagram_profile }}" target="_blank" class="btn btn-sm btn-outline-danger"><i class="fab fa-instagram"></i></a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold mb-0">
+                    {% if selected_name and selected_name != "All Journalists" %}
+                        Articles by {{ selected_name }}
+                    {% else %}
+                        Recent Publications
+                    {% endif %}
+                </h4>
+                {% if selected_name %}
+                <a href="{% url 'authors' %}" class="btn btn-sm btn-light border text-muted">Clear Filter</a>
+                {% endif %}
+            </div>
+
+            <div class="row g-4">
+                {% for article in page_obj %}
+                <div class="col-12">
+                    <div class="card h-100 shadow-sm border-0 journalist-card">
+                        <div class="row g-0">
+                            <div class="col-md-4">
+                                {% if article.get_article_image %}
+                                <img src="{{ article.get_article_image }}" class="img-fluid rounded-start h-100 w-100" style="object-fit: cover; min-height: 180px;" alt="Article image">
+                                {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center h-100 rounded-start" style="min-height: 180px;">
+                                    <i class="fas fa-newspaper fa-3x text-white-50"></i>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="badge bg-light text-dark border">{{ article.media_outlet_fk.name|default:article.media_outlet }}</span>
+                                        <span class="small text-muted">{{ article.posting_time|date:"M j, Y" }}</span>
+                                    </div>
+                                    <h5 class="card-title fw-bold mb-2">
+                                        <a href="{{ article.url }}" target="_blank" class="text-decoration-none text-dark">
+                                            {{ article.article_text|truncatewords:15 }}
+                                        </a>
+                                    </h5>
+                                    <div class="mb-3">
+                                        <span class="badge {% if article.tone|lower == 'positive' %}badge-tone-pos{% else %}badge-tone-neg{% endif %}">
+                                            Tone: {{ article.tone|title }}
+                                        </span>
+                                        <span class="badge badge-intent">
+                                            Intent: {{ article.strategic_intent|title }}
+                                        </span>
+                                    </div>
+                                    <p class="card-text text-muted small">
+                                        {{ article.article_text|truncatewords:35 }}
+                                    </p>
+                                    <a href="{{ article.url }}" target="_blank" class="btn btn-link p-0 text-primary fw-bold text-decoration-none small">
+                                        Read Full Article <i class="fas fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <div class="opacity-25 mb-3">
+                        <i class="fas fa-folder-open fa-4x"></i>
+                    </div>
+                    <p class="text-muted fs-5">Select a journalist from the left to view their specific publications.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if page_obj.has_other_pages %}
+            <nav class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
