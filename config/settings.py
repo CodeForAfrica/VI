@@ -127,3 +127,4 @@ CACHES = {
 # Optional: Use Redis for sessions too
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
+X_FRAME_OPTIONS = 'SAMEORIGIN'
