@@ -1,4 +1,3 @@
-Working 
 from django.shortcuts import render
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
