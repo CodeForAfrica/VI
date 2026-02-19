@@ -1072,7 +1072,24 @@ def authors(request):
         'selected_author': selected_author,
     }
     return render(request, 'dashboard/authors.html', context)
+def articles_view(request):
+    search_query = request.GET.get("q", "")
 
+    articles = MediaNarrative.objects.all().order_by("-posting_time")  # Fixed: was Article.objects
+
+    if search_query:
+        articles = articles.filter(article_text__icontains=search_query)
+
+    paginator = Paginator(articles, 10)  # 10 articles per page
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "page_obj": page_obj,
+        "search_query": search_query,
+    }
+    return render(request, "articles.html", context)
+    
 def intents(request):
     intent_name = request.GET.get('intent', '').strip()
     qs = MediaNarrative.objects.all().order_by('-posting_time')
