@@ -177,24 +177,36 @@ class DisinfoAnalysisChatbot:
 chatbot_instance = DisinfoAnalysisChatbot()
 
 @csrf_exempt
-@require_http_methods(["POST"])
 def chatbot_response(request):
-    try:
-        data = json.loads(request.body)
-        user_message = data.get('message', '').strip()
-        
-        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
-        bot_reply = chatbot_instance.process_query(user_message)
-        
-        return JsonResponse({
-            'reply': bot_reply, 
-            'success': True
-        })
-    except Exception as e:
-        return JsonResponse({
-            'reply': f"Error: {str(e)}", 
-            'success': False
-        })
+    # 1. Handle Quick Chips (GET request from the buttons)
+    if request.method == "GET":
+        user_message = request.GET.get('q', '').strip()
+        if user_message:
+            bot_reply = chatbot_instance.process_query(user_message)
+            # When using GET (for the iframe load), we return a full page
+            return render(request, 'dashboard/chat.html', {
+                'reply': bot_reply, 
+                'query': user_message
+            })
+        # If no query, just show the empty chat page
+        return render(request, 'dashboard/chat.html')
+
+    # 2. Handle Typing (POST request from your existing JS)
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            user_message = data.get('message', '').strip()
+            bot_reply = chatbot_instance.process_query(user_message)
+            
+            return JsonResponse({
+                'reply': bot_reply, 
+                'success': True
+            })
+        except Exception as e:
+            return JsonResponse({
+                'reply': f"Error: {str(e)}", 
+                'success': False
+            })
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
@@ -838,25 +850,28 @@ def generate_report(request):
             insight_prompt = f"""
             Analyze the following media narratives for {selected_country} as a Senior Geopolitical Analyst.
             Your objective is to evaluate these articles for signs of foreign influence and structural vulnerability.
-
+            
             STRICT FORMATTING RULES:
-            - NO markdown symbols. DO NOT use '###' or '**'.
-            - Use plain text headers in ALL CAPS for sections.
-            - Use simple dashes (-) for bullet points.
-            - Keep the language formal and professional.
-
-            STRUCTURE:
-            ### 📊 Narrative Summary
+            1. NO MARKDOWN SYMBOLS. Do not use asterisks (**), hashes (###), or underscores (_).
+            2. USE PLAIN TEXT HEADERS in ALL CAPS.
+            3. Use simple dashes (-) for bullet points.
+            4. Do not use emojis.
+            
+            REQUIRED STRUCTURE:
+            
+            NARRATIVE SUMMARY
             (Provide a high-level summary of the media volume, dominant sentiment, and primary themes/narratives found in the dataset.)
-
-            ### 🛡️ Key Actors & Influence
-            (List the primary foreign actors mentioned and their apparent strategic goals or intents as inferred from the narratives.)
-
-            ### ⚠️ Influence Threat Analysis
-            (Assess the overall likelihood and severity of the influence threat to {selected_country}. Consider if narratives are exploiting local divisions, economic ties, or social fragility.)
-
+            
+            KEY ACTORS AND INFLUENCE
+            (List the primary foreign actors mentioned and their apparent strategic goals as inferred.)
+            
+            INFLUENCE THREAT ANALYSIS
+            (Assess the overall likelihood and severity of the influence threat to {selected_country}.)
+            
             DATASET:
             {all_text_context}
+            
+            FINAL REMINDER: Generate the report in PLAIN TEXT only. Do not use any markdown formatting characters.
             """
 
             try:
