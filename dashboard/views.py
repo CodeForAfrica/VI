@@ -621,13 +621,17 @@ def media(request):
     }
     df = pd.DataFrame(data)
 
-    # Filter out 0 values to prevent Plotly errors
-    df = df[df['article_count'] > 0]
-    df = df.reset_index(drop=True)
+    # 1. Filter out 0s and empty names
+    df = df[df['article_count'] > 0].copy() 
 
     if not df.empty:
+        # 2. Sort the dataframe by count before building the chart
         df = df.sort_values('article_count', ascending=True)
         
+        # 3. Explicitly tell Plotly the order of the Y-axis (the media names)
+        # This prevents the KeyError by ensuring every name in the DF is accounted for
+        media_order = df['name'].tolist()
+
         fig = px.bar(
             df, 
             x='article_count', 
@@ -635,13 +639,15 @@ def media(request):
             orientation='h',
             color='name',
             template='plotly_white',
-            labels={'article_count': 'Total Articles', 'name': 'Media Outlet'}
+            labels={'article_count': 'Total Articles', 'name': 'Media Outlet'},
+            category_orders={"name": media_order} # This ensures the names map correctly
         )
         
         fig.update_layout(
             showlegend=False,
             margin=dict(l=20, r=20, t=40, b=20),
-            height=400
+            height=400,
+            yaxis={'categoryorder':'array', 'categoryarray': media_order} # Secondary safety
         )
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
