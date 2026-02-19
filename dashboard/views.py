@@ -211,15 +211,14 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         import os
         # Load YOUR CSV file with the exact path
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
+        csv_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
         
         # Verify the file exists
-        if not os.path.exists(csv_file):
-            logger.error(f"CSV file not found: {csv_file}")
-            logger.error(f"Files in parent directory: {os.listdir(os.path.join(current_dir, '..'))}")
-            return 0.5, "Unknown"  # Default fallback
+        if not os.path.exists(csv_path):
+            logger.error(f"⚠️ CSV file NOT FOUND at: {csv_path}")
+            return 0.5, "Unknown"
         
-        # FIX 2: Corrected variable name from csv_file to csv_path to match the line above
+        # FIX: Ensure variable name matches (csv_path)
         df = pd.read_csv(csv_path)
         
         country_mapping = {
