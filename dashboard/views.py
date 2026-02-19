@@ -690,7 +690,7 @@ def media(request):
         'selected_name': outlet_name or "All Outlets",
         'target_countries': TARGET_COUNTRIES,
     }
-    return render(request, 'dashboard/media.html', context)
+    return render(request, 'media.html', context)
 
 def intents(request):
     intent_name = request.GET.get('intent', '').strip()
