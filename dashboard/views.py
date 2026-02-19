@@ -1003,111 +1003,144 @@ def generate_report(request):
 
 def countries(request):
     selected_country = request.GET.get('country', '').strip()
-    qs = MediaNarrative.objects.all()
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+
     if selected_country:
         qs = qs.filter(target_country__iexact=selected_country)
 
-    # Aggregate by country
-    country_stats = qs.values('target_country').annotate(
-        total_articles=Count('id'),
-        avg_vulnerability=Avg('vulnerability_index'),
-        avg_confidence=Avg('confidence')
-    ).order_by('-total_articles')
+    # Initialize variables with placeholders to prevent NameErrors
+    publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
+    subject_chart = "<p class='text-center py-5 text-muted'>No subject data available</p>"
+    actor_country_chart = "<p class='text-center py-5 text-muted'>No actor-country pairing data available</p>"
 
-    # Prepare data for chart
-    chart_data = []
-    for stat in country_stats:
-        chart_data.append({
-            'country': stat['target_country'],
-            'articles': stat['total_articles'],
-            'avg_vulnerability': stat['avg_vulnerability'] or 0.0,
-            'avg_confidence': stat['avg_confidence'] or 0.0,
-        })
+    # --- 1. Top African Countries by total articles ---
+    top_publishers = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('target_country').annotate(
+        article_count=Count('id')
+    ).order_by('-article_count')[:10]
 
-    # Convert to DataFrame for Plotly
-    df = pd.DataFrame(chart_data)
-    if not df.empty:
-        fig = px.bar(df, x='country', y='articles', title="Articles by Country")
-        chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    else:
-        chart_html = "<p>No data available for chart</p>"
+    if top_publishers.exists():
+        df = pd.DataFrame(list(top_publishers))
+        if not df.empty:
+            df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
+            df = df.sort_values('Articles', ascending=True)
+            fig = go.Figure(go.Bar(
+                x=df['Articles'],
+                y=df['Country'],
+                orientation='h',
+                marker=dict(color='#2563eb'), 
+                text=df['Articles'],
+                textposition='outside'
+            ))
+            fig.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
+            publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # --- 2. Top Foreign Actors Mentioned ---
+    top_subjects = MediaNarrative.objects.exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).values('inferred_actor').annotate(
+        mention_count=Count('id')
+    ).order_by('-mention_count')[:10]
+
+    if top_subjects.exists():
+        df_sub = pd.DataFrame(list(top_subjects))
+        if not df_sub.empty:
+            df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
+            df_sub = df_sub.sort_values('Mentions', ascending=True)
+            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white")
+            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
+            fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
+            subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # --- 3. Top Actor-Country Pairings ---
+    ac_pairings = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).exclude(
+        inferred_actor__in=['', 'Unknown', None]
+    ).values('target_country', 'inferred_actor').annotate(
+        count=Count('id')
+    ).order_by('-count')[:10]
+
+    if ac_pairings.exists():
+        df_ac = pd.DataFrame(list(ac_pairings))
+        if not df_ac.empty:
+            df_ac['Label'] = df_ac['target_country'] + " - " + df_ac['inferred_actor']
+            df_ac = df_ac.sort_values('count', ascending=True)
+            fig_ac = px.bar(df_ac, x='count', y='Label', orientation='h', template="plotly_white")
+            fig_ac.update_traces(marker_color='#6366f1', textposition='outside')
+            fig_ac.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
+            actor_country_chart = fig_ac.to_html(full_html=False, include_plotlyjs='cdn')
 
     context = {
-        'country_list': country_stats,
-        'chart_html': chart_html,
-        'selected_country': selected_country,
-        'african_countries': COUNTRIES,
+        'publisher_chart': publisher_chart,
+        'subject_chart': subject_chart,
+        'actor_country_chart': actor_country_chart,
+        'sample_articles': qs[:10],
+        'selected_country': selected_country or "All Countries",
+        'african_countries': COUNTRIES, 
     }
-    return render(request, 'dashboard/countries.html', context)
+    return render(request, 'countries.html', context)
 
 
 def authors(request):
-    # 1. Get the selected journalist from the URL
-    selected_name = request.GET.get('journalist', '').strip()
+    # 1. Capture the selected journalist name from URL
+    journalist_name = request.GET.get('journalist', '').strip()
     
-    # 2. Aggregate Top Journalists for the sidebar
-    top_journalists = Journalist.objects.annotate(
-        article_count=Count('articles')
-    ).filter(article_count__gt=0).order_by('-article_count')[:20]
+    # 2. CACHE logic for the Sidebar and Chart (The "Heavy" Data)
+    # We use a unique key to store the top journalists and the chart HTML
+    cache_key = "authors_sidebar_and_chart"
+    cached_data = cache.get(cache_key)
 
-    # 3. Handle Selected Journalist Profile Details
-    selected_journalist = None
-    if selected_name:
-        selected_journalist = Journalist.objects.filter(name__iexact=selected_name).first()
-
-    # 4. Filter Articles for the main feed
-    if selected_name:
-        article_list = MediaNarrative.objects.filter(
-            journalist_fk__name__iexact=selected_name
-        ).order_by('-posting_time')
+    if cached_data:
+        top_journalists = cached_data['top_journalists']
+        authors_chart = cached_data['authors_chart']
     else:
-        article_list = MediaNarrative.objects.all().order_by('-posting_time')
+        # If no cache, calculate the data
+        top_journalists = Journalist.objects.annotate(
+            article_count=Count('articles')
+        ).filter(article_count__gt=0).order_by('-article_count')[:10]
 
-    # 5. Generate Plotly Chart for Top Authors
-    authors_chart = None
-    if top_journalists.exists():
-        # Convert queryset to list of dicts for Pandas
-        chart_data = list(top_journalists.values('name', 'article_count')[:10])
-        df = pd.DataFrame(chart_data)
-        
-        if not df.empty:
-            # Create a horizontal bar chart
+        # Generate the Plotly Chart HTML
+        authors_chart = None
+        if top_journalists:
+            df = pd.DataFrame(list(top_journalists.values('name', 'article_count')))
             fig = px.bar(
-                df, 
-                x='article_count', 
-                y='name', 
-                orientation='h',
-                labels={'article_count': 'Total Articles', 'name': 'Journalist'},
-                color='article_count',
-                color_continuous_scale='Blues'
+                df, x='article_count', y='name', orientation='h',
+                color='article_count', color_continuous_scale='Blues',
+                labels={'article_count': 'Articles', 'name': 'Journalist'}
             )
-            
             fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=20, r=20, t=20, b=20),
-                height=400,
-                xaxis_title=None,
-                yaxis_title=None,
-                yaxis={'categoryorder':'total ascending'} # Highest on top
+                height=350, margin=dict(l=10, r=10, t=10, b=10),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                yaxis={'categoryorder': 'total ascending'}
             )
-            
             authors_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 6. Pagination (10 articles per page)
-    paginator = Paginator(article_list, 10)
+        # Store in cache for 24 hours (60s * 60m * 24h)
+        cached_data = {'top_journalists': top_journalists, 'authors_chart': authors_chart}
+        cache.set(cache_key, cached_data, 60 * 60 * 24)
+
+    # 3. Dynamic Logic (Not cached, changes based on user click)
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+    selected_journalist = None
+
+    if journalist_name:
+        qs = qs.filter(journalist_fk__name__iexact=journalist_name)
+        selected_journalist = Journalist.objects.filter(name__iexact=journalist_name).first()
+
+    # 4. Pagination
+    paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 7. Final Context
     context = {
         'top_journalists': top_journalists,
-        'selected_journalist': selected_journalist,
-        'selected_name': selected_name,
-        'page_obj': page_obj,
         'authors_chart': authors_chart,
+        'page_obj': page_obj,
+        'selected_name': journalist_name or "All Journalists",
+        'selected_journalist': selected_journalist,
     }
-    
     return render(request, 'dashboard/authors.html', context)
     
 def articles_view(request):
