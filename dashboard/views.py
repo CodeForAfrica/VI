@@ -608,8 +608,11 @@ def media(request):
     outlet_name = request.GET.get('outlet', '')
     media_chart = ""
 
-    # Fetching outlets - Ensure we order by article count
-    top_outlets = MediaOutlet.objects.all().order_by('-article_count')[:10]
+    # We use .annotate() to create the 'article_count' field 
+    # by counting the related 'articles' for each outlet.
+    top_outlets = MediaOutlet.objects.annotate(
+        article_count=Count('articles') 
+    ).order_by('-article_count')[:10]
     
     # Create DataFrame for plotting
     data = {
@@ -618,14 +621,11 @@ def media(request):
     }
     df = pd.DataFrame(data)
 
-    # FIX: Filter out 0 values to prevent Plotly KeyError: 'Saudi Arabia PR'
+    # Filter out 0 values to prevent Plotly errors
     df = df[df['article_count'] > 0]
-    
-    # Reset index to ensure a clean sequential index for the grouper
     df = df.reset_index(drop=True)
 
     if not df.empty:
-        # Sort values so the largest is at the top of the horizontal bar chart
         df = df.sort_values('article_count', ascending=True)
         
         fig = px.bar(
@@ -645,7 +645,7 @@ def media(request):
         )
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Fetching narrative queryset for the list below the chart
+    # Fetching narrative queryset
     qs = MediaNarrative.objects.all().select_related('media_outlet').order_by('-posting_time')[:20]
 
     context = {
