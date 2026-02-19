@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.core.cache import cache
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
@@ -190,36 +191,34 @@ def chatbot_response(request):
             'success': False
         })
 
-def calculate_contextual_score(target_country, foreign_actor, intent_filter=None): 
+def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
+    # This function is already efficient as it reads the CSV once per call.
+    # Consider caching its results based on inputs if called frequently.
+    cache_key = f"cvi_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logger.info(f"Cache HIT for CVI: {cache_key}")
+        return cached_result
+
     try:
         import pandas as pd
         import os
-        
-        # Load YOUR CSV file with the exact path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
-        
-        # Verify the file exists
         if not os.path.exists(csv_file):
             logger.error(f"CSV file not found: {csv_file}")
-            logger.error(f"Files in parent directory: {os.listdir(os.path.join(current_dir, '..'))}")
-            return 0.5, "Unknown"  # Default fallback
-        
-        # Read YOUR CSV file
+            return 0.5, "Unknown"
         df = pd.read_csv(csv_file)
-        
-        # Normalize country and actor names to match your CSV format
         country_mapping = {
             "south africa": "South Africa",
-            "senegal": "Senegal", 
+            "senegal": "Senegal",
             "drc": "DRC",
             "cote d'ivoire": "CoteIvoire",
             "cote ivoire": "CoteIvoire",
             "ivory coast": "CoteIvoire",
             "ethiopia": "Ethiopia"
         }
-        
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
@@ -232,61 +231,60 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             "israel": "Israel",
             "iran": "Iran"
         }
-        
-        # Format the inputs to match YOUR CSV format
         formatted_country = country_mapping.get(target_country.lower(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
-        
-        # Find all rows matching this country-actor combination in YOUR CSV
         matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
-        
+
         if not matching_rows.empty:
-            # 1. If user selected an intent, try to find that specific one
             if intent_filter:
                 specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
                 if not specific_match.empty:
                     row = specific_match.iloc[0]
-                    return float(row['FinalRisk']), row['intent']
-
-            # 2. Fallback: Find the row with the HIGHEST score 
+                    result = float(row['FinalRisk']), row['intent']
+                    cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+                    return result
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             max_score = max_row['FinalRisk']
             max_intent = max_row['intent']
-            
             logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-            return float(max_score), max_intent
+            result = float(max_score), max_intent
+            cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+            return result
         else:
-            # If no exact match found, try case-insensitive match
             matching_rows = df[
-                (df['country'].str.lower() == formatted_country.lower()) & 
+                (df['country'].str.lower() == formatted_country.lower()) &
                 (df['actor'].str.lower() == formatted_actor.lower())
             ]
-            
             if not matching_rows.empty:
-                # Apply intent filter logic even in case-insensitive fallback
                 if intent_filter:
                     specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
                     if not specific_match.empty:
                         row = specific_match.iloc[0]
-                        return float(row['FinalRisk']), row['intent']
-
+                        result = float(row['FinalRisk']), row['intent']
+                        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+                        return result
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
-                
                 logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-                return float(max_score), max_intent
-        
-        # If no match found, return default
+                result = float(max_score), max_intent
+                cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+                return result
+
         logger.info(f"No score found for {target_country}-{foreign_actor} in CSV, using default")
-        return 0.5, "Unknown"
-        
+        result = 0.5, "Unknown"
+        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+        return result
     except FileNotFoundError:
         logger.error(f"CSV file not found at: {csv_file}")
-        return 0.5, "Unknown"
+        result = 0.5, "Unknown"
+        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+        return result
     except Exception as e:
         logger.error(f"Contextual score lookup error: {e}")
-        return 0.5, "Unknown"  # Default fallback
+        result = 0.5, "Unknown"
+        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+        return result # Default fallback
         
 def overview(request):
     # 1. Initialize Safety Defaults
@@ -295,111 +293,159 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     cvi_intent = None
-    
+
     # 2. Capture Inputs (Intent, Actor, Country)
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
-    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip() 
-    
-    # 3. Global Exclusions (Sports/Maintenance)
-    exclude_keywords = [
-        'football', 'soccer', 'sport', 'sports', 'match', 'game', 
-        'tournament', 'championship', 'olympic', 'cricket', 'basketball', 
-        'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight', 
-        'league', 'team', 'player', 'coach', 'stadium'
-    ]
+    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
 
-    base_qs = MediaNarrative.objects.all()
-    for word in exclude_keywords:
-        base_qs = base_qs.exclude(article_text__icontains=word)
-    
-    full_stats_qs = base_qs.order_by('-posting_time')
+    # --- CACHE KEYS FOR FILTERED BASE QUERY ---
+    base_qs_cache_key = "overview_base_qs_no_sports"
+    base_qs = cache.get(base_qs_cache_key)
+    if base_qs is None:
+        logger.info("Cache MISS for base_qs, rebuilding...")
+        exclude_keywords = [
+            'football', 'soccer', 'sport', 'sports', 'match', 'game',
+            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
+            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
+            'league', 'team', 'player', 'coach', 'stadium'
+        ]
+        base_qs = MediaNarrative.objects.all()
+        for word in exclude_keywords:
+            base_qs = base_qs.exclude(article_text__icontains=word)
+        cache.set(base_qs_cache_key, base_qs, timeout=60*60*24) # Cache for 24 hours if base doesn't change often
 
-    # 4. CALCULATOR LOGIC 
+    # Apply filters based on user input
+    filtered_qs = base_qs
+    if calc_target_country:
+        filtered_qs = filtered_qs.filter(target_country__iexact=calc_target_country)
+    if calc_foreign_actor:
+        filtered_qs = filtered_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+
+    # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
     if calc_target_country and calc_foreign_actor:
         cvi_score, cvi_intent = calculate_contextual_score(
-            calc_target_country, 
-            calc_foreign_actor, 
+            calc_target_country,
+            calc_foreign_actor,
             intent_filter=calc_strategic_intent
         )
-        
-        # Filter display list to match selection actor and country selection 
-        full_stats_qs = full_stats_qs.filter(
-            target_country__iexact=calc_target_country,
-            inferred_actor__iexact=calc_foreign_actor
-        )
-        
+        # Filter display list to match selection actor and country selection (already done above)
     else:
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
 
-    # total articles
-    total_articles = full_stats_qs.count()
+    # total articles for the *filtered* queryset
+    # Cache this based on filters
+    total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
+    total_articles = cache.get(total_articles_cache_key)
+    if total_articles is None:
+        logger.info(f"Cache MISS for total_articles: {total_articles_cache_key}")
+        total_articles = filtered_qs.count()
+        cache.set(total_articles_cache_key, total_articles, timeout=60*60) # Cache for 1 hour
 
-    # 5. Global Stats & Averages
-    from django.db.models import Avg, Count
-    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
-    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
-    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
-    
-    avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
-    avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
-    avg_confidence = avg_stats['confidence__avg'] or 0.0
-    
-    # 6. Volume Chart 
-    try:
-        limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
-        if limited_for_chart.exists():
-            df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
-            df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date  # FIXED: Use 'posting_time'
-            daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-            if not daily_counts.empty:
-                fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
-                chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    except Exception as e:
-        logger.error(f"Volume Chart Error: {e}")
+    full_stats_qs = filtered_qs.order_by('-posting_time') # Use the filtered queryset
 
-    # 7. Optimized Data Lists
-    country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
-    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
+    # 5. Global Stats & Averages (Cache these!)
+    # Cache global stats based on the *filtered* queryset
+    stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
+    global_stats_cached = cache.get(stats_cache_key)
+    if global_stats_cached is None:
+        logger.info(f"Cache MISS for global_stats: {stats_cache_key}")
+        unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
+        unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
+        unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
+        avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
+        avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
+        avg_confidence = avg_stats['confidence__avg'] or 0.0
+        global_stats_cached = {
+            'unique_outlets': unique_outlets,
+            'unique_intents': unique_intents,
+            'unique_actors': unique_actors,
+            'avg_vulnerability': round(avg_vulnerability, 3),
+            'avg_confidence': round(avg_confidence, 3),
+        }
+        cache.set(stats_cache_key, global_stats_cached, timeout=60*60) # Cache for 1 hour
+    else:
+        logger.info(f"Cache HIT for global_stats: {stats_cache_key}")
 
-    # 8. Pagination 
-    paginator = Paginator(full_stats_qs, 10)
+    unique_outlets = global_stats_cached['unique_outlets']
+    unique_intents = global_stats_cached['unique_intents']
+    unique_actors = global_stats_cached['unique_actors']
+    avg_vulnerability = global_stats_cached['avg_vulnerability']
+    avg_confidence = global_stats_cached['avg_confidence']
+
+
+    # 6. Volume Chart (Cache the HTML output!)
+    chart_cache_key = f"overview_volume_chart_{calc_target_country}_{calc_foreign_actor}"
+    cached_chart = cache.get(chart_cache_key)
+    if cached_chart:
+        logger.info(f"Cache HIT for volume chart: {chart_cache_key}")
+        chart = cached_chart
+    else:
+        logger.info(f"Cache MISS for volume chart: {chart_cache_key}")
+        try:
+            limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
+            if limited_for_chart.exists():
+                df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
+                df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
+                daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
+                if not daily_counts.empty:
+                    fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
+                    fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
+                    chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+                    cache.set(chart_cache_key, chart, timeout=60*60) # Cache chart for 1 hour
+        except Exception as e:
+            logger.error(f"Volume Chart Error: {e}")
+            # Optionally cache the error state too for a shorter time
+            cache.set(chart_cache_key, chart, timeout=60*15) # Cache error for 15 mins
+
+
+    # 7. Optimized Data Lists (Cache these too!)
+    country_list_cache_key = f"overview_country_list_{calc_target_country}_{calc_foreign_actor}"
+    country_list = cache.get(country_list_cache_key)
+    if country_list is None:
+        logger.info(f"Cache MISS for country_list: {country_list_cache_key}")
+        country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
+        cache.set(country_list_cache_key, country_list, timeout=60*60) # Cache for 1 hour
+
+    top_subjects_cache_key = f"overview_top_subjects_{calc_target_country}_{calc_foreign_actor}"
+    top_subjects = cache.get(top_subjects_cache_key)
+    if top_subjects is None:
+        logger.info(f"Cache MISS for top_subjects: {top_subjects_cache_key}")
+        top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
+        cache.set(top_subjects_cache_key, top_subjects, timeout=60*60) # Cache for 1 hour
+
+
+    # 8. Pagination
+    # Use the filtered queryset for pagination
+    paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    import re  
-    from dashboard.services.ml_inference_service import MLInferenceService  
-    
-    ml_service = MLInferenceService()  
-
-    # --- DEFINE FUNCTION ONCE BEFORE THE LOOP ---
+    # CRITICAL: Avoid running ML inference per article on the fly!
+    # Assume vulnerability_index, strategic_intent, tone are already calculated during ingestion.
+    # Remove or heavily optimize the ml_service.calculate_vulnerability_index loop here.
+    # The extract_title_from_text function is okay to run per article in the page batch (10 items).
+    import re
+    # Define extract_title_from_text inside the view to avoid potential scoping issues with caching loops
     def extract_title_from_text(text):
         if not text:
             return "No Content Available"
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines:
             return "Empty Article"
-        
         for candidate in lines[:3]:
             is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
-           
             if not is_metadata and 5 <= len(candidate) <= 250:
                 return candidate
-        
         words = text.split()
-        
         fallback = " ".join(words[:20])
         return f"{fallback}..." if len(words) > 20 else fallback
 
-    
     for article in page_obj.object_list:
-        
         article.display_title = extract_title_from_text(article.article_text)
-
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
         else:
@@ -409,35 +455,30 @@ def overview(request):
                 article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
                 article.display_summary = text
+        # SKIP ML CALCULATION HERE - Should be done during ingestion
+        # if article.vulnerability_index is None:
+        #     # This was the slow part!
+        #     vi_score = ml_service.calculate_vulnerability_index(...)
+        #     article.vulnerability_index = float(vi_score) if vi_score else 0.0
+        # else:
+        #     article.vulnerability_index = float(article.vulnerability_index)
 
-        # C. Individual Article Vulnerability Score
-        if article.vulnerability_index is None:
-            vi_score = ml_service.calculate_vulnerability_index(
-                article.strategic_intent or 'neutral',
-                article.tone or 'neutral',
-                article.target_country,
-                article.inferred_actor,
-                article.confidence or 0.5
-            )
-            article.vulnerability_index = float(vi_score) if vi_score else 0.0
-        else:
-            article.vulnerability_index = float(article.vulnerability_index)
-            
-    # 10. Methodology / Description
+
+    # 10. Methodology / Description (Can be cached if static)
+    # ... (keep your existing methodology string logic) ...
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
-
     vulnerability_methodology = (
         f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
         f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
         "It is estimated using advanced ML models and statistically corrected using human labels via "
-        "Prediction-powered Inference (PPI) to ensure reliable measurement. \n\n"
-        
+        "Prediction-powered Inference (PPI) to ensure reliable measurement.\n\n"
         f"2. Contextual Signal: Captures the structural susceptibility of {target_label} to influence "
         f"from {actor_label} on that specific factor. It incorporates measurable actor×country conditions "
         "such as debt exposure, military presence, resource dependencies, election timing, or policy "
         "environment that may increase vulnerability."
     )
+
 
     # 11. Context Assembly
     context = {
@@ -447,8 +488,8 @@ def overview(request):
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
-        'avg_vulnerability': round(avg_vulnerability, 3),
-        'avg_confidence': round(avg_confidence, 3),
+        'avg_vulnerability': avg_vulnerability,
+        'avg_confidence': avg_confidence,
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
@@ -459,9 +500,9 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
         'intent_choices': INTENT_CHOICES,
-        'vulnerability_description': vulnerability_methodology,  
+        'vulnerability_description': vulnerability_methodology,
     }
-    return render(request, 'overview.html', context)        
+    return render(request, 'overview.html', context)     
    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
