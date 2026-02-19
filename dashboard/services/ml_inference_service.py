@@ -1,3 +1,5 @@
+# dashboard/services/ml_inference_service.py
+
 import boto3
 import tempfile
 import os
@@ -12,6 +14,8 @@ import joblib
 import json
 import importlib.util
 from langdetect import detect, DetectorFactory, LangDetectException
+import pandas as pd # Added for CSV handling
+
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
@@ -38,7 +42,32 @@ class MLInferenceService:
         self._strategic_label_encoder = None
         self._tone_label_encoder = None
         self._strategic_vocab = None
-    
+        self._csv_risk_df = None # Cache for the CSV risk data
+        self._load_csv_risks() # Load CSV data once during initialization
+
+    def _load_csv_risks(self):
+        """Load the pre-calculated risk scores from the CSV file."""
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            # Assuming the CSV is in the parent directory (project root)
+            csv_file_path = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
+            
+            # Also check the alternative name if the primary one doesn't exist
+            if not os.path.exists(csv_file_path):
+                 csv_file_path = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
+            
+            if os.path.exists(csv_file_path):
+                self._csv_risk_df = pd.read_csv(csv_file_path)
+                logger.info(f"Loaded CSV risk data from {csv_file_path}. Shape: {self._csv_risk_df.shape}")
+            else:
+                logger.warning(f"CSV risk file not found at {csv_file_path} or alternative name.")
+                self._csv_risk_df = pd.DataFrame() # Initialize as empty DataFrame
+
+        except Exception as e:
+            logger.error(f"Error loading CSV risk data: {e}")
+            self._csv_risk_df = pd.DataFrame() # Initialize as empty DataFrame on error
+
+
     def _download_from_s3(self, s3_key, local_path):
         """Download single file from S3"""
         if not self.s3_client:
@@ -137,40 +166,43 @@ class MLInferenceService:
         return classifier
     
     def _load_contextual_module_from_s3(self):
-        """ONLY CHANGE: Load contextual module from S3 - SIMPLIFIED"""
-        try:
-            # Download contextual module from S3 - USE CORRECT PATH
-            response = self.s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key='contextual_all_intents_v2.py'  # SIMPLIFIED PATH - JUST THE FILE NAME
-            )
-            
-            # Save temporarily and import
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(response['Body'].read().decode('utf-8'))
-                temp_py_path = f.name
-            
-            spec = importlib.util.spec_from_file_location('contextual_mod', temp_py_path)
-            contextual_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(contextual_mod)
-            
-            return contextual_mod
-        except Exception as e:
-            logger.warning(f"S3 contextual file not found, trying local: {e}")
-            # Try to load from local file
-            try:
-                import os
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                local_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
-                
-                if os.path.exists(local_file):
-                    spec = importlib.util.spec_from_file_location('contextual_mod', local_file)
-                    contextual_mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(contextual_mod)
-                    return contextual_mod
-            except Exception as local_error:
-                logger.error(f"Local contextual file also failed: {local_error}")
-            return None
+        """Return None since we're using pre-calculated CSV scores instead"""
+        logger.info("Using pre-calculated CSV scores instead of contextual module")
+        return None
+        # --- OLD CODE ---
+        # try:
+        #     # Download contextual module from S3 - USE CORRECT PATH
+        #     response = self.s3_client.get_object(
+        #         Bucket=self.bucket_name,
+        #         Key='contextual_all_intents_v2.py'  # SIMPLIFIED PATH - JUST THE FILE NAME
+        #     )
+        #     
+        #     # Save temporarily and import
+        #     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        #         f.write(response['Body'].read().decode('utf-8'))
+        #         temp_py_path = f.name
+        #     
+        #     spec = importlib.util.spec_from_file_location('contextual_mod', temp_py_path)
+        #     contextual_mod = importlib.util.module_from_spec(spec)
+        #     spec.loader.exec_module(contextual_mod)
+        #     
+        #     return contextual_mod
+        # except Exception as e:
+        #     logger.warning(f"S3 contextual file not found, trying local: {e}")
+        #     # Try to load from local file
+        #     try:
+        #         import os
+        #         current_dir = os.path.dirname(os.path.abspath(__file__))
+        #         local_file = os.path.join(current_dir, '..', '..', 'contextual_all_intents_v2.py')
+        #         
+        #         if os.path.exists(local_file):
+        #             spec = importlib.util.spec_from_file_location('contextual_mod', local_file)
+        #             contextual_mod = importlib.util.module_from_spec(spec)
+        #             spec.loader.exec_module(contextual_mod)
+        #             return contextual_mod
+        #     except Exception as local_error:
+        #         logger.error(f"Local contextual file also failed: {local_error}")
+        #     return None
     
     def preprocess_text(self, text):
         """Replicate preprocessing from notebook"""
@@ -276,156 +308,135 @@ class MLInferenceService:
             'strategic_intent_conf': si_confidence,
             'strategic_intent_source': 'model'  # From your notebook's logic
         }
-    
+
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
-        """Calculate vulnerability index using contextual module and PPI approach (from your notebook)"""
+        """Calculate vulnerability index using pre-calculated CSV scores instead of contextual module"""
         try:
-            # Load contextual module from S3 - ONLY CHANGE: Simplified loading
-            contextual_mod = self._load_contextual_module_from_s3()
-            
-            if contextual_mod:
-                # Use contextual module if available
-                try:
-                    # Compute g, R, CA using functions from your contextual_all_intents_v2.py
-                    g = contextual_mod.compute_gs()
-                    R = contextual_mod.compute_R(g)
-                    CA = contextual_mod.compute_CAs(g, R)
-                    
-                    # Get the contextual risk for this specific country-actor pair
-                    contextual_risk = 0.0
-                    intent_category = strategic_intent
-                    
-                    # Normalize country names to match contextual module
-                    country_mapping = {
-                        "south africa": "South Africa",
-                        "senegal": "Senegal", 
-                        "drc": "DRC",
-                        "cote d'ivoire": "CoteIvoire",
-                        "cote ivoire": "CoteIvoire",
-                        "ivory coast": "CoteIvoire",
-                        "ethiopia": "Ethiopia"
-                    }
-                    
-                    actor_mapping = {
-                        "uae": "UAE",
-                        "china": "China",
-                        "france": "France",
-                        "us": "UnitedStates",
-                        "united states": "UnitedStates",
-                        "russia": "Russia",
-                        "saudi": "Saudi",
-                        "turkey": "Turkey",
-                        "israel": "Israel",
-                        "iran": "Iran"
-                    }
-                    
-                    formatted_country = country_mapping.get(target_country.lower(), target_country)
-                    formatted_actor = actor_mapping.get(inferred_actor.lower(), inferred_actor)
-                    
-                    # Get the first available intent category
-                    intent_categories = list(CA.keys())
-                    if intent_categories and formatted_country in CA[intent_categories[0]]:
-                        if formatted_actor in CA[intent_categories[0]][formatted_country]:
-                            contextual_risk = CA[intent_categories[0]][formatted_country][formatted_actor]
-                    
-                    # Calculate composite risk
-                    strategic_weight = 0.35
-                    tone_weight = 0.25
-                    confidence_weight = 0.2
-                    contextual_weight = 0.2
-                    
-                    # Map intent and tone to risk scores
-                    intent_scores = {
-                        'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                        'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                        'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                        'positive': 0.1, 'supportive': 0.0
-                    }
-                    
-                    tone_scores = {
-                        'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                        'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                        'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-                    }
-                    
-                    intent_risk = intent_scores.get(strategic_intent.lower(), 0.3)
-                    tone_risk = tone_scores.get(tone.lower(), 0.3)
-                    
-                    # Normalize scores
-                    normalized_intent = min(max(intent_risk, 0), 1)
-                    normalized_tone = min(max(tone_risk, 0), 1)
-                    normalized_confidence = min(max(confidence, 0), 1)
-                    normalized_contextual = min(max(contextual_risk, 0), 1)
-                    
-                    vulnerability_index = (
-                        (normalized_intent * strategic_weight) +
-                        (normalized_tone * tone_weight) +
-                        (normalized_confidence * confidence_weight) +
-                        (normalized_contextual * contextual_weight)
-                    )
-                    
-                    return min(vulnerability_index, 1.0)
-                    
-                except Exception as e:
-                    logger.error(f"Error in contextual vulnerability calculation: {e}")
-                    # Fallback to simple calculation
-                    intent_scores = {
-                        'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                        'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                        'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                        'positive': 0.1, 'supportive': 0.0
-                    }
-                    
-                    tone_scores = {
-                        'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                        'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                        'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-                    }
-                    
-                    intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
-                    tone_score = tone_scores.get(tone.lower(), 0.3)
-                    
-                    return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
+            # Load your pre-calculated CSV file - using the cached DataFrame
+            df = self._csv_risk_df
+
+            if df.empty:
+                logger.warning("CSV risk data is empty, using fallback calculation")
+                # Fallback to simple calculation if CSV is not available
+                return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
+
+            # Normalize inputs to match CSV format
+            country_mapping = {
+                "south africa": "South Africa",
+                "senegal": "Senegal", 
+                "drc": "DRC",
+                "cote d'ivoire": "CoteIvoire",
+                "cote ivoire": "CoteIvoire",
+                "ivory coast": "CoteIvoire",
+                "ethiopia": "Ethiopia"
+            }
+
+            actor_mapping = {
+                "uae": "UAE",
+                "china": "China",
+                "france": "France",
+                "us": "UnitedStates",
+                "united states": "UnitedStates",
+                "russia": "Russia",
+                "saudi": "Saudi",
+                "turkey": "Turkey",
+                "israel": "Israel",
+                "iran": "Iran",
+                "rwanda": "Rwanda",
+                "nonstate": "NonState"
+            }
+
+            intent_mapping = {
+                'economic dependency': 'Economic',
+                'economic': 'Economic',
+                'sovereignty': 'Sovereignty',
+                'lgbtq': 'LGBTQ',
+                'religious': 'Religious',
+                'military presence': 'MilitaryPresence',
+                'military': 'MilitaryPresence',
+                'resource dependency': 'ResourceDependency',
+                'social fragility': 'SocialFragility',
+                'social': 'SocialFragility',
+                'election influence': 'ElectionInfluence',
+                'election': 'ElectionInfluence',
+            }
+
+            formatted_country = country_mapping.get(target_country.lower(), target_country)
+            formatted_actor = actor_mapping.get(inferred_actor.lower(), inferred_actor)
+            formatted_intent = intent_mapping.get(strategic_intent.lower(), strategic_intent)
+
+            # Look up the pre-calculated risk score from CSV
+            matching_row = df[
+                (df['country'] == formatted_country) &
+                (df['actor'] == formatted_actor) &
+                (df['intent'] == formatted_intent)
+            ]
+
+            if not matching_row.empty:
+                # Get the pre-calculated FinalRisk score from your CSV
+                csv_risk_score = float(matching_row.iloc[0]['FinalRisk'])
+
+                # Weight the CSV score with the ML confidence
+                # The CSV score is the main contextual risk, ML confidence adds a small adjustment
+                weighted_score = (
+                    csv_risk_score * 0.8 +  # 80% weight to pre-calculated CSV score
+                    confidence * 0.2         # 20% weight to ML confidence
+                )
+
+                return min(weighted_score, 1.0)
+
             else:
-                # Fallback if no contextual module available
-                intent_scores = {
-                    'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                    'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                    'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                    'positive': 0.1, 'supportive': 0.0
-                }
-                
-                tone_scores = {
-                    'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                    'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                    'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-                }
-                
-                intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
-                tone_score = tone_scores.get(tone.lower(), 0.3)
-                
-                return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
-            
+                # If no exact match found, try to find the closest match
+                # First, find all scores for this country-actor pair regardless of intent
+                country_actor_matches = df[
+                    (df['country'] == formatted_country) &
+                    (df['actor'] == formatted_actor)
+                ]
+
+                if not country_actor_matches.empty:
+                    # Use the average of all intents for this country-actor pair
+                    avg_risk = country_actor_matches['FinalRisk'].mean()
+                    weighted_score = (
+                        avg_risk * 0.7 +      # 70% weight to average CSV score
+                        confidence * 0.3      # 30% weight to ML confidence
+                    )
+                    return min(weighted_score, 1.0)
+                else:
+                    # If no country-actor match, use the fallback calculation
+                    logger.warning(f"No CSV match found for {target_country}-{inferred_actor}-{strategic_intent}")
+                    return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
+
         except Exception as e:
-            logger.error(f"Error calculating vulnerability index: {e}")
-            # Return simple fallback
-            intent_scores = {
-                'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
-                'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
-                'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
-                'positive': 0.1, 'supportive': 0.0
-            }
-            
-            tone_scores = {
-                'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-                'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-                'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-            }
-            
-            intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
-            tone_score = tone_scores.get(tone.lower(), 0.3)
-            
-            return (intent_score * 0.6 + tone_score * 0.3 + confidence * 0.1)
+            logger.error(f"Error using CSV for vulnerability index: {e}")
+            # Fallback to simple calculation if anything goes wrong
+            return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
+
+    def _calculate_fallback_vulnerability_index(self, strategic_intent, tone, confidence):
+        """Fallback calculation if CSV is not available"""
+        # Map intent and tone to risk scores using your existing mappings
+        intent_scores = {
+            'hostile': 1.0, 'aggressive': 0.9, 'manipulative': 0.8,
+            'deceptive': 0.8, 'misleading': 0.7, 'concerning': 0.6,
+            'suspicious': 0.5, 'neutral': 0.3, 'informative': 0.2,
+            'positive': 0.1, 'supportive': 0.0,
+            # Your specific intent categories
+            'economic': 0.6, 'sovereignty': 0.8, 'lgbtq': 0.4,
+            'religious': 0.5, 'military': 0.7, 'militarypresence': 0.7,
+            'resourcedependency': 0.6, 'socialfragility': 0.9,
+            'electioninfluence': 0.8
+        }
+
+        tone_scores = {
+            'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
+            'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
+            'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
+        }
+
+        intent_score = intent_scores.get(strategic_intent.lower(), 0.3)
+        tone_score = tone_scores.get(tone.lower(), 0.3)
+
+        # Simple weighted combination
+        return (intent_score * 0.4 + tone_score * 0.3 + confidence * 0.3)
     
     def cleanup(self):
         """Clean up temporary directories"""
