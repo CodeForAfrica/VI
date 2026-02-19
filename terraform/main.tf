@@ -58,6 +58,14 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
+# Lambda Layer for Dependencies
+resource "aws_lambda_layer_version" "dependencies" {
+  filename   = "lambda_layer.zip" # Terraform will look for this file relative to where you run terraform
+  layer_name = "mediacloud-dependencies"
+
+  compatible_runtimes = ["python3.9", "python3.10", "python3.11"]
+}
+
 # Lambda Function for MediaCloud Ingestion
 resource "aws_lambda_function" "mediacloud_ingestion" {
   filename         = "lambda_function.zip"
