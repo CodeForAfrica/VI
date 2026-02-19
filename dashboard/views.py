@@ -593,49 +593,56 @@ def overview(request):
    
 
 def media(request):
-    # 1. Capture the outlet name from the URL
-    outlet_name = request.GET.get('outlet', '').strip()
-
-    # 2. Start with all articles ordered by most recent
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-
-    # 3. Filter by Media Outlet ONLY
-    if outlet_name:
-        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
-
-    # 4. Top 10 Media Outlets for the Sidebar/Chart
-    top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('articles')
-    ).order_by('-article_count')[:10]
-
-    # 5. Chart Logic
+    outlet_name = request.GET.get('outlet', '')
     media_chart = ""
-    if top_outlets.exists():
-        df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
+
+    # Fetching outlets - Ensure we order by article count
+    top_outlets = MediaOutlet.objects.all().order_by('-article_count')[:10]
+    
+    # Create DataFrame for plotting
+    data = {
+        'name': [o.name for o in top_outlets],
+        'article_count': [o.article_count for o in top_outlets]
+    }
+    df = pd.DataFrame(data)
+
+    # FIX: Filter out 0 values to prevent Plotly KeyError: 'Saudi Arabia PR'
+    df = df[df['article_count'] > 0]
+    
+    # Reset index to ensure a clean sequential index for the grouper
+    df = df.reset_index(drop=True)
+
+    if not df.empty:
+        # Sort values so the largest is at the top of the horizontal bar chart
         df = df.sort_values('article_count', ascending=True)
-        fig = px.bar(df, x='article_count', y='name', orientation='h', 
-                     color='name', color_discrete_sequence=px.colors.qualitative.Bold)
-        fig.update_layout(height=400, template="plotly_white", showlegend=False)
+        
+        fig = px.bar(
+            df, 
+            x='article_count', 
+            y='name', 
+            orientation='h',
+            color='name',
+            template='plotly_white',
+            labels={'article_count': 'Total Articles', 'name': 'Media Outlet'}
+        )
+        
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=400
+        )
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 6. Selected outlet profile data
-    selected_outlet = None
-    if outlet_name:
-        selected_outlet = MediaOutlet.objects.filter(name__iexact=outlet_name).first()
-
-    # 7. Pagination
-    paginator = Paginator(qs, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Fetching narrative queryset for the list below the chart
+    qs = MediaNarrative.objects.all().select_related('media_outlet').order_by('-posting_time')[:20]
 
     context = {
-        'media_chart': media_chart,
         'top_outlets': top_outlets,
-        'page_obj': page_obj,
-        'selected_outlet': selected_outlet,
-        'selected_name': outlet_name or "All Media Outlets",
+        'media_chart': media_chart,
+        'qs': qs,
     }
     return render(request, 'dashboard/media.html', context)
+    
     
 def generate_report(request):
     selected_country = request.GET.get('country')
