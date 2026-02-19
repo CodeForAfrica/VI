@@ -2,6 +2,7 @@ provider "aws" {
   region = var.aws_region
 }
 
+# IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
   name = "mediacloud_lambda_role"
 
@@ -19,6 +20,7 @@ resource "aws_iam_role" "lambda_role" {
   })
 }
 
+# IAM Policy for Lambda
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "mediacloud_lambda_policy"
   role = aws_iam_role.lambda_role.id
@@ -56,6 +58,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
+# Lambda Function
 resource "aws_lambda_function" "mediacloud_ingestion" {
   filename         = "lambda_function.zip"
   function_name    = "mediacloud-ingestion-function"
@@ -79,18 +82,21 @@ resource "aws_lambda_function" "mediacloud_ingestion" {
   }
 }
 
+# EventBridge Rule (Triggers Daily)
 resource "aws_cloudwatch_event_rule" "daily_ingestion" {
   name                = "daily-mediacloud-ingestion"
   description         = "Daily trigger for MediaCloud data ingestion"
   schedule_expression = "rate(1 day)"  # Run daily
 }
 
+# Connect EventBridge to Lambda
 resource "aws_cloudwatch_event_target" "lambda_target" {
   rule      = aws_cloudwatch_event_rule.daily_ingestion.name
   target_id = "LambdaTarget"
   arn       = aws_lambda_function.mediacloud_ingestion.arn
 }
 
+# Give EventBridge permission to invoke Lambda
 resource "aws_lambda_permission" "allow_cloudwatch" {
   statement_id  = "AllowExecutionFromCloudWatch"
   action        = "lambda:InvokeFunction"
