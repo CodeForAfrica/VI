@@ -313,10 +313,10 @@ def overview(request):
         ]
         base_qs = MediaNarrative.objects.all()
         for word in exclude_keywords:
-            # Note: Chaining .exclude() might still be slow on a huge table.
+          
             # Consider moving this exclusion to ingestion time if possible.
             base_qs = base_qs.exclude(article_text__icontains=word)
-        # DO NOT cache the full QuerySet object itself (base_qs), it's not serializable
+        
         # Instead, cache the *fact* that the exclusion list was applied.
         # We'll cache the results of operations performed on the filtered queryset below.
         cache.set(f"{base_qs_cache_key}_excluded", True, timeout=60*60*24) # Cache the exclusion logic flag
