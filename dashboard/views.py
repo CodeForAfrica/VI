@@ -53,6 +53,10 @@ INTENT_CHOICES = [
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
 
+ =========================
+# CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
+# =========================
+
 class DisinfoAnalysisChatbot:
     def __init__(self):
         # Initializing the Groq client with your specific Llama 4 model
@@ -133,6 +137,22 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize chatbot: {e}")
     chatbot_instance = None
+
+
+# The @csrf_exempt and @require_http_methods decorators and the function definition
+# should be at the module level (leftmost), not indented under the class.
+@csrf_exempt
+@require_http_methods(["POST"])
+def chatbot_endpoint(request):
+    try:
+        data = json.loads(request.body)
+        user_message = data.get('message', '').strip()
+        #  Uses 'reply' to match your JavaScript fetch expectation
+        bot_reply = chatbot_instance.process_query(user_message) if chatbot_instance else "Chatbot not available."
+        return JsonResponse({'reply': bot_reply, 'success': True})
+    except Exception as e:
+        return JsonResponse({'reply': f"Error: {str(e)}", 'success': False})
+
 
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
@@ -980,18 +1000,6 @@ def generate_report(request):
     # but included for completeness.
     return HttpResponse("Unexpected error during report generation.", status=500)
 
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def chatbot_endpoint(request):
-    try:
-        data = json.loads(request.body)
-        user_message = data.get('message', '').strip()
-        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
-        bot_reply = chatbot_instance.process_query(user_message) if chatbot_instance else "Chatbot not available."
-        return JsonResponse({'reply': bot_reply, 'success': True})
-    except Exception as e:
-        return JsonResponse({'reply': f"Error: {str(e)}", 'success': False})
 
 
 def countries(request):
