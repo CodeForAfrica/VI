@@ -621,15 +621,17 @@ def media(request):
     }
     df = pd.DataFrame(data)
 
-    # 1. Filter out 0s and empty names
-    df = df[df['article_count'] > 0].copy() 
+    # 1. Filter out 0s first
+    df = df[df['article_count'] > 0].copy()
 
     if not df.empty:
-        # 2. Sort the dataframe by count before building the chart
+        # 2. Sort by count
         df = df.sort_values('article_count', ascending=True)
         
-        # 3. Explicitly tell Plotly the order of the Y-axis (the media names)
-        # This prevents the KeyError by ensuring every name in the DF is accounted for
+        # 3. CRITICAL: Reset the index so the DF internal mapping is clean
+        df = df.reset_index(drop=True)
+        
+        # 4. Create the order list from the ALREADY filtered and sorted DF
         media_order = df['name'].tolist()
 
         fig = px.bar(
@@ -640,17 +642,19 @@ def media(request):
             color='name',
             template='plotly_white',
             labels={'article_count': 'Total Articles', 'name': 'Media Outlet'},
-            category_orders={"name": media_order} # This ensures the names map correctly
+            # Use the order derived directly from the final dataframe
+            category_orders={"name": media_order} 
         )
         
         fig.update_layout(
             showlegend=False,
             margin=dict(l=20, r=20, t=40, b=20),
             height=400,
-            yaxis={'categoryorder':'array', 'categoryarray': media_order} # Secondary safety
+            # Force the Y-axis to follow our specific list
+            yaxis={'categoryorder':'array', 'categoryarray': media_order}
         )
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-
+        
     # Fetching narrative queryset
     qs = MediaNarrative.objects.all().select_related('media_outlet').order_by('-posting_time')[:20]
 
