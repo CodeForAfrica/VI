@@ -52,11 +52,6 @@ INTENT_CHOICES = [
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
-
-#=========================
-# CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
-# =========================
-
 class DisinfoAnalysisChatbot:
     def __init__(self):
         # Initializing the Groq client with your specific Llama 4 model
@@ -65,95 +60,135 @@ class DisinfoAnalysisChatbot:
 
     def process_query(self, query):
         query_l = query.lower().strip()
-
+        
         # Quick Relevance Check - Focus on foreign influence
         irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'local sport', 'local entertainment']
-        if any(word in query_l for word in irrelevant):
-            return "I can only answer questions related to foreign influence and strategic narratives in African media."
-
-        # Help Queries
-        if 'help' in query_l or 'what can you do' in query_l:
-            return "I analyze media narratives for foreign influence. Ask about actors, countries, strategic intents, or vulnerabilities."
-
-        # Vulnerability Index Explanation
-        if 'vulnerability index' in query_l or 'index' in query_l:
-            avg_vulnerability = MediaNarrative.objects.exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
+        if any(word in query_l for word in irrelevant) and not any(actor in query_l for actor in ['france', 'china', 'usa', 'us', 'russia', 'united states', 'unitedstates']):
+            return "I specialize in foreign influence analysis and vulnerability indices. I don't track local sports or entertainment unless they involve foreign actors."
+    
+        # Handle multiple questions about ANY country with foreign actor focus
+        import re
+        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
+        match = re.search(country_pattern, query_l, re.IGNORECASE)
+        
+        if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
+            country_mentioned = match.group(1).lower()
+            
+            # EXACT database format matching
+            db_country = None
+            if 'south' in country_mentioned and 'africa' in country_mentioned:
+                db_country = 'South Africa'
+            elif country_mentioned in ['senegal', 'senegal']:
+                db_country = 'Senegal'
+            elif country_mentioned in ['drc', 'democratic republic of congo', 'congo']:
+                db_country = 'DRC'
+            elif any(x in country_mentioned for x in ['cote', 'ivoire', 'ivory']):
+                db_country = 'Côte d\'Ivoire'
+            elif country_mentioned in ['ethiopia', 'ethopia']:
+                db_country = 'Ethiopia'
+            
+            if db_country:
+                # COUNT articles for this country that mention foreign actors
+                country_articles = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country
+                ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+                ).count()
+                
+                # GET key narratives for this country WITH FOREIGN ACTORS
+                country_narratives = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country
+                ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+                ).exclude(
+                    strategic_intent__in=['', None, 'unknown', 'Unknown']
+                ).values('strategic_intent', 'inferred_actor').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:5]
+                
+                narratives_list = [f"• {item['strategic_intent']} by {item['inferred_actor']}: {item['count']} articles" for item in country_narratives]
+                narratives_str = "\n".join(narratives_list) if narratives_list else "• No foreign influence narratives identified"
+                
+                return (f"{db_country} Foreign Influence Analysis:\n"
+                       f"• Total articles with foreign actor involvement: {country_articles:,}\n"
+                       f"• Key foreign influence narratives:\n{narratives_str}")
+    
+        # Dashboard-specific queries
+        if any(word in query_l for word in ['dashboard', 'interface', 'how to', 'help', 'navigate', 'filter']):
+            return "Our dashboard analyzes foreign influence in African media. You can filter by country, foreign actor, or strategic intent. Each article has a vulnerability index score showing foreign influence risk."
+    
+        # Statistical queries
+        if any(word in query_l for word in ['how many', 'count', 'total', 'number', 'statistics']):
+            # Count only articles with foreign actor mentions
+            total = MediaNarrative.objects.exclude(
+                inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+            ).exclude(article_text__icontains='football').count()
+            return f"The database contains {total:,} articles analyzing foreign influence (excluding local content)."
+    
+        # Vulnerability index queries
+        if any(word in query_l for word in ['vulnerability', 'index', 'score', 'risk']):
+            # Calculate average for articles with foreign actors only
+            avg_vulnerability = MediaNarrative.objects.exclude(
+                inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+            ).exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
             avg_str = f"{avg_vulnerability:.3f}" if avg_vulnerability else "0.000 (not yet calculated for all records)"
             return f"The vulnerability index measures foreign influence risk (0-1). Current average: {avg_str}"
-
+    
         # Default AI analysis
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
-
+        
     def get_context_from_db(self, query):
         # Filter out irrelevant topics before sending context to the AI
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        base_qs = MediaNarrative.objects.all()
-        for word in exclude_keywords:
-            base_qs = base_qs.exclude(article_text__icontains=word)
-
-        # Limit context based on keywords in the query
-        relevant_articles = base_qs
-        if 'senegal' in query.lower():
-            relevant_articles = relevant_articles.filter(target_country__icontains='Senegal')
-        elif 'ethiopia' in query.lower():
-            relevant_articles = relevant_articles.filter(target_country__icontains='Ethiopia')
-        # Add more country-specific filters if needed
-
-        # Get recent and relevant articles
-        context_snippets = relevant_articles.order_by('-posting_time')[:5]
-        context_text = "\n".join([f"Title: {a.article_text[:100]}... Content: {a.article_text[:200]}..." for a in context_snippets])
-        return context_text
+        articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+        context = ""
+        for art in articles:
+            # Safety check for empty text fields
+            text_snippet = (art.article_text[:200] + "...") if art.article_text else "No text content."
+            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Intent: {art.strategic_intent} | Text: {text_snippet}\n\n"
+        return context
 
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely.
+        Analyze the context provided and answer the query concisely. 
         Focus strictly on foreign influence and strategic narratives.
         """
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Context: {context}\n\nQuery: {query}"}
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
                 ],
                 model=self.model,
-                max_tokens=512
+                temperature=0.1,
             )
             return chat_completion.choices[0].message.content
         except Exception as e:
-            logger.error(f"AI Chat Error: {e}")
-            return f"Sorry, I couldn't process that query due to an AI error: {e}"
+            return f"AI Error: {str(e)}"
 
+# Instantiate the chatbot once
+chatbot_instance = DisinfoAnalysisChatbot()
 
-# Initialize chatbot globally (ensure GROQ_API_KEY is set before app starts)
-try:
-    chatbot_instance = DisinfoAnalysisChatbot()
-except Exception as e:
-    logger.error(f"Failed to initialize chatbot: {e}")
-    chatbot_instance = None
-
-
-# The @csrf_exempt and @require_http_methods decorators and the function definition
-# should be at the module level (leftmost), not indented under the class.
 @csrf_exempt
 @require_http_methods(["POST"])
-def chatbot_endpoint(request):
+def chatbot_response(request):
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
-        #  Uses 'reply' to match your JavaScript fetch expectation
-        bot_reply = chatbot_instance.process_query(user_message) if chatbot_instance else "Chatbot not available."
-        return JsonResponse({'reply': bot_reply, 'success': True})
+        
+        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
+        bot_reply = chatbot_instance.process_query(user_message)
+        
+        return JsonResponse({
+            'reply': bot_reply, 
+            'success': True
+        })
     except Exception as e:
-        return JsonResponse({'reply': f"Error: {str(e)}", 'success': False})
-
-
+        return JsonResponse({
+            'reply': f"Error: {str(e)}", 
+            'success': False
+        })
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
