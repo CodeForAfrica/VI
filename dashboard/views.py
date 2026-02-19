@@ -1,5 +1,5 @@
+Working 
 from django.shortcuts import render
-from django.core.cache import cache
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
@@ -152,7 +152,7 @@ class DisinfoAnalysisChatbot:
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely.
+        Analyze the context provided and answer the query concisely. 
         Focus strictly on foreign influence and strategic narratives.
         """
         try:
@@ -178,7 +178,7 @@ def chatbot_response(request):
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         
-        # Uses 'reply' to match JavaScript fetch expectation
+        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
         bot_reply = chatbot_instance.process_query(user_message)
         
         return JsonResponse({
@@ -191,34 +191,36 @@ def chatbot_response(request):
             'success': False
         })
 
-def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
+def calculate_contextual_score(target_country, foreign_actor, intent_filter=None): 
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
-    
-    # caching its results based on inputs if called frequently.
-    cache_key = f"cvi_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
-    cached_result = cache.get(cache_key)
-    if cached_result:
-        logger.info(f"Cache HIT for CVI: {cache_key}")
-        return cached_result
-
     try:
         import pandas as pd
         import os
+        
+        # Load YOUR CSV file with the exact path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
+        
+        # Verify the file exists
         if not os.path.exists(csv_file):
             logger.error(f"CSV file not found: {csv_file}")
-            return 0.5, "Unknown"
+            logger.error(f"Files in parent directory: {os.listdir(os.path.join(current_dir, '..'))}")
+            return 0.5, "Unknown"  # Default fallback
+        
+        # Read YOUR CSV file
         df = pd.read_csv(csv_file)
+        
+        # Normalize country and actor names to match your CSV format
         country_mapping = {
             "south africa": "South Africa",
-            "senegal": "Senegal",
+            "senegal": "Senegal", 
             "drc": "DRC",
             "cote d'ivoire": "CoteIvoire",
             "cote ivoire": "CoteIvoire",
             "ivory coast": "CoteIvoire",
             "ethiopia": "Ethiopia"
         }
+        
         actor_mapping = {
             "uae": "UAE",
             "china": "China",
@@ -231,60 +233,61 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             "israel": "Israel",
             "iran": "Iran"
         }
+        
+        # Format the inputs to match YOUR CSV format
         formatted_country = country_mapping.get(target_country.lower(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
+        
+        # Find all rows matching this country-actor combination in YOUR CSV
         matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
-
+        
         if not matching_rows.empty:
+            # 1. If user selected an intent, try to find that specific one
             if intent_filter:
                 specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
                 if not specific_match.empty:
                     row = specific_match.iloc[0]
-                    result = float(row['FinalRisk']), row['intent']
-                    cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-                    return result
+                    return float(row['FinalRisk']), row['intent']
+
+            # 2. Fallback: Find the row with the HIGHEST score 
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             max_score = max_row['FinalRisk']
             max_intent = max_row['intent']
+            
             logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-            result = float(max_score), max_intent
-            cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-            return result
+            return float(max_score), max_intent
         else:
+            # If no exact match found, try case-insensitive match
             matching_rows = df[
-                (df['country'].str.lower() == formatted_country.lower()) &
+                (df['country'].str.lower() == formatted_country.lower()) & 
                 (df['actor'].str.lower() == formatted_actor.lower())
             ]
+            
             if not matching_rows.empty:
+                # Apply intent filter logic even in case-insensitive fallback
                 if intent_filter:
                     specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
                     if not specific_match.empty:
                         row = specific_match.iloc[0]
-                        result = float(row['FinalRisk']), row['intent']
-                        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-                        return result
+                        return float(row['FinalRisk']), row['intent']
+
                 max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
                 max_score = max_row['FinalRisk']
                 max_intent = max_row['intent']
+                
                 logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-                result = float(max_score), max_intent
-                cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-                return result
-
+                return float(max_score), max_intent
+        
+        # If no match found, return default
         logger.info(f"No score found for {target_country}-{foreign_actor} in CSV, using default")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result
+        return 0.5, "Unknown"
+        
     except FileNotFoundError:
         logger.error(f"CSV file not found at: {csv_file}")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result
+        return 0.5, "Unknown"
     except Exception as e:
         logger.error(f"Contextual score lookup error: {e}")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result # Default fallback
+        return 0.5, "Unknown"  # Default fallback
         
 def overview(request):
     # 1. Initialize Safety Defaults
@@ -293,225 +296,111 @@ def overview(request):
     top_subjects = []
     cvi_score = None
     cvi_intent = None
-
+    
     # 2. Capture Inputs (Intent, Actor, Country)
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
-    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
+    calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip() 
+    
+    # 3. Global Exclusions (Sports/Maintenance)
+    exclude_keywords = [
+        'football', 'soccer', 'sport', 'sports', 'match', 'game', 
+        'tournament', 'championship', 'olympic', 'cricket', 'basketball', 
+        'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight', 
+        'league', 'team', 'player', 'coach', 'stadium'
+    ]
 
-    # --- CACHE KEYS FOR FILTERED QUERYSETS AND STATS ---
-    # Base queryset without sports (potentially expensive to build)
-    base_qs_cache_key = "overview_base_qs_no_sports"
-    base_qs = cache.get(base_qs_cache_key)
-    if base_qs is None:
-        logger.info("Cache MISS for base_qs, rebuilding...")
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        base_qs = MediaNarrative.objects.all()
-        for word in exclude_keywords:
-          
-            base_qs = base_qs.exclude(article_text__icontains=word)
-        # DO NOT cache the full QuerySet object itself (base_qs), it's not serializable
-        # Instead, cache the *fact* that the exclusion list was applied.
-       
-        cache.set(f"{base_qs_cache_key}_excluded", True, timeout=60*60*24) # Cache the exclusion logic flag
-    else:
-        logger.info(f"Cache HIT for base_qs exclusion logic: {base_qs_cache_key}")
+    base_qs = MediaNarrative.objects.all()
+    for word in exclude_keywords:
+        base_qs = base_qs.exclude(article_text__icontains=word)
+    
+    full_stats_qs = base_qs.order_by('-posting_time')
 
-
-    # Apply filters based on user input to the base queryset
-    # Create a cache key specific to the current filters
-    filtered_qs_cache_key = f"overview_filtered_qs_{calc_target_country}_{calc_foreign_actor}"
-    full_stats_qs = cache.get(filtered_qs_cache_key)
-    if full_stats_qs is None:
-        logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
-        # Rebuild the base queryset excluding sports
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        temp_base_qs = MediaNarrative.objects.all()
-        for word in exclude_keywords:
-             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
-
-        # Apply user filters
-        if calc_target_country:
-            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-        if calc_foreign_actor:
-            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-
-        # Order by posting time 
-        full_stats_qs = temp_base_qs.order_by('-posting_time')
-     
-    else:
-        logger.info(f"Cache HIT for filtered_qs: {filtered_qs_cache_key}")
-
-    # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
+    # 4. CALCULATOR LOGIC 
     if calc_target_country and calc_foreign_actor:
         cvi_score, cvi_intent = calculate_contextual_score(
-            calc_target_country,
-            calc_foreign_actor,
+            calc_target_country, 
+            calc_foreign_actor, 
             intent_filter=calc_strategic_intent
         )
+        
         # Filter display list to match selection actor and country selection 
+        full_stats_qs = full_stats_qs.filter(
+            target_country__iexact=calc_target_country,
+            inferred_actor__iexact=calc_foreign_actor
+        )
+        
     else:
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
 
-    # --- CACHING FOR EXPENSIVE OPERATIONS ON THE FILTERED QUERYSET ---
-    # Cache total articles count
-    total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
-    total_articles = cache.get(total_articles_cache_key)
-    if total_articles is None:
-        logger.info(f"Cache MISS for total_articles: {total_articles_cache_key}")
-        # Perform the count on the filtered queryset
-        if full_stats_qs is not None:
-             total_articles = full_stats_qs.count()
-        else:
-            # Fallback if full_stats_qs wasn't cached and had to be rebuilt
-            exclude_keywords = [
-                'football', 'soccer', 'sport', 'sports', 'match', 'game',
-                'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-                'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-                'league', 'team', 'player', 'coach', 'stadium'
-            ]
-            temp_base_qs = MediaNarrative.objects.all()
-            for word in exclude_keywords:
-                 temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
-            if calc_target_country:
-                temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-            if calc_foreign_actor:
-                temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-            total_articles = temp_base_qs.count()
+    # total articles
+    total_articles = full_stats_qs.count()
 
-        cache.set(total_articles_cache_key, total_articles, timeout=60*60) # Cache for 1 hour
-    else:
-        logger.info(f"Cache HIT for total_articles: {total_articles_cache_key}")
-
-
-    # Rebuild full_stats_qs if it wasn't cached (necessary to perform other operations)
-    if full_stats_qs is None:
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        temp_base_qs = MediaNarrative.objects.all()
-        for word in exclude_keywords:
-             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
-        if calc_target_country:
-            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-        if calc_foreign_actor:
-            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-        full_stats_qs = temp_base_qs.order_by('-posting_time')
-
-
-    # 5. Global Stats & Averages 
-    stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
-    global_stats_cached = cache.get(stats_cache_key)
-    if global_stats_cached is None:
-        logger.info(f"Cache MISS for global_stats: {stats_cache_key}")
-        # Perform expensive aggregations on the filtered queryset
-        unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
-        unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
-        unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
-        avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
-        avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
-        avg_confidence = avg_stats['confidence__avg'] or 0.0
-        global_stats_cached = {
-            'unique_outlets': unique_outlets,
-            'unique_intents': unique_intents,
-            'unique_actors': unique_actors,
-            'avg_vulnerability': round(avg_vulnerability, 3),
-            'avg_confidence': round(avg_confidence, 3),
-        }
-        cache.set(stats_cache_key, global_stats_cached, timeout=60*60) # Cache for 1 hour
-    else:
-        logger.info(f"Cache HIT for global_stats: {stats_cache_key}")
-
-    unique_outlets = global_stats_cached['unique_outlets']
-    unique_intents = global_stats_cached['unique_intents']
-    unique_actors = global_stats_cached['unique_actors']
-    avg_vulnerability = global_stats_cached['avg_vulnerability']
-    avg_confidence = global_stats_cached['avg_confidence']
-
-
+    # 5. Global Stats & Averages
+    from django.db.models import Avg, Count
+    unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
+    unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
+    unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
+    
+    avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
+    avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
+    avg_confidence = avg_stats['confidence__avg'] or 0.0
+    
     # 6. Volume Chart 
-    chart_cache_key = f"overview_volume_chart_{calc_target_country}_{calc_foreign_actor}"
-    cached_chart = cache.get(chart_cache_key)
-    if cached_chart:
-        logger.info(f"Cache HIT for volume chart: {chart_cache_key}")
-        chart = cached_chart
-    else:
-        logger.info(f"Cache MISS for volume chart: {chart_cache_key}")
-        try:
-            # Use the filtered queryset for chart data, limit to 500 for performance
-            limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
-            if limited_for_chart.exists():
-                df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
-                df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date
-                daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
-                if not daily_counts.empty:
-                    fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
-                    fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
-                    chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-                    cache.set(chart_cache_key, chart, timeout=60*60) # Cache chart for 1 hour
-        except Exception as e:
-            logger.error(f"Volume Chart Error: {e}")
-            cache.set(chart_cache_key, chart, timeout=60*15) # Cache error for 15 mins
+    try:
+        limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
+        if limited_for_chart.exists():
+            df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
+            df['date'] = pd.to_datetime(df['posting_time'], utc=True).dt.date  # FIXED: Use 'posting_time'
+            daily_counts = df['date'].value_counts().sort_index().reset_index(name='count')
+            if not daily_counts.empty:
+                fig = px.line(daily_counts, x='date', y='count', template="plotly_white")
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=300)
+                chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    except Exception as e:
+        logger.error(f"Volume Chart Error: {e}")
 
+    # 7. Optimized Data Lists
+    country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
+    top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
 
-    # 7. Optimized Data Lists 
-    country_list_cache_key = f"overview_country_list_{calc_target_country}_{calc_foreign_actor}"
-    country_list = cache.get(country_list_cache_key)
-    if country_list is None:
-        logger.info(f"Cache MISS for country_list: {country_list_cache_key}")
-        # Perform aggregation on the filtered queryset
-        country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
-        cache.set(country_list_cache_key, country_list, timeout=60*60) # Cache for 1 hour
-
-    top_subjects_cache_key = f"overview_top_subjects_{calc_target_country}_{calc_foreign_actor}"
-    top_subjects = cache.get(top_subjects_cache_key)
-    if top_subjects is None:
-        logger.info(f"Cache MISS for top_subjects: {top_subjects_cache_key}")
-        # Perform aggregation on the filtered queryset
-        top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
-        cache.set(top_subjects_cache_key, top_subjects, timeout=60*60) # Cache for 1 hour
-
-
-    # 8. Pagination
-    # Use the filtered queryset for pagination
-    paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
+    # 8. Pagination 
+    paginator = Paginator(full_stats_qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-
     # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    import re
+    import re  
+    from dashboard.services.ml_inference_service import MLInferenceService  
+    
+    ml_service = MLInferenceService()  
+
+    # --- DEFINE FUNCTION ONCE BEFORE THE LOOP ---
     def extract_title_from_text(text):
         if not text:
             return "No Content Available"
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines:
             return "Empty Article"
+        
         for candidate in lines[:3]:
             is_metadata = re.match(r'^(By|On|Updated|Source:|Published|https?://|.*\d{4})', candidate, re.IGNORECASE)
+           
             if not is_metadata and 5 <= len(candidate) <= 250:
                 return candidate
+        
         words = text.split()
+        
         fallback = " ".join(words[:20])
         return f"{fallback}..." if len(words) > 20 else fallback
 
+    
     for article in page_obj.object_list:
+        
         article.display_title = extract_title_from_text(article.article_text)
+
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
         else:
@@ -521,15 +410,30 @@ def overview(request):
                 article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
                 article.display_summary = text
-        
-    # 10. Methodology / Description (Can be cached if static)
+
+        # C. Individual Article Vulnerability Score
+        if article.vulnerability_index is None:
+            vi_score = ml_service.calculate_vulnerability_index(
+                article.strategic_intent or 'neutral',
+                article.tone or 'neutral',
+                article.target_country,
+                article.inferred_actor,
+                article.confidence or 0.5
+            )
+            article.vulnerability_index = float(vi_score) if vi_score else 0.0
+        else:
+            article.vulnerability_index = float(article.vulnerability_index)
+            
+    # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
+
     vulnerability_methodology = (
         f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
         f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
         "It is estimated using advanced ML models and statistically corrected using human labels via "
-        "Prediction-powered Inference (PPI) to ensure reliable measurement.\n\n"
+        "Prediction-powered Inference (PPI) to ensure reliable measurement. \n\n"
+        
         f"2. Contextual Signal: Captures the structural susceptibility of {target_label} to influence "
         f"from {actor_label} on that specific factor. It incorporates measurable actor×country conditions "
         "such as debt exposure, military presence, resource dependencies, election timing, or policy "
@@ -544,8 +448,8 @@ def overview(request):
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
-        'avg_vulnerability': avg_vulnerability,
-        'avg_confidence': avg_confidence,
+        'avg_vulnerability': round(avg_vulnerability, 3),
+        'avg_confidence': round(avg_confidence, 3),
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
@@ -556,10 +460,9 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
         'intent_choices': INTENT_CHOICES,
-        'vulnerability_description': vulnerability_methodology,
+        'vulnerability_description': vulnerability_methodology,  
     }
-    return render(request, 'overview.html', context)
-     
+    return render(request, 'overview.html', context)        
    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
@@ -678,64 +581,16 @@ def articles_view(request):
     }
     return render(request, "articles.html", context)
 
-
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
-
-    # Filter articles if an outlet is selected
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if outlet_name:
-        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
-
-    # Top 10 Media Outlets from MediaOutlet model (with article count)
-    top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('articles')
-    ).order_by('-article_count')[:10]
-
-    # Chart: Top Media Outlets
-    if top_outlets.exists():
-        df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
-        df = df.sort_values('article_count', ascending=True)
-        fig = px.bar(
-            df,
-            x='article_count',
-            y='name',
-            orientation='h',
-            title='Most Frequent Media Outlets',
-            labels={'article_count': 'Number of Articles', 'name': 'Media Outlet'},
-            text='article_count',
-            color='name',
-            color_discrete_sequence=px.colors.qualitative.Bold
-        )
-        fig.update_traces(textposition='outside')
-        fig.update_layout(
-            height=500,
-            showlegend=False,
-            template="plotly_white",
-            xaxis_title="Number of Articles",
-            yaxis_title="Media Outlet"
-        )
-        media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    else:
-        media_chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No media outlet data available.</p></div>"
-
-    # Pagination for articles
-    paginator = Paginator(qs, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Selected outlet profile
-    selected_outlet = None
-    if outlet_name:
-        selected_outlet = MediaOutlet.objects.filter(name__iexact=outlet_name).first()
-
+    if outlet_name: qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+    
+    top_outlets = MediaOutlet.objects.annotate(article_count=Count('articles')).order_by('-article_count')[:10]
     context = {
-        'media_chart': media_chart,
         'top_outlets': top_outlets,
-        'page_obj': page_obj,
-        'selected_outlet': selected_outlet,
+        'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
         'selected_name': outlet_name or "All Outlets",
-        'covers_targets': qs.filter(target_country__in=TARGET_COUNTRIES).exists() if outlet_name else False,
         'target_countries': TARGET_COUNTRIES,
     }
     return render(request, 'dashboard/media.html', context)
