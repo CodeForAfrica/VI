@@ -678,19 +678,67 @@ def articles_view(request):
     }
     return render(request, "articles.html", context)
 
+
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
+
+    # Filter articles if an outlet is selected
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if outlet_name: qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
-    
-    top_outlets = MediaOutlet.objects.annotate(article_count=Count('articles')).order_by('-article_count')[:10]
+    if outlet_name:
+        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+
+    # Top 10 Media Outlets from MediaOutlet model (with article count)
+    top_outlets = MediaOutlet.objects.annotate(
+        article_count=Count('articles')
+    ).order_by('-article_count')[:10]
+
+    # Chart: Top Media Outlets
+    if top_outlets.exists():
+        df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
+        df = df.sort_values('article_count', ascending=True)
+        fig = px.bar(
+            df,
+            x='article_count',
+            y='name',
+            orientation='h',
+            title='Most Frequent Media Outlets',
+            labels={'article_count': 'Number of Articles', 'name': 'Media Outlet'},
+            text='article_count',
+            color='name',
+            color_discrete_sequence=px.colors.qualitative.Bold
+        )
+        fig.update_traces(textposition='outside')
+        fig.update_layout(
+            height=500,
+            showlegend=False,
+            template="plotly_white",
+            xaxis_title="Number of Articles",
+            yaxis_title="Media Outlet"
+        )
+        media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    else:
+        media_chart = "<div class='text-center py-5'><p class='text-muted fs-4'>No media outlet data available.</p></div>"
+
+    # Pagination for articles
+    paginator = Paginator(qs, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Selected outlet profile
+    selected_outlet = None
+    if outlet_name:
+        selected_outlet = MediaOutlet.objects.filter(name__iexact=outlet_name).first()
+
     context = {
+        'media_chart': media_chart,
         'top_outlets': top_outlets,
-        'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
+        'page_obj': page_obj,
+        'selected_outlet': selected_outlet,
         'selected_name': outlet_name or "All Outlets",
+        'covers_targets': qs.filter(target_country__in=TARGET_COUNTRIES).exists() if outlet_name else False,
         'target_countries': TARGET_COUNTRIES,
     }
-    return render(request, 'media.html', context)
+    return render(request, 'dashboard/media.html', context)
 
 def intents(request):
     intent_name = request.GET.get('intent', '').strip()
