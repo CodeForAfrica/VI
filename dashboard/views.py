@@ -44,9 +44,15 @@ COUNTRIES = [
 FOREIGN_ACTORS = [
     "US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda"
 ]
+# Each item must be a (Value, Label) pair
 INTENT_CHOICES = [
-    "Economic Dependency", "Sovereignty", "LGBTQ", "Religious", "Military Presence",
-    "Resource Dependency", "Social Fragility", "Election Influence"
+    ('Economic', 'Economic'),
+    ('Sovereignty', 'Sovereignty'),
+    ('LGBTQ', 'LGBTQ'),
+    ('Religious', 'Religious'),
+    ('Military presence', 'Military presence'),
+    ('Resource Dependency', 'Resource Dependency'),
+    ('Social Fragility', 'Social Fragility'),
 ]
 
 # =========================
