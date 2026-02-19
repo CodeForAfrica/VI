@@ -209,12 +209,16 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     try:
         import pandas as pd
         import os
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
-        if not os.path.exists(csv_file):
-            logger.error(f"CSV file not found: {csv_file}")
+        # FIX 1: Defined csv_path using settings.BASE_DIR for reliability
+        csv_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+        
+        if not os.path.exists(csv_path):
+            logger.warning(f"⚠️ CSV not found at {csv_path}. Using fallback.")
             return 0.5, "Unknown"
-        df = pd.read_csv(csv_file)
+        
+        # FIX 2: Corrected variable name from csv_file to csv_path to match the line above
+        df = pd.read_csv(csv_path)
+        
         country_mapping = {
             "south africa": "South Africa",
             "senegal": "Senegal",
@@ -236,13 +240,15 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             "israel": "Israel",
             "iran": "Iran"
         }
-        formatted_country = country_mapping.get(target_country.lower(), target_country)
-        formatted_actor = actor_mapping.get(foreign_actor.lower(), foreign_actor)
+        
+        # FIX 3: Added .strip() to handle potential whitespace in user input
+        formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
+        formatted_actor = actor_mapping.get(foreign_actor.lower().strip(), foreign_actor)
         matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
 
         if not matching_rows.empty:
             if intent_filter:
-                specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
+                specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
                 if not specific_match.empty:
                     row = specific_match.iloc[0]
                     result = float(row['FinalRisk']), row['intent']
@@ -262,7 +268,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             ]
             if not matching_rows.empty:
                 if intent_filter:
-                    specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower()]
+                    specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
                     if not specific_match.empty:
                         row = specific_match.iloc[0]
                         result = float(row['FinalRisk']), row['intent']
@@ -280,17 +286,11 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         result = 0.5, "Unknown"
         cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
         return result
-    except FileNotFoundError:
-        logger.error(f"CSV file not found at: {csv_file}")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result
     except Exception as e:
         logger.error(f"Contextual score lookup error: {e}")
         result = 0.5, "Unknown"
         cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
         return result # Default fallback
-
 
 def overview(request):
     # 1. Initialize Safety Defaults
