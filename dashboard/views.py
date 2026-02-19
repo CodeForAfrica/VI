@@ -152,7 +152,7 @@ class DisinfoAnalysisChatbot:
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely. 
+        Analyze the context provided and answer the query concisely.
         Focus strictly on foreign influence and strategic narratives.
         """
         try:
@@ -178,7 +178,7 @@ def chatbot_response(request):
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         
-        # KEY FIX: Using 'reply' to match your JavaScript fetch expectation
+        # Uses 'reply' to match JavaScript fetch expectation
         bot_reply = chatbot_instance.process_query(user_message)
         
         return JsonResponse({
@@ -193,7 +193,7 @@ def chatbot_response(request):
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
-   
+    
     # caching its results based on inputs if called frequently.
     cache_key = f"cvi_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
     cached_result = cache.get(cache_key)
@@ -299,7 +299,8 @@ def overview(request):
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
 
-    # --- CACHE KEYS FOR FILTERED BASE QUERY ---
+    # --- CACHE KEYS FOR FILTERED QUERYSETS AND STATS ---
+    # Base queryset without sports (potentially expensive to build)
     base_qs_cache_key = "overview_base_qs_no_sports"
     base_qs = cache.get(base_qs_cache_key)
     if base_qs is None:
@@ -312,15 +313,44 @@ def overview(request):
         ]
         base_qs = MediaNarrative.objects.all()
         for word in exclude_keywords:
+          
             base_qs = base_qs.exclude(article_text__icontains=word)
-        cache.set(base_qs_cache_key, base_qs, timeout=60*60*24) # Cache for 24 hours if base doesn't change often
+        # DO NOT cache the full QuerySet object itself (base_qs), it's not serializable
+        # Instead, cache the *fact* that the exclusion list was applied.
+       
+        cache.set(f"{base_qs_cache_key}_excluded", True, timeout=60*60*24) # Cache the exclusion logic flag
+    else:
+        logger.info(f"Cache HIT for base_qs exclusion logic: {base_qs_cache_key}")
 
-    # Apply filters based on user input
-    filtered_qs = base_qs
-    if calc_target_country:
-        filtered_qs = filtered_qs.filter(target_country__iexact=calc_target_country)
-    if calc_foreign_actor:
-        filtered_qs = filtered_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+
+    # Apply filters based on user input to the base queryset
+    # Create a cache key specific to the current filters
+    filtered_qs_cache_key = f"overview_filtered_qs_{calc_target_country}_{calc_foreign_actor}"
+    full_stats_qs = cache.get(filtered_qs_cache_key)
+    if full_stats_qs is None:
+        logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
+        # Rebuild the base queryset excluding sports
+        exclude_keywords = [
+            'football', 'soccer', 'sport', 'sports', 'match', 'game',
+            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
+            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
+            'league', 'team', 'player', 'coach', 'stadium'
+        ]
+        temp_base_qs = MediaNarrative.objects.all()
+        for word in exclude_keywords:
+             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
+
+        # Apply user filters
+        if calc_target_country:
+            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
+        if calc_foreign_actor:
+            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+
+        # Order by posting time 
+        full_stats_qs = temp_base_qs.order_by('-posting_time')
+     
+    else:
+        logger.info(f"Cache HIT for filtered_qs: {filtered_qs_cache_key}")
 
     # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
     if calc_target_country and calc_foreign_actor:
@@ -335,23 +365,61 @@ def overview(request):
         calc_foreign_actor = ""
         calc_strategic_intent = ""
 
-    # total articles for the *filtered* queryset
-    # Cache this based on filters
+    # --- CACHING FOR EXPENSIVE OPERATIONS ON THE FILTERED QUERYSET ---
+    # Cache total articles count
     total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
     total_articles = cache.get(total_articles_cache_key)
     if total_articles is None:
         logger.info(f"Cache MISS for total_articles: {total_articles_cache_key}")
-        total_articles = filtered_qs.count()
-        cache.set(total_articles_cache_key, total_articles, timeout=60*60) # Cache for 1 hour
+        # Perform the count on the filtered queryset
+        if full_stats_qs is not None:
+             total_articles = full_stats_qs.count()
+        else:
+            # Fallback if full_stats_qs wasn't cached and had to be rebuilt
+            exclude_keywords = [
+                'football', 'soccer', 'sport', 'sports', 'match', 'game',
+                'tournament', 'championship', 'olympic', 'cricket', 'basketball',
+                'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
+                'league', 'team', 'player', 'coach', 'stadium'
+            ]
+            temp_base_qs = MediaNarrative.objects.all()
+            for word in exclude_keywords:
+                 temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
+            if calc_target_country:
+                temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
+            if calc_foreign_actor:
+                temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+            total_articles = temp_base_qs.count()
 
-    full_stats_qs = filtered_qs.order_by('-posting_time') # Use the filtered queryset
+        cache.set(total_articles_cache_key, total_articles, timeout=60*60) # Cache for 1 hour
+    else:
+        logger.info(f"Cache HIT for total_articles: {total_articles_cache_key}")
+
+
+    # Rebuild full_stats_qs if it wasn't cached (necessary to perform other operations)
+    if full_stats_qs is None:
+        exclude_keywords = [
+            'football', 'soccer', 'sport', 'sports', 'match', 'game',
+            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
+            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
+            'league', 'team', 'player', 'coach', 'stadium'
+        ]
+        temp_base_qs = MediaNarrative.objects.all()
+        for word in exclude_keywords:
+             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
+        if calc_target_country:
+            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
+        if calc_foreign_actor:
+            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+        full_stats_qs = temp_base_qs.order_by('-posting_time')
+
 
     # 5. Global Stats & Averages 
-    # Cache global stats based on the *filtered* queryset
     stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
     global_stats_cached = cache.get(stats_cache_key)
     if global_stats_cached is None:
         logger.info(f"Cache MISS for global_stats: {stats_cache_key}")
+        # Perform expensive aggregations on the filtered queryset
         unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
         unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
         unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
@@ -376,7 +444,7 @@ def overview(request):
     avg_confidence = global_stats_cached['avg_confidence']
 
 
-    # 6. Volume Chart (Cache the HTML output!)
+    # 6. Volume Chart 
     chart_cache_key = f"overview_volume_chart_{calc_target_country}_{calc_foreign_actor}"
     cached_chart = cache.get(chart_cache_key)
     if cached_chart:
@@ -385,6 +453,7 @@ def overview(request):
     else:
         logger.info(f"Cache MISS for volume chart: {chart_cache_key}")
         try:
+            # Use the filtered queryset for chart data, limit to 500 for performance
             limited_for_chart = full_stats_qs.exclude(posting_time__isnull=True)[:500]
             if limited_for_chart.exists():
                 df = pd.DataFrame.from_records(limited_for_chart.values('posting_time'))
@@ -397,7 +466,6 @@ def overview(request):
                     cache.set(chart_cache_key, chart, timeout=60*60) # Cache chart for 1 hour
         except Exception as e:
             logger.error(f"Volume Chart Error: {e}")
-            # Optionally cache the error state too for a shorter time
             cache.set(chart_cache_key, chart, timeout=60*15) # Cache error for 15 mins
 
 
@@ -406,6 +474,7 @@ def overview(request):
     country_list = cache.get(country_list_cache_key)
     if country_list is None:
         logger.info(f"Cache MISS for country_list: {country_list_cache_key}")
+        # Perform aggregation on the filtered queryset
         country_list = full_stats_qs.exclude(target_country__in=['', 'Unknown', None]).values('target_country').annotate(total=Count('id')).order_by('-total')[:10]
         cache.set(country_list_cache_key, country_list, timeout=60*60) # Cache for 1 hour
 
@@ -413,6 +482,7 @@ def overview(request):
     top_subjects = cache.get(top_subjects_cache_key)
     if top_subjects is None:
         logger.info(f"Cache MISS for top_subjects: {top_subjects_cache_key}")
+        # Perform aggregation on the filtered queryset
         top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
         cache.set(top_subjects_cache_key, top_subjects, timeout=60*60) # Cache for 1 hour
 
@@ -423,9 +493,9 @@ def overview(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    
+
+    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
     import re
-    # Define extract_title_from_text inside the view to avoid potential scoping issues with caching loops
     def extract_title_from_text(text):
         if not text:
             return "No Content Available"
@@ -452,11 +522,9 @@ def overview(request):
             else:
                 article.display_summary = text
         
-
-    # 10. Methodology / Description 
+    # 10. Methodology / Description (Can be cached if static)
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
-    
     vulnerability_methodology = (
         f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
         f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
@@ -467,7 +535,6 @@ def overview(request):
         "such as debt exposure, military presence, resource dependencies, election timing, or policy "
         "environment that may increase vulnerability."
     )
-
 
     # 11. Context Assembly
     context = {
@@ -491,7 +558,8 @@ def overview(request):
         'intent_choices': INTENT_CHOICES,
         'vulnerability_description': vulnerability_methodology,
     }
-    return render(request, 'overview.html', context)     
+    return render(request, 'overview.html', context)
+     
    
 # =========================
 # OTHER PAGES (Countries, Authors, Media, Intents)
