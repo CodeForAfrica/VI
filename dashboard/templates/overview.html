@@ -153,16 +153,9 @@
                 </h6>
                 
                 <div class="row g-3 mb-3">
-                    <div class="col-md-6 border-end">
-                        <span class="signal-tag content-signal">1. Content Signal</span>
-                        <p class="small text-muted mb-0" style="line-height: 1.3;">
-                            Measures the intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong> on a specific factor. Estimated using ML models and statistically corrected via human labels (PPI).
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <span class="signal-tag context-signal">2. Contextual Signal</span>
-                        <p class="small text-muted mb-0" style="line-height: 1.3;">
-                            Captures the structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>. Includes debt, military presence, resource ties, and social fragility.
+                    <div class="col-md-12">
+                        <p class="small text-muted mb-0" style="line-height: 1.5; white-space: pre-wrap;">
+                            {{ vulnerability_description }}
                         </p>
                     </div>
                 </div>
@@ -173,7 +166,7 @@
 
                 <p style="font-size: 0.72rem; color: #64748b; line-height: 1.4;">
                     <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>
-                    Current focus: <em>{{ primary_intent|default:selected_intent|default:"General Influence" }}</em>.
+                    Current focus: <em>{{ cvi_intent|default:selected_intent|default:"General Influence" }}</em>.
                 </p>
             </div>
         {% else %}
