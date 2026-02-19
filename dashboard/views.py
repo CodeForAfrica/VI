@@ -193,8 +193,8 @@ def chatbot_response(request):
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
-    # This function is already efficient as it reads the CSV once per call.
-    # Consider caching its results based on inputs if called frequently.
+   
+    # caching its results based on inputs if called frequently.
     cache_key = f"cvi_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
     cached_result = cache.get(cache_key)
     if cached_result:
@@ -329,7 +329,7 @@ def overview(request):
             calc_foreign_actor,
             intent_filter=calc_strategic_intent
         )
-        # Filter display list to match selection actor and country selection (already done above)
+        # Filter display list to match selection actor and country selection 
     else:
         calc_target_country = ""
         calc_foreign_actor = ""
@@ -346,7 +346,7 @@ def overview(request):
 
     full_stats_qs = filtered_qs.order_by('-posting_time') # Use the filtered queryset
 
-    # 5. Global Stats & Averages (Cache these!)
+    # 5. Global Stats & Averages 
     # Cache global stats based on the *filtered* queryset
     stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
     global_stats_cached = cache.get(stats_cache_key)
@@ -401,7 +401,7 @@ def overview(request):
             cache.set(chart_cache_key, chart, timeout=60*15) # Cache error for 15 mins
 
 
-    # 7. Optimized Data Lists (Cache these too!)
+    # 7. Optimized Data Lists 
     country_list_cache_key = f"overview_country_list_{calc_target_country}_{calc_foreign_actor}"
     country_list = cache.get(country_list_cache_key)
     if country_list is None:
@@ -423,11 +423,7 @@ def overview(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    # CRITICAL: Avoid running ML inference per article on the fly!
-    # Assume vulnerability_index, strategic_intent, tone are already calculated during ingestion.
-    # Remove or heavily optimize the ml_service.calculate_vulnerability_index loop here.
-    # The extract_title_from_text function is okay to run per article in the page batch (10 items).
+    
     import re
     # Define extract_title_from_text inside the view to avoid potential scoping issues with caching loops
     def extract_title_from_text(text):
@@ -455,19 +451,12 @@ def overview(request):
                 article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
                 article.display_summary = text
-        # SKIP ML CALCULATION HERE - Should be done during ingestion
-        # if article.vulnerability_index is None:
-        #     # This was the slow part!
-        #     vi_score = ml_service.calculate_vulnerability_index(...)
-        #     article.vulnerability_index = float(vi_score) if vi_score else 0.0
-        # else:
-        #     article.vulnerability_index = float(article.vulnerability_index)
+        
 
-
-    # 10. Methodology / Description (Can be cached if static)
-    # ... (keep your existing methodology string logic) ...
+    # 10. Methodology / Description 
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
+    
     vulnerability_methodology = (
         f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
         f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
