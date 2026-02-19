@@ -57,6 +57,19 @@
     /* Badge Styling */
     .badge-tone { background-color: var(--success-green) !important; color: white !important; padding: 5px 10px; margin-right: 5px; }
     .badge-intent { background-color: var(--warning-amber) !important; color: white !important; padding: 5px 10px; }
+
+    /* Chatbot Floating UI */
+    #chatbot-wrapper { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
+    .chat-btn { 
+        width: 60px; height: 60px; border-radius: 50%; background-color: var(--action-blue); 
+        color: white; border: none; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .chat-btn:hover { transform: scale(1.1); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.4); }
+    #chat-window { 
+        display: none; position: absolute; bottom: 80px; right: 0; width: 380px; height: 550px; 
+        background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
 </style>
 
 <div class="row g-3 mb-5">
@@ -152,7 +165,7 @@
                 </div>
 
                 <p style="font-size: 0.75rem; color: #64748b; line-height: 1.4; margin-bottom: 0;">
-                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>
+                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. 
                     Current focus: <em>{{ cvi_intent|default:selected_intent|default:"General Influence" }}</em>.
                 </p>
             </div>
@@ -203,6 +216,7 @@
 </div>
 
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--navy-dark);">Recent Articles</h4>
+
 <div class="row g-4 mb-5">
     {% for article in page_obj %}
     <div class="col-12">
@@ -231,12 +245,41 @@
     {% endfor %}
 </div>
 
+<div id="chatbot-wrapper">
+    <button onclick="toggleChat()" class="chat-btn shadow-lg d-flex align-items-center justify-content-center">
+        <i class="fas fa-comment-dots fa-2x"></i>
+    </button>
+
+    <div id="chat-window" class="shadow-lg border">
+        <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: var(--navy-dark);">
+            <div class="d-flex align-items-center">
+                <div class="bg-success rounded-circle me-2" style="width: 10px; height: 10px; border: 2px solid white;"></div>
+                <span class="fw-bold small text-uppercase" style="letter-spacing: 1px;">VI Tool Assistance</span>
+            </div>
+            <button onclick="toggleChat()" class="btn-close btn-close-white" style="font-size: 0.7rem;"></button>
+        </div>
+        
+        <iframe src="/chat/" style="width: 100%; height: calc(100% - 56px); border: none;"></iframe>
+    </div>
+</div>
+
 <script>
+    // Handle Dropdown Auto-Submit
     document.querySelectorAll('.cvi-left select').forEach(dropdown => {
         dropdown.addEventListener('change', function() {
             this.closest('form').submit();
         });
     });
+
+    // Chatbot Toggle Logic
+    function toggleChat() {
+        const chatWindow = document.getElementById('chat-window');
+        if (chatWindow.style.display === 'none' || chatWindow.style.display === '') {
+            chatWindow.style.display = 'block';
+        } else {
+            chatWindow.style.display = 'none';
+        }
+    }
 </script>
 
 {% endblock %}
