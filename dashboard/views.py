@@ -551,21 +551,21 @@ def overview(request):
         #     article.vulnerability_index = float(article.vulnerability_index)
 
 
-    # 10. Methodology / Description (Can be cached if static)
-    # ... (keep your existing methodology string logic) ...
+    # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
+
     vulnerability_methodology = (
         f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
         f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
         "It is estimated using advanced ML models and statistically corrected using human labels via "
-        "Prediction-powered Inference (PPI) to ensure reliable measurement.\n\n"
+        "Prediction-powered Inference (PPI) to ensure reliable measurement. \n\n"
+        
         f"2. Contextual Signal: Captures the structural susceptibility of {target_label} to influence "
         f"from {actor_label} on that specific factor. It incorporates measurable actor×country conditions "
         "such as debt exposure, military presence, resource dependencies, election timing, or policy "
         "environment that may increase vulnerability."
     )
-
 
     # 11. Context Assembly
     context = {
@@ -575,8 +575,8 @@ def overview(request):
         'unique_outlets': unique_outlets,
         'unique_intents': unique_intents,
         'unique_actors': unique_actors,
-        'avg_vulnerability': avg_vulnerability,
-        'avg_confidence': avg_confidence,
+        'avg_vulnerability': round(avg_vulnerability, 3),
+        'avg_confidence': round(avg_confidence, 3),
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
@@ -587,10 +587,10 @@ def overview(request):
         'selected_actor': calc_foreign_actor,
         'selected_intent': calc_strategic_intent,
         'intent_choices': INTENT_CHOICES,
-        'vulnerability_description': vulnerability_methodology,
+        'vulnerability_description': vulnerability_methodology,  
     }
-    return render(request, 'overview.html', context)
-
+    return render(request, 'overview.html', context)        
+   
 
 def media(request):
     # 1. Capture the outlet name from the URL
