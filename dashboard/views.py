@@ -1041,41 +1041,74 @@ def countries(request):
     return render(request, 'dashboard/countries.html', context)
 
 
-def authors_dashboard(request):
-    # 1. Top Journalists Aggregation
-    author_stats = MediaNarrative.objects.values('journalist_fk__name').annotate(
-        total_articles=Count('id')
-    ).filter(journalist_fk__name__isnull=False).order_by('-total_articles')[:10]
+def authors(request):
+    # 1. Get the selected journalist from the URL
+    selected_name = request.GET.get('journalist', '').strip()
+    
+    # 2. Aggregate Top Journalists for the sidebar
+    top_journalists = Journalist.objects.annotate(
+        article_count=Count('articles')
+    ).filter(article_count__gt=0).order_by('-article_count')[:20]
 
-    # 2. Top African Countries Aggregation
-    country_stats = MediaNarrative.objects.exclude(
-        target_country__in=['', 'Unknown', None]
-    ).values('target_country').annotate(
-        article_count=Count('id')
-    ).order_by('-article_count')[:10]
+    # 3. Handle Selected Journalist Profile Details
+    selected_journalist = None
+    if selected_name:
+        selected_journalist = Journalist.objects.filter(name__iexact=selected_name).first()
 
-    # Generate the Country Chart
-    country_chart = ""
-    if country_stats:
-        df_country = pd.DataFrame(list(country_stats))
-        df_country = df_country.sort_values('article_count', ascending=True) # For horizontal bar
-        fig = px.bar(
-            df_country, 
-            x='article_count', 
-            y='target_country', 
-            orientation='h',
-            template="plotly_white",
-            color_discrete_sequence=['#2563eb']
-        )
-        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=350)
-        country_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    # 4. Filter Articles for the main feed
+    if selected_name:
+        article_list = MediaNarrative.objects.filter(
+            journalist_fk__name__iexact=selected_name
+        ).order_by('-posting_time')
+    else:
+        article_list = MediaNarrative.objects.all().order_by('-posting_time')
 
+    # 5. Generate Plotly Chart for Top Authors
+    authors_chart = None
+    if top_journalists.exists():
+        # Convert queryset to list of dicts for Pandas
+        chart_data = list(top_journalists.values('name', 'article_count')[:10])
+        df = pd.DataFrame(chart_data)
+        
+        if not df.empty:
+            # Create a horizontal bar chart
+            fig = px.bar(
+                df, 
+                x='article_count', 
+                y='name', 
+                orientation='h',
+                labels={'article_count': 'Total Articles', 'name': 'Journalist'},
+                color='article_count',
+                color_continuous_scale='Blues'
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=20, r=20, t=20, b=20),
+                height=400,
+                xaxis_title=None,
+                yaxis_title=None,
+                yaxis={'categoryorder':'total ascending'} # Highest on top
+            )
+            
+            authors_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # 6. Pagination (10 articles per page)
+    paginator = Paginator(article_list, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # 7. Final Context
     context = {
-        'author_stats': author_stats,
-        'country_chart': country_chart,
-        'country_stats': country_stats,
+        'top_journalists': top_journalists,
+        'selected_journalist': selected_journalist,
+        'selected_name': selected_name,
+        'page_obj': page_obj,
+        'authors_chart': authors_chart,
     }
-    return render(request, 'authors.html', context)
+    
+    return render(request, 'dashboard/authors.html', context)
     
 def articles_view(request):
     search_query = request.GET.get("q", "")
