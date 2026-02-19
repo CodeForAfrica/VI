@@ -112,3 +112,18 @@ S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 # API Keys - SECURE: All from environment
 MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# CACHES configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1', # Adjust if Redis is on a different host/port
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+# Optional: Use Redis for sessions too
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
