@@ -599,7 +599,7 @@ def media(request):
     
     # Using the field names confirmed by your error log
     if outlet_name: 
-        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+        articles = MediaNarrative.objects.filter(journalist_fk__name__iexact=selected_author)
 
     # FIX: Changed 'medianarrative' or 'articles_set' to 'articles' 
     # as per your 'Choices are' error log.
@@ -1042,43 +1042,41 @@ def countries(request):
     return render(request, 'dashboard/countries.html', context)
 
 
-def authors(request):
-    selected_author = request.GET.get('author', '').strip()
-    qs = MediaNarrative.objects.all()
-    
-    # Use the FK confirmed in your previous error choice list
-    if selected_author:
-        qs = qs.filter(journalist_fk__name__iexact=selected_author)
+def authors_dashboard(request):
+    # 1. Top Journalists Aggregation
+    author_stats = MediaNarrative.objects.values('journalist_fk__name').annotate(
+        total_articles=Count('id')
+    ).filter(journalist_fk__name__isnull=False).order_by('-total_articles')[:10]
 
-    author_stats = qs.values('journalist_fk__name').annotate(
-        total_articles=Count('id'),
-        avg_vulnerability=Avg('vulnerability_index'),
-        avg_confidence=Avg('confidence')
-    ).order_by('-total_articles')
+    # 2. Top African Countries Aggregation
+    country_stats = MediaNarrative.objects.exclude(
+        target_country__in=['', 'Unknown', None]
+    ).values('target_country').annotate(
+        article_count=Count('id')
+    ).order_by('-article_count')[:10]
 
-    chart_data = []
-    for stat in author_stats:
-        if stat['journalist_fk__name']: 
-            chart_data.append({
-                'author': stat['journalist_fk__name'],
-                'articles': stat['total_articles'],
-                'avg_vulnerability': stat['avg_vulnerability'] or 0.0,
-                'avg_confidence': stat['avg_confidence'] or 0.0,
-            })
-
-    df = pd.DataFrame(chart_data)
-    if not df.empty:
-        fig = px.bar(df, x='author', y='articles', title="Articles by Author")
-        chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    else:
-        chart_html = "<p>No data available for chart</p>"
+    # Generate the Country Chart
+    country_chart = ""
+    if country_stats:
+        df_country = pd.DataFrame(list(country_stats))
+        df_country = df_country.sort_values('article_count', ascending=True) # For horizontal bar
+        fig = px.bar(
+            df_country, 
+            x='article_count', 
+            y='target_country', 
+            orientation='h',
+            template="plotly_white",
+            color_discrete_sequence=['#2563eb']
+        )
+        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=350)
+        country_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     context = {
-        'author_list': author_stats,
-        'chart_html': chart_html,
-        'selected_author': selected_author,
+        'author_stats': author_stats,
+        'country_chart': country_chart,
+        'country_stats': country_stats,
     }
-    return render(request, 'dashboard/authors.html', context)
+    return render(request, 'authors.html', context)
     
 def articles_view(request):
     search_query = request.GET.get("q", "")
