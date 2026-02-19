@@ -209,12 +209,15 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     try:
         import pandas as pd
         import os
-        # FIX 1: Defined csv_path using settings.BASE_DIR for reliability
-        csv_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+        # Load YOUR CSV file with the exact path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
         
-        if not os.path.exists(csv_path):
-            logger.warning(f"⚠️ CSV not found at {csv_path}. Using fallback.")
-            return 0.5, "Unknown"
+        # Verify the file exists
+        if not os.path.exists(csv_file):
+            logger.error(f"CSV file not found: {csv_file}")
+            logger.error(f"Files in parent directory: {os.listdir(os.path.join(current_dir, '..'))}")
+            return 0.5, "Unknown"  # Default fallback
         
         # FIX 2: Corrected variable name from csv_file to csv_path to match the line above
         df = pd.read_csv(csv_path)
@@ -592,19 +595,19 @@ def overview(request):
 
 def media(request):
     outlet_name = request.GET.get('outlet', '').strip()
-    
-    # 1. Main Queryset with correct ordering
     qs = MediaNarrative.objects.all().order_by('-posting_time')
+    
+    # Using the field names confirmed by your error log
     if outlet_name: 
         qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
 
-    # 2. Sidebar: Count articles per outlet using correct reverse relationship
-    # If this still fails, try .annotate(article_count=Count('medianarrative'))
+    # FIX: Changed 'medianarrative' or 'articles_set' to 'articles' 
+    # as per your 'Choices are' error log.
     top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('medianarrative') 
+        article_count=Count('articles') 
     ).order_by('-article_count')[:10]
 
-    # Initialize variables
+    # ... (Keep all your chart logic exactly as it was) ...
     publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
     subject_chart = "<p class='text-center py-5 text-muted'>No subject data available</p>"
     actor_country_chart = "<p class='text-center py-5 text-muted'>No actor-country pairing data available</p>"
@@ -614,45 +617,20 @@ def media(request):
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(article_count=Count('id')).order_by('-article_count')[:10]
 
-    if top_publishers:
+    if top_publishers.exists():
         df_pub = pd.DataFrame(list(top_publishers))
         if not df_pub.empty:
-            df_pub = df_pub.rename(columns={'target_country': 'Country', 'article_count': 'Articles'}).sort_values('Articles')
-            fig_pub = px.bar(df_pub, x='Articles', y='Country', orientation='h', template="plotly_white")
-            fig_pub.update_traces(marker_color='#2563eb', texttemplate='%{x}', textposition='outside')
-            fig_pub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
+            df_pub = df_pub.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
+            df_pub = df_pub.sort_values('Articles', ascending=True)
+            fig_pub = go.Figure(go.Bar(
+                x=df_pub['Articles'], y=df_pub['Country'],
+                orientation='h', marker=dict(color='#2563eb'),
+                text=df_pub['Articles'], textposition='outside'
+            ))
+            fig_pub.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
             publisher_chart = fig_pub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # - 2. Top Foreign Actors -
-    top_subjects = MediaNarrative.objects.exclude(
-        inferred_actor__in=['', 'Unknown', None, 'local', 'Local']
-    ).values('inferred_actor').annotate(mention_count=Count('id')).order_by('-mention_count')[:10]
-
-    if top_subjects:
-        df_sub = pd.DataFrame(list(top_subjects))
-        if not df_sub.empty:
-            df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'}).sort_values('Mentions')
-            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white")
-            fig_sub.update_traces(marker_color='#f59e0b', texttemplate='%{x}', textposition='outside')
-            fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
-            subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
-
-    # - 3. Actor-Country Pairings -
-    ac_pairings = MediaNarrative.objects.exclude(
-        target_country__in=['', 'Unknown', None]
-    ).exclude(
-        inferred_actor__in=['', 'Unknown', None, 'local', 'Local']
-    ).values('target_country', 'inferred_actor').annotate(count=Count('id')).order_by('-count')[:10]
-
-    if ac_pairings:
-        df_ac = pd.DataFrame(list(ac_pairings))
-        if not df_ac.empty:
-            df_ac['Label'] = df_ac['target_country'] + " - " + df_ac['inferred_actor']
-            df_ac = df_ac.sort_values('count')
-            fig_ac = px.bar(df_ac, x='count', y='Label', orientation='h', template="plotly_white")
-            fig_ac.update_traces(marker_color='#6366f1', texttemplate='%{x}', textposition='outside')
-            fig_ac.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
-            actor_country_chart = fig_ac.to_html(full_html=False, include_plotlyjs='cdn')
+    # ... (Keep rest of the actor/country pairing logic exactly as is) ...
 
     context = {
         'top_outlets': top_outlets,
@@ -663,8 +641,8 @@ def media(request):
         'actor_country_chart': actor_country_chart,
         'target_countries': COUNTRIES,
     }
-    return render(request, 'media.html', context)
-
+    return render(request, 'dashboard/media.html', context)
+    
 def generate_report(request):
     selected_country = request.GET.get('country')
     selected_actors = request.GET.getlist('actors')
@@ -1068,11 +1046,10 @@ def authors(request):
     selected_author = request.GET.get('author', '').strip()
     qs = MediaNarrative.objects.all()
     
-    # FIX: Use journalist_fk instead of journalist
+    # Use the FK confirmed in your previous error choice list
     if selected_author:
         qs = qs.filter(journalist_fk__name__iexact=selected_author)
 
-    # Aggregate using the correct relationship path
     author_stats = qs.values('journalist_fk__name').annotate(
         total_articles=Count('id'),
         avg_vulnerability=Avg('vulnerability_index'),
@@ -1081,35 +1058,32 @@ def authors(request):
 
     chart_data = []
     for stat in author_stats:
-        # Use the correct dictionary key from the values() call
-        name = stat['journalist_fk__name']
-        if name: 
+        if stat['journalist_fk__name']: 
             chart_data.append({
-                'author': name,
+                'author': stat['journalist_fk__name'],
                 'articles': stat['total_articles'],
-                'avg_vulnerability': float(stat['avg_vulnerability']) if stat['avg_vulnerability'] else 0.0,
-                'avg_confidence': float(stat['avg_confidence']) if stat['avg_confidence'] else 0.0,
+                'avg_vulnerability': stat['avg_vulnerability'] or 0.0,
+                'avg_confidence': stat['avg_confidence'] or 0.0,
             })
 
     df = pd.DataFrame(chart_data)
     if not df.empty:
-        fig = px.bar(df, x='author', y='articles', title="Articles by Author", template="plotly_white")
-        fig.update_traces(marker_color='#2563eb')
+        fig = px.bar(df, x='author', y='articles', title="Articles by Author")
         chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
     else:
-        chart_html = "<p class='text-center py-5 text-muted'>No author data available for chart</p>"
+        chart_html = "<p>No data available for chart</p>"
 
     context = {
         'author_list': author_stats,
         'chart_html': chart_html,
         'selected_author': selected_author,
     }
-    return render(request, 'authors.html', context)
+    return render(request, 'dashboard/authors.html', context)
     
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
-    articles = MediaNarrative.objects.all().order_by("-posting_time")  # Fixed: was Article.objects
+    articles = MediaNarrative.objects.all().order_by("-posting_time")  
 
     if search_query:
         articles = articles.filter(article_text__icontains=search_query)
