@@ -593,52 +593,47 @@ def overview(request):
 
 
 def media(request):
+    # 1. Capture the outlet name from the URL
     outlet_name = request.GET.get('outlet', '').strip()
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-    
-    # Using the field names confirmed by your error log
-    if outlet_name: 
-        articles = MediaNarrative.objects.filter(journalist_fk__name__iexact=selected_author)
 
-    # FIX: Changed 'medianarrative' or 'articles_set' to 'articles' 
-    # as per your 'Choices are' error log.
+    # 2. Start with all articles ordered by most recent
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+
+    # 3. Filter by Media Outlet ONLY
+    if outlet_name:
+        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+
+    # 4. Top 10 Media Outlets for the Sidebar/Chart
     top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('articles') 
+        article_count=Count('articles')
     ).order_by('-article_count')[:10]
 
-    # ... (Keep all your chart logic exactly as it was) ...
-    publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
-    subject_chart = "<p class='text-center py-5 text-muted'>No subject data available</p>"
-    actor_country_chart = "<p class='text-center py-5 text-muted'>No actor-country pairing data available</p>"
+    # 5. Chart Logic
+    media_chart = ""
+    if top_outlets.exists():
+        df = pd.DataFrame(list(top_outlets.values('name', 'article_count')))
+        df = df.sort_values('article_count', ascending=True)
+        fig = px.bar(df, x='article_count', y='name', orientation='h', 
+                     color='name', color_discrete_sequence=px.colors.qualitative.Bold)
+        fig.update_layout(height=400, template="plotly_white", showlegend=False)
+        media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # - 1. Top African Countries -
-    top_publishers = MediaNarrative.objects.exclude(
-        target_country__in=['', 'Unknown', None]
-    ).values('target_country').annotate(article_count=Count('id')).order_by('-article_count')[:10]
+    # 6. Selected outlet profile data
+    selected_outlet = None
+    if outlet_name:
+        selected_outlet = MediaOutlet.objects.filter(name__iexact=outlet_name).first()
 
-    if top_publishers.exists():
-        df_pub = pd.DataFrame(list(top_publishers))
-        if not df_pub.empty:
-            df_pub = df_pub.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
-            df_pub = df_pub.sort_values('Articles', ascending=True)
-            fig_pub = go.Figure(go.Bar(
-                x=df_pub['Articles'], y=df_pub['Country'],
-                orientation='h', marker=dict(color='#2563eb'),
-                text=df_pub['Articles'], textposition='outside'
-            ))
-            fig_pub.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
-            publisher_chart = fig_pub.to_html(full_html=False, include_plotlyjs='cdn')
-
-    # ... (Keep rest of the actor/country pairing logic exactly as is) ...
+    # 7. Pagination
+    paginator = Paginator(qs, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     context = {
+        'media_chart': media_chart,
         'top_outlets': top_outlets,
-        'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
-        'selected_name': outlet_name or "All Outlets",
-        'publisher_chart': publisher_chart,
-        'subject_chart': subject_chart,
-        'actor_country_chart': actor_country_chart,
-        'target_countries': COUNTRIES,
+        'page_obj': page_obj,
+        'selected_outlet': selected_outlet,
+        'selected_name': outlet_name or "All Media Outlets",
     }
     return render(request, 'dashboard/media.html', context)
     
