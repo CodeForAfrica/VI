@@ -354,11 +354,17 @@ class MLInferenceService:
     def _calculate_fallback_vulnerability_index(self, strategic_intent, tone, confidence):
         """Standard fallback if the CSV lookup fails completely."""
         intent_scores = {
-            'Economic': 0.6, 'Sovereignty': 0.8, 'LGBTQ': 0.4,
-            'Religious': 0.5, 'MilitaryPresence': 0.7,
-            'ResourceDependency': 0.6, 'SocialFragility': 0.9
+            'Economic': 0.6, 
+            'Sovereignty': 0.8, 
+            'LGBTQ': 0.4,
+            'Religious': 0.5, 
+            'ElectionInfluence': 0.8,  # Added this
+            'MilitaryPresence': 0.7,
+            'ResourceDependency': 0.6, 
+            'SocialFragility': 0.9
         }
-        # If we are here, we return a rounded, simple value
+        # Use the intent to get a base score, default to 0.5 if not found
+        # Note: strategic_intent here should be the 'formatted_intent' for best results
         base = intent_scores.get(strategic_intent, 0.5)
         return round(base, 2)
 
