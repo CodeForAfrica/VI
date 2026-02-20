@@ -217,88 +217,79 @@ def chatbot_response(request):
     })
         
 def get_risk_data_hybrid():
-    """Tries S3 first, falls back to the local file in your root folder. Cache removed for real-time file checking."""
+    """Tries GitHub Raw URL directly to ensure the file is always found."""
     
-    # 1. Try S3
-    try:
-        bucket_name = getattr(settings, 'S3_MODELS_BUCKET', None)
-        if bucket_name:
-            s3 = boto3.client(
-                's3',
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_S3_REGION_NAME
-            )
-            # Looks for the clean filename you updated in GitHub
-            obj = s3.get_object(Bucket=bucket_name, Key='final_risk_by_actor_intent_country.csv')
-            df = pd.read_csv(io.BytesIO(obj['Body'].read()))
-            logger.info("✅ Successfully loaded risk data from S3.")
-            return df
-    except Exception as e:
-        logger.warning(f"⚠️ S3 fetch failed: {e}")
+    # URL to your specific file
+    
+    github_raw_url = "https://raw.githubusercontent.com/hanna-tes/Vulnerability_index_tool/refs/heads/main/final_risk_by_actor_intent_country.csv?token=GHSAT0AAAAAADRDAPFL7NLSZUPM54N2T52W2MYIKOQ"
 
-    # 2. Local Fallback
     try:
-        # settings.BASE_DIR points to the folder containing manage.py
-        local_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+        # We use a timeout to ensure the website doesn't hang if GitHub is slow
+        response = requests.get(github_raw_url, timeout=5)
         
-        if os.path.exists(local_path):
-            df = pd.read_csv(local_path)
-            logger.info(f"✅ Loaded local risk file as backup: {local_path}")
+        if response.status_code == 200:
+            df = pd.read_csv(io.StringIO(response.text))
+            logger.info("✅ Successfully loaded risk data directly from GitHub Raw.")
             return df
         else:
-            # If you see this in logs, the file is not in the same folder as manage.py
-            logger.warning(f"⚠️ CSV risk file not found at {local_path}. Using fallback calculation only.")
+            logger.warning(f"⚠️ GitHub Raw fetch failed with status: {response.status_code}")
     except Exception as e:
-        logger.error(f"❌ Local fallback failed: {e}")
+        logger.error(f"❌ GitHub Connection Error: {e}")
+
+    # Final Local Fallback just in case internet is down
+    local_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+    if os.path.exists(local_path):
+        return pd.read_csv(local_path)
 
     return None
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """Lookup logic using the hybrid data source - Cache removed to ensure file updates are reflected immediately"""
-    
-    # Get data from Hybrid Source (Always looks at the file now)
     df = get_risk_data_hybrid()
     
     if df is None:
         return 0.5, "Unknown"
 
     try:
-        # --- YOUR EXACT MAPPINGS ---
+        # Standardizing inputs to handle accents (like Côte d'Ivoire)
+        # and case sensitivity issues
         country_mapping = {
-            "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire", "cote ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire", "ethiopia": "Ethiopia"
+            "côte d'ivoire": "CoteIvoire",
+            "cote d'ivoire": "CoteIvoire",
+            "south africa": "South Africa",
+            "senegal": "Senegal",
+            "drc": "DRC",
+            "ethiopia": "Ethiopia"
         }
+        
         actor_mapping = {
             "uae": "UAE", "china": "China", "france": "France",
             "us": "UnitedStates", "united states": "UnitedStates",
-            "russia": "Russia", "saudi": "Saudi", "turkey": "Turkey",
-            "israel": "Israel", "iran": "Iran"
+            "russia": "Russia"
         }
-        
-        formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
-        formatted_actor = actor_mapping.get(foreign_actor.lower().strip(), foreign_actor)
 
-        # Look for matches (Case-Insensitive)
-        mask = (df['country'].str.lower() == formatted_country.lower().strip()) & \
-               (df['actor'].str.lower() == formatted_actor.lower().strip())
+        # Normalize the input strings
+        search_country = target_country.lower().strip()
+        search_actor = foreign_actor.lower().strip()
+
+        formatted_country = country_mapping.get(search_country, target_country)
+        formatted_actor = actor_mapping.get(search_actor, foreign_actor)
+
+        mask = (df['country'].str.lower() == formatted_country.lower()) & \
+               (df['actor'].str.lower() == formatted_actor.lower())
+        
         matching_rows = df[mask]
 
         if not matching_rows.empty:
-            # 1. Filter by specific intent if user selected one
             if intent_filter:
                 spec_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
                 if not spec_match.empty:
                     row = spec_match.iloc[0]
                     return float(row['FinalRisk']), row['intent']
             
-            # 2. Fallback to highest risk (idxmax logic)
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             return float(max_row['FinalRisk']), max_row['intent']
 
         return 0.5, "Unknown"
-
     except Exception as e:
         logger.error(f"Calculator Error: {e}")
         return 0.5, "Unknown"
