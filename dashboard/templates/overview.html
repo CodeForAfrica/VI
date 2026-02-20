@@ -20,44 +20,18 @@
     .cvi-left { flex: 0 0 35%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; position: relative; }
     .cvi-right { flex: 0 0 65%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
     
-    /* Methodology Breakdown - Two Column Style */
-    .methodology-container {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 24px;
-        margin-top: 20px;
-        width: 100%;
-    }
+    /* Methodology Breakdown */
+    .methodology-container { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-top: 20px; width: 100%; }
     .signal-box { padding: 15px; border-radius: 8px; height: 100%; }
-    .content-signal { background-color: #f0f7ff; } /* Light blue */
-    .contextual-signal { background-color: #fffaf0; } /* Light yellow */
+    .content-signal { background-color: #f0f7ff; } 
+    .contextual-signal { background-color: #fffaf0; } 
     
-    .signal-header {
-        font-size: 0.75rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 10px;
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-    }
+    .signal-header { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; display: inline-block; padding: 2px 8px; border-radius: 4px; }
     .content-signal .signal-header { color: #2563eb; background: #dbeafe; }
     .contextual-signal .signal-header { color: #92400e; background: #fef3c7; }
     .signal-text { font-size: 0.85rem; line-height: 1.5; color: #475569; margin-bottom: 0; }
     
-    .calc-formula {
-        font-family: 'Courier New', Courier, monospace;
-        background: #f1f5f9;
-        padding: 12px;
-        border-radius: 6px;
-        text-align: center;
-        font-weight: bold;
-        color: #475569;
-        border: 1px dashed #cbd5e1;
-        margin: 15px 0;
-    }
+    .calc-formula { font-family: 'Courier New', Courier, monospace; background: #f1f5f9; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold; color: #475569; border: 1px dashed #cbd5e1; margin: 15px 0; }
 
     /* Reset Button */
     .reset-container { position: relative; z-index: 1050; padding-top: 15px; border-top: 1px solid #eee; margin-top: 20px; }
@@ -69,29 +43,16 @@
 
     /* Professional Chatbot UI */
     #chatbot-wrapper { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
-    .chat-btn { 
-        width: 60px; height: 60px; border-radius: 50%; background-color: var(--action-blue); 
-        color: white; border: none; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
+    .chat-btn { width: 60px; height: 60px; border-radius: 50%; background-color: var(--action-blue); color: white; border: none; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .chat-btn:hover { transform: scale(1.1); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.4); }
     
-    #chat-window { 
-        display: none; position: absolute; bottom: 80px; right: 0; width: 380px; height: 600px; 
-        background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
+    #chat-window { display: none; position: absolute; bottom: 80px; right: 0; width: 380px; height: 600px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
     .quick-chips { padding: 10px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 5px; }
-    .chip {
-        background: white; border: 1px solid var(--action-blue); color: var(--action-blue);
-        font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s;
-    }
+    .chip { background: white; border: 1px solid var(--action-blue); color: var(--action-blue); font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; }
     .chip:hover { background: var(--action-blue); color: white; }
 
     /* Typing Animation */
-    .typing-dots span {
-        width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; display: inline-block;
-        animation: bounce 1.4s infinite ease-in-out both;
-    }
+    .typing-dots span { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; display: inline-block; animation: bounce 1.4s infinite ease-in-out both; }
     .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
     .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
     @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
@@ -156,11 +117,9 @@
                     {% endfor %}
                 </select>
             </div>
-            
             <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">
                 <i class="fas fa-calculator me-2"></i>Calculate & Filter
             </button>
-            
             <div class="text-center reset-container">
                 <a href="{% url 'overview' %}" class="reset-link text-decoration-none small text-muted fw-bold">
                     <i class="fas fa-sync-alt me-1"></i> Reset All Parameters
@@ -173,37 +132,23 @@
         {% if selected_country and selected_actor %}
             <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
             <div class="h5 fw-bold text-uppercase mt-2" style="letter-spacing: 1px;">Vulnerability Score</div>
-            
             <div class="methodology-container shadow-sm">
                 <h6 class="fw-bold mb-3"><i class="fas fa-microscope me-2 text-primary"></i>Methodology Breakdown</h6>
-                
                 <div class="row g-3">
                     <div class="col-md-6">
                         <div class="signal-box content-signal">
                             <span class="signal-header">1. Content Signal</span>
-                            <p class="signal-text">
-                                Measures the intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong> on a specific factor. Estimated using ML models and statistically corrected via human labels (PPI).
-                            </p>
+                            <p class="signal-text">Measures intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong>.</p>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="signal-box contextual-signal">
                             <span class="signal-header">2. Contextual Signal</span>
-                            <p class="signal-text">
-                                Captures the structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>. Includes debt, military presence, resource ties, and social fragility.
-                            </p>
+                            <p class="signal-text">Structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>.</p>
                         </div>
                     </div>
                 </div>
-
-                <div class="calc-formula mt-3 mb-2" style="font-size: 0.85rem; background: #f8fafc;">
-                    (Content Signal + Contextual Signal) = Vulnerability Index
-                </div>
-
-                <div class="mt-2" style="font-size: 0.75rem; color: #64748b;">
-                    <strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>
-                    Current focus: <span class="fst-italic">{{ selected_intent|default:"General Influence" }}</span>.
-                </div>
+                <div class="calc-formula mt-3 mb-2" style="font-size: 0.85rem; background: #f8fafc;">(Content Signal + Contextual Signal) = Vulnerability Index</div>
             </div>
         {% else %}
             <div class="text-muted opacity-50 text-center p-4">
@@ -252,18 +197,13 @@
 </div>
 
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--navy-dark);">Recent Articles</h4>
-
 <div class="row g-4 mb-5">
     {% for article in page_obj %}
     <div class="col-12">
         <div class="card shadow-sm border-0">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="fw-bold mb-0">
-                        <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: #000000;">
-                            {{ article.display_title }}
-                        </a>
-                    </h6>
+                    <h6 class="fw-bold mb-0"><a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: #000000;">{{ article.display_title }}</a></h6>
                     <span class="text-muted small">{{ article.posting_time|date:"M d, Y" }}</span>
                 </div>
                 <div class="mb-3 mt-2">
@@ -300,7 +240,7 @@
             <span class="small text-muted">Analyzing narratives...</span>
         </div>
 
-        <iframe id="chat-iframe" src="/chat/" style="width: 100%; height: calc(100% - 60px); border: none;"></iframe>
+        <iframe id="chat-iframe" src="{% url 'chatbot_response' %}" style="width: 100%; height: calc(100% - 130px); border: none;"></iframe>
 
         <div class="quick-chips">
             <div class="chip" onclick="askCopilot('What is the current CVI for Senegal?')">CVI Senegal?</div>
@@ -311,7 +251,7 @@
 </div>
 
 <script>
-    // Dropdown Submit
+    // Submit form on dropdown change
     document.querySelectorAll('.cvi-left select').forEach(dropdown => {
         dropdown.addEventListener('change', function() { this.closest('form').submit(); });
     });
@@ -322,19 +262,32 @@
         win.style.display = (win.style.display === 'none' || win.style.display === '') ? 'block' : 'none';
     }
 
-    // Quick Question
+    // Fixed askCopilot Function
     function askCopilot(question) {
         const iframe = document.getElementById('chat-iframe');
         const loader = document.getElementById('chat-loader');
+        
+        // 1. Show loader and hide iframe immediately
         loader.style.display = 'flex';
         iframe.style.display = 'none';
-        iframe.src = "/chat/?q=" + encodeURIComponent(question);
         
+        // 2. Set the new source
+        iframe.src = "{% url 'chatbot_response' %}?q=" + encodeURIComponent(question);
+        
+        // 3. Setup the hidden loader once content is ready
         iframe.onload = function() {
-            loader.style.display = 'none';
+            loader.style.setProperty('display', 'none', 'important');
             iframe.style.display = 'block';
         };
     }
+
+    // Ensure clean state on first load
+    document.addEventListener('DOMContentLoaded', function() {
+        const loader = document.getElementById('chat-loader');
+        const iframe = document.getElementById('chat-iframe');
+        if(loader) loader.style.display = 'none';
+        if(iframe) iframe.style.display = 'block';
+    });
 </script>
 
 {% endblock %}
