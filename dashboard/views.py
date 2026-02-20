@@ -220,56 +220,75 @@ def chatbot_response(request):
         
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    # This matches your 'ls' output perfectly
-    file_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+    # 1. PATH FINDING
+    # This looks for the file in the same folder as manage.py, relative to this file
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    # We go up until we find the file (usually 1 or 2 levels)
+    possible_paths = [
+        os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv'),
+        os.path.join(os.path.dirname(settings.BASE_DIR), 'final_risk_by_actor_intent_country.csv'),
+        os.path.join(current_file_dir, '..', 'final_risk_by_actor_intent_country.csv')
+    ]
     
+    file_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            file_path = path
+            break
+
+    if not file_path:
+        # If we still can't find it, print exactly where we looked so we can see why
+        print(f"❌ Could not find CSV. Looked in: {possible_paths}")
+        return 0.5, "Unknown"
+
+    # 2. LOAD DATA
     try:
-        # No more S3 or GitHub requests - just reading the local file
         df = pd.read_csv(file_path)
-        
-        # Mapping to handle the 'Côte d'Ivoire' accents from your logs
-        country_mapping = {
-            "côte d'ivoire": "CoteIvoire",
-            "cote d'ivoire": "CoteIvoire",
-            "south africa": "South Africa",
-            "senegal": "Senegal",
-            "drc": "DRC",
-            "ethiopia": "Ethiopia"
-        }
-        
-        actor_mapping = {
-            "uae": "UAE", "china": "China", "france": "France",
-            "us": "UnitedStates", "united states": "UnitedStates",
-            "russia": "Russia"
-        }
-
-        c_term = target_country.lower().strip()
-        a_term = foreign_actor.lower().strip()
-
-        formatted_country = country_mapping.get(c_term, target_country)
-        formatted_actor = actor_mapping.get(a_search, foreign_actor)
-
-        mask = (df['country'].str.lower() == formatted_country.lower()) & \
-               (df['actor'].str.lower() == formatted_actor.lower())
-        
-        matches = df[mask]
-
-        if not matches.empty:
-            if intent_filter:
-                intent_match = matches[matches['intent'].str.lower() == intent_filter.lower().strip()]
-                if not intent_match.empty:
-                    row = intent_match.iloc[0]
-                    return float(row['FinalRisk']), row['intent']
-            
-            # Highest risk fallback
-            max_row = matches.loc[matches['FinalRisk'].idxmax()]
-            return float(max_row['FinalRisk']), max_row['intent']
-
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Error reading CSV: {e}")
+        return 0.5, "Unknown"
+
+    # 3. MATCHING & MAPPING
+    # Mapping based on your specific CSV structure
+    country_mapping = {
+        "côte d'ivoire": "CoteIvoire",
+        "cote d'ivoire": "CoteIvoire",
+        "south africa": "South Africa",
+        "senegal": "Senegal",
+        "drc": "DRC",
+        "ethiopia": "Ethiopia"
+    }
+    
+    actor_mapping = {
+        "uae": "UAE", "china": "China", "france": "France",
+        "us": "UnitedStates", "united states": "UnitedStates",
+        "russia": "Russia"
+    }
+
+    c_term = target_country.lower().strip()
+    a_term = foreign_actor.lower().strip()
+
+    formatted_country = country_mapping.get(c_term, target_country)
+    formatted_actor = actor_mapping.get(a_term, foreign_actor)
+
+    # 4. FILTERING
+    mask = (df['country'].str.lower() == formatted_country.lower()) & \
+           (df['actor'].str.lower() == formatted_actor.lower())
+    
+    matches = df[mask]
+
+    if not matches.empty:
+        if intent_filter:
+            intent_match = matches[matches['intent'].str.lower() == intent_filter.lower().strip()]
+            if not intent_match.empty:
+                row = intent_match.iloc[0]
+                return float(row['FinalRisk']), row['intent']
         
+        max_row = matches.loc[matches['FinalRisk'].idxmax()]
+        return float(max_row['FinalRisk']), max_row['intent']
+
     return 0.5, "Unknown"
-        
+    
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
