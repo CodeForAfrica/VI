@@ -37,6 +37,11 @@ from botocore.exceptions import ClientError, NoCredentialsError
 
 logger = logging.getLogger(__name__)
 
+print("---------------------------------------------")
+print(f"SERVER STARTING IN: {os.getcwd()}")
+print(f"FILES VISIBLE HERE: {os.listdir(os.getcwd())}")
+print("---------------------------------------------")
+
 # =========================
 # CONSTANTS
 # =========================
@@ -221,13 +226,18 @@ def chatbot_response(request):
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     # 1. PATH FINDING
-    # This looks for the file in the same folder as manage.py, relative to this file
     current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    # We go up until we find the file (usually 1 or 2 levels)
+    
+    # We add an aggressive absolute path check to the top of the list
     possible_paths = [
+        # Check absolute project root (where manage.py usually is)
+        os.path.join(os.path.dirname(current_file_dir), 'final_risk_by_actor_intent_country.csv'),
+        # Check current working directory
+        os.path.join(os.getcwd(), 'final_risk_by_actor_intent_country.csv'),
+        # Check standard Django BASE_DIR
         os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv'),
-        os.path.join(os.path.dirname(settings.BASE_DIR), 'final_risk_by_actor_intent_country.csv'),
-        os.path.join(current_file_dir, '..', 'final_risk_by_actor_intent_country.csv')
+        # Check one level above BASE_DIR
+        os.path.join(os.path.dirname(settings.BASE_DIR), 'final_risk_by_actor_intent_country.csv')
     ]
     
     file_path = None
@@ -237,8 +247,8 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             break
 
     if not file_path:
-        # If we still can't find it, print exactly where we looked so we can see why
-        print(f"❌ Could not find CSV. Looked in: {possible_paths}")
+        # LOGGING INSTEAD OF PRINTING FOR BETTER VISIBILITY
+        print(f"⚠️ CSV risk file not found. Checked: {possible_paths}")
         return 0.5, "Unknown"
 
     # 2. LOAD DATA
@@ -249,7 +259,6 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         return 0.5, "Unknown"
 
     # 3. MATCHING & MAPPING
-    # Mapping based on your specific CSV structure
     country_mapping = {
         "côte d'ivoire": "CoteIvoire",
         "cote d'ivoire": "CoteIvoire",
@@ -272,6 +281,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     formatted_actor = actor_mapping.get(a_term, foreign_actor)
 
     # 4. FILTERING
+    # Ensure we handle column casing by converting to lower
     mask = (df['country'].str.lower() == formatted_country.lower()) & \
            (df['actor'].str.lower() == formatted_actor.lower())
     
@@ -284,11 +294,11 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
                 row = intent_match.iloc[0]
                 return float(row['FinalRisk']), row['intent']
         
+        # Select highest risk row for the selected actor/country pair
         max_row = matches.loc[matches['FinalRisk'].idxmax()]
         return float(max_row['FinalRisk']), max_row['intent']
 
-    return 0.5, "Unknown"
-    
+    return 0.5, "Unknown"    
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
