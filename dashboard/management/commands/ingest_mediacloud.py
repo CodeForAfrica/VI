@@ -13,7 +13,7 @@ import cloudscraper
 DB_USER = "postgres"
 DB_PASSWORD = "cLUgQCdGpBmUiJcjFz"
 DB_HOST = "rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com"
-DB_PORT = "1621"
+DB_PORT = "5432"
 DB_NAME = "postgres"
 DB_TABLE = "dashboard_medianarrative"
 
@@ -151,7 +151,7 @@ def main():
         if idx % 5 == 0 or idx == total_attempted:
             print_progress(idx + 1, total_attempted, saved_count, failed_count)
         
-        time.sleep(1.2)
+        time.sleep(3.0)
 
     print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed: {failed_count}")
 
