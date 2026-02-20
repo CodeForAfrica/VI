@@ -35,7 +35,7 @@ logging.basicConfig(
 engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
 # Pull from environment to match settings.py and mediacloud_ingestion_service.py
 
-MEDIACLOUD_API_KEY = os.getenv("MEDIACLOUD_API_KEY", "42caaa0601bd290fc5adada8bb804cdfc0604a7a")
+API_KEY = os.getenv("MEDIACLOUD_API_KEY", "42caaa0601bd290fc5adada8bb804cdfc0604a7a")
 mc_search = mediacloud.api.SearchApi(MEDIACLOUD_API_KEY)
 START_DATE = date(2025, 1, 1)
 END_DATE = date.today()
