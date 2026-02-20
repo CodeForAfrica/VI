@@ -230,7 +230,7 @@ def get_risk_data_from_s3():
         )
         
         # Pulling from your sandbox bucket defined in settings
-        obj = s3.get_object(Bucket=settings.CVI_BUCKET_NAME, Key='final_risk_by_actor_intent_country.csv')
+        obj = s3.get_object(Bucket=settings.S3_MODELS_BUCKET, Key='final_risk_by_actor_intent_country.csv')
         df = pd.read_csv(io.BytesIO(obj['Body'].read()))
         
         # Cache the whole dataframe for 1 hour to keep lookups instant
