@@ -225,28 +225,21 @@ def chatbot_response(request):
         
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    # Since the debug log shows the file is in the current working directory:
     file_path = os.path.join(os.getcwd(), 'final_risk_by_actor_intent_country.csv')
 
     if not os.path.exists(file_path):
-        # This print will help us see if the path somehow changed during execution
-        print(f"⚠️ Still not found! Python is looking at: {file_path}")
         return 0.5, "Unknown"
 
     try:
         df = pd.read_csv(file_path)
     except Exception as e:
-        print(f"❌ Read Error: {e}")
         return 0.5, "Unknown"
 
-    # --- MAPPING ---
+    # 1. MAPPINGS (Ensures UI strings match CSV strings)
     country_mapping = {
-        "côte d'ivoire": "CoteIvoire",
-        "cote d'ivoire": "CoteIvoire",
-        "south africa": "South Africa",
-        "senegal": "Senegal",
-        "drc": "DRC",
-        "ethiopia": "Ethiopia"
+        "côte d'ivoire": "CoteIvoire", "cote d'ivoire": "CoteIvoire",
+        "south africa": "South Africa", "senegal": "Senegal",
+        "drc": "DRC", "ethiopia": "Ethiopia"
     }
     
     actor_mapping = {
@@ -255,29 +248,43 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         "russia": "Russia"
     }
 
+    # NEW: Intent Mapping (Fixes the "Social Fragility" vs "SocialFragility" issue)
+    intent_mapping = {
+        "social fragility": "SocialFragility",
+        "military presence": "MilitaryPresence",
+        "resource dependency": "ResourceDependency",
+        "election influence": "ElectionInfluence",
+        "economic": "Economic",
+        "sovereignty": "Sovereignty"
+    }
+
     c_term = target_country.lower().strip()
     a_term = foreign_actor.lower().strip()
+    i_term = intent_filter.lower().strip() if intent_filter else None
 
     formatted_country = country_mapping.get(c_term, target_country)
     formatted_actor = actor_mapping.get(a_term, foreign_actor)
+    formatted_intent = intent_mapping.get(i_term, intent_filter)
 
-    # --- FILTERING ---
-    mask = (df['country'].str.lower() == formatted_country.lower()) & \
-           (df['actor'].str.lower() == formatted_actor.lower())
+    # 2. FILTERING (Added .str.strip() to handle CSV whitespace)
+    mask = (df['country'].str.strip().str.lower() == formatted_country.lower()) & \
+           (df['actor'].str.strip().str.lower() == formatted_actor.lower())
     
     matches = df[mask]
 
     if not matches.empty:
-        if intent_filter:
-            intent_match = matches[matches['intent'].str.lower() == intent_filter.lower().strip()]
+        if formatted_intent:
+            # Try to match the specific intent
+            intent_match = matches[matches['intent'].str.strip().str.lower() == formatted_intent.lower()]
             if not intent_match.empty:
                 return float(intent_match.iloc[0]['FinalRisk']), intent_match.iloc[0]['intent']
         
+        # If intent not found, return the Maximum Risk for that country-actor pair
         max_row = matches.loc[matches['FinalRisk'].idxmax()]
         return float(max_row['FinalRisk']), max_row['intent']
 
-    return 0.5, "Unknown"
-    
+    # Final fallback if country/actor isn't even in the CSV
+    return 0.5, "Unknown"    
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
