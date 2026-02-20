@@ -287,6 +287,17 @@ class MLInferenceService:
             formatted_actor = actor_mapping.get(inferred_actor.lower().strip(), inferred_actor)
             formatted_intent = intent_mapping.get(strategic_intent.lower().strip(), "Unknown")
 
+            print("------------------------------------------")
+            print(f"RAW INPUTS: Country={target_country}, Actor={inferred_actor}, Intent={strategic_intent}")
+            print(f"MAPPED TO: Country='{formatted_country}', Actor='{formatted_actor}', Intent='{formatted_intent}'")
+            
+            # Check if the CSV actually has this country/actor at all
+            country_exists = not df[df['country'] == formatted_country].empty
+            actor_exists = not df[df['actor'] == formatted_actor].empty
+            
+            print(f"IN CSV? Country: {country_exists} | Actor: {actor_exists}")
+            print("------------------------------------------")
+
             # 2. STRATEGY A: EXACT MATCH (CSV Only)
             matching_row = df[
                 (df['country'] == formatted_country) &
