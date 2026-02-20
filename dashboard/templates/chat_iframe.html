@@ -2,59 +2,74 @@
 <html>
 <head>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; margin: 0; background: #f8fafc; }
-        #chat-log { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.4; }
-        .user { align-self: flex-end; background: #2563eb; color: white; border-bottom-right-radius: 2px; }
-        .ai { align-self: flex-start; background: white; border: 1px solid #e2e8f0; color: #1e293b; border-bottom-left-radius: 2px; white-space: pre-line; }
-        .input-area { padding: 10px; background: white; border-top: 1px solid #e2e8f0; sticky: bottom; }
+        body { background: transparent; font-family: sans-serif; margin: 0; overflow: hidden; }
+        #chat-container { display: flex; flex-direction: column; height: 100vh; }
+        #chat-content { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .message { max-width: 85%; padding: 10px 15px; border-radius: 15px; font-size: 0.9rem; line-height: 1.4; }
+        .bot-msg { background: #f0f2f5; align-self: flex-start; color: #333; border-bottom-left-radius: 2px; }
+        .user-msg { background: #007bff; align-self: flex-end; color: white; border-bottom-right-radius: 2px; }
+        .input-area { padding: 10px; border-top: 1px solid #dee2e6; background: white; }
     </style>
 </head>
 <body>
-    <div id="chat-log">
-        {% if reply %}
-            <div class="msg user">{{ query }}</div>
-            <div class="msg ai">{{ reply }}</div>
-        {% else %}
-            <div class="msg ai">Hello! I am your Analysis Assistant. How can I help you today?</div>
-        {% endif %}
+    <div id="chat-container">
+        <div id="chat-content">
+            {% if query %}
+                <div class="message user-msg">{{ query }}</div>
+                <div class="message bot-msg">{{ reply|safe }}</div>
+            {% else %}
+                <div class="message bot-msg">Hello! I am your Analysis Assistant. How can I help you today?</div>
+            {% endif %}
+        </div>
+
+        <div class="input-area">
+            <div class="input-group">
+                <input type="text" id="user-input" class="form-control form-control-sm" placeholder="Type your message...">
+                <button class="btn btn-primary btn-sm" onclick="handleSend()">Send</button>
+            </div>
+        </div>
     </div>
 
-    <form id="chat-form" class="input-area">
-        <div class="input-group">
-            <input type="text" id="user-input" class="form-control form-control-sm" placeholder="Type your question..." required autocomplete="off">
-            <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-paper-plane"></i></button>
-        </div>
-    </form>
-
     <script>
-        const chatForm = document.getElementById('chat-form');
-        const chatLog = document.getElementById('chat-log');
-
-        chatForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('user-input');
-            const msg = input.value;
+        // 1. Hide the parent "Analyzing" loader immediately when this loads
+        window.onload = function() {
+            const loader = window.parent.document.getElementById('chat-loader');
+            if (loader) loader.style.display = 'none';
             
-            // Add user message to UI
-            chatLog.innerHTML += `<div class="msg user">${msg}</div>`;
-            input.value = '';
-            chatLog.scrollTop = chatLog.scrollHeight;
-
-            // Send to your Python chatbot_response view
-            const response = await fetch('/chat/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg })
-            });
-            const data = await response.json();
-            
-            // Add AI response to UI
-            chatLog.innerHTML += `<div class="msg ai">${data.reply}</div>`;
-            chatLog.scrollTop = chatLog.scrollHeight;
+            // Scroll to bottom
+            const content = document.getElementById('chat-content');
+            content.scrollTop = content.scrollHeight;
         };
+
+        async function handleSend() {
+            const input = document.getElementById('user-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Show user message immediately
+            const content = document.getElementById('chat-content');
+            content.innerHTML += `<div class="message user-msg">${message}</div>`;
+            input.value = '';
+
+            try {
+                const response = await fetch("{% url 'chatbot_response' %}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                const data = await response.json();
+                content.innerHTML += `<div class="message bot-msg">${data.reply}</div>`;
+                content.scrollTop = content.scrollHeight;
+            } catch (e) {
+                content.innerHTML += `<div class="message bot-msg text-danger">Error connecting to server.</div>`;
+            }
+        }
+
+        // Allow 'Enter' key to send
+        document.getElementById('user-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') handleSend();
+        });
     </script>
 </body>
 </html>
