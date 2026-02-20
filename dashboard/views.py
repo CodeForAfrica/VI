@@ -611,62 +611,36 @@ def overview(request):
     return render(request, 'overview.html', context)        
    
 
+from django.core.paginator import Paginator
+
 def media(request):
-    outlet_name = request.GET.get('outlet', '')
-    media_chart = ""
-
-    # 1. Get the top 10 outlets and their counts
-    top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('articles') 
-    ).order_by('-article_count')[:10]
+    # 1. Get the filter parameter
+    outlet_name = request.GET.get('outlet', '').strip()
     
-    # 2. Convert to DataFrame
-    df = pd.DataFrame({
-        'name': [o.name for o in top_outlets],
-        'article_count': [o.article_count for o in top_outlets]
-    })
-
-    # 3. Filter out outlets with 0 articles (to avoid empty bars)
-    df = df[df['article_count'] > 0].copy()
-
-    if not df.empty:
-        # 4. Sort by count (ascending for the horizontal bar chart)
-        df = df.sort_values('article_count', ascending=True)
-        
-        # 5. Get the order list ONLY from the remaining, existing data
-        final_names_list = df['name'].tolist()
-
-        fig = px.bar(
-            df, 
-            x='article_count', 
-            y='name', 
-            orientation='h',
-            color='name',
-            template='plotly_white',
-            labels={'article_count': 'Total Articles', 'name': 'Media Outlet'},
-            # Use the clean list we just made
-            category_orders={"name": final_names_list} 
-        )
-        
-        fig.update_layout(
-            showlegend=False,
-            margin=dict(l=20, r=20, t=40, b=20),
-            height=400,
-            # Ensure the Y-axis respects the order of our list
-            yaxis={'categoryorder':'array', 'categoryarray': final_names_list}
-        )
-        media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        
-    # Fetching narrative queryset
-    qs = MediaNarrative.objects.all().select_related('media_outlet').order_by('-posting_time')[:20]
+    # 2. Start with all narratives, optimized with select_related
+    qs = MediaNarrative.objects.all().select_related('media_outlet_fk').order_by('-posting_time')
+    
+    # 3. Apply filter if a specific outlet is requested
+    if outlet_name:
+        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+    
+    # 4. Get the sidebar/stats list
+    top_outlets = MediaOutlet.objects.annotate(
+        article_count=Count('articles')
+    ).order_by('-article_count')[:5]
+    
+    # 5. Handle Pagination
+    paginator = Paginator(qs, 5)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     context = {
         'top_outlets': top_outlets,
-        'media_chart': media_chart,
-        'qs': qs,
+        'page_obj': page_obj,
+        'selected_name': outlet_name if outlet_name else "All Outlets",
+        'target_countries': TARGET_COUNTRIES, 
     }
-    return render(request, 'dashboard/media.html', context)
-    
+    return render(request, 'dashboard/media.html', context)    
     
 def generate_report(request):
     selected_country = request.GET.get('country')
