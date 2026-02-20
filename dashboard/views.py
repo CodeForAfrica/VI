@@ -638,7 +638,7 @@ def media(request):
         'top_outlets': top_outlets,
         'page_obj': page_obj,
         'selected_name': outlet_name if outlet_name else "All Outlets",
-        'target_countries': TARGET_COUNTRIES, 
+        'target_countries': COUNTRIES, 
     }
     return render(request, 'dashboard/media.html', context)    
     
