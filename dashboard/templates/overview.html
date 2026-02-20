@@ -21,7 +21,7 @@
     .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
     .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
     
-    /* Methodology Styles based on Screenshot */
+    /* Methodology Styles */
     .methodology-container {
         background: white;
         border: 1px solid #e2e8f0;
@@ -87,38 +87,6 @@
     </div>
 </div>
 
-<div class="row g-4 mb-5">
-    <div class="col-lg-7">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
-            </div>
-            <div class="card-body p-0">
-                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents</h5>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for sub in top_subjects %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
-                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
 <h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
 <div class="cvi-panel shadow-sm mb-5">
     <div class="cvi-left">
@@ -165,11 +133,11 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <span class="signal-header"><span class="signal-blue">1. Content Signal</span></span>
-                        <p class="signal-box mb-0">Measures the intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong> on a specific factor.</p>
+                        <p class="signal-box mb-0">Measures the intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong>.</p>
                     </div>
                     <div class="col-md-6">
                         <span class="signal-header"><span class="signal-yellow">2. Contextual Signal</span></span>
-                        <p class="signal-box mb-0">Captures the structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>. Includes debt, military, and social fragility.</p>
+                        <p class="signal-box mb-0">Captures the structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>.</p>
                     </div>
                 </div>
 
@@ -178,11 +146,42 @@
                 </div>
                 <p class="text-muted mt-2 mb-0" style="font-size: 0.7rem;"><strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>Current focus: <em>{{ selected_intent|default:"General Influence" }}</em>.</p>
             </div>
-
             <p class="small text-muted mt-3">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
         {% else %}
             <div class="text-muted opacity-50"><i class="fas fa-calculator fa-3x mb-3"></i><p>Select parameters to view calculations</p></div>
         {% endif %}
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for sub in top_subjects %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
+                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
     </div>
 </div>
 
