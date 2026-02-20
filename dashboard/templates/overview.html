@@ -6,56 +6,39 @@
         --navy-dark: #1a2a40; 
         --action-blue: #2563eb; 
         --soft-bg: #f8fafc;
-        --success-green: #10b981;
-        --warning-amber: #f59e0b;
     }
     
     /* Stats Styling */
-    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; transition: transform 0.2s; }
-    .stat-card:hover { transform: translateY(-3px); }
+    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; }
     .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
     
+    /* Badge Styling */
+    .badge-tone { background-color: #10b981 !important; color: white !important; padding: 5px 10px; }
+    .badge-intent { background-color: #f59e0b !important; color: white !important; padding: 5px 10px; }
+    
     /* CVI Calculator Panel */
-    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 350px; }
-    .cvi-left { flex: 0 0 35%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; position: relative; }
-    .cvi-right { flex: 0 0 65%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 250px; }
+    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
+    .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
     
-    /* Methodology Breakdown */
-    .methodology-container { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-top: 20px; width: 100%; }
-    .signal-box { padding: 15px; border-radius: 8px; height: 100%; }
-    .content-signal { background-color: #f0f7ff; } 
-    .contextual-signal { background-color: #fffaf0; } 
-    
-    .signal-header { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; display: inline-block; padding: 2px 8px; border-radius: 4px; }
-    .content-signal .signal-header { color: #2563eb; background: #dbeafe; }
-    .contextual-signal .signal-header { color: #92400e; background: #fef3c7; }
-    .signal-text { font-size: 0.85rem; line-height: 1.5; color: #475569; margin-bottom: 0; }
-    
-    .calc-formula { font-family: 'Courier New', Courier, monospace; background: #f1f5f9; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold; color: #475569; border: 1px dashed #cbd5e1; margin: 15px 0; }
-
-    /* Reset Button */
-    .reset-container { position: relative; z-index: 1050; padding-top: 15px; border-top: 1px solid #eee; margin-top: 20px; }
-    .reset-link { transition: all 0.2s; display: inline-block; padding: 8px 16px; cursor: pointer; }
-    .reset-link:hover { background-color: #fee2e2; color: #dc2626 !important; border-radius: 4px; }
-    
-    .badge-tone { background-color: var(--success-green) !important; color: white !important; padding: 5px 10px; margin-right: 5px; }
-    .badge-intent { background-color: var(--warning-amber) !important; color: white !important; padding: 5px 10px; }
-
-    /* Professional Chatbot UI */
-    #chatbot-wrapper { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
-    .chat-btn { width: 60px; height: 60px; border-radius: 50%; background-color: var(--action-blue); color: white; border: none; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .chat-btn:hover { transform: scale(1.1); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.4); }
-    
-    #chat-window { display: none; position: absolute; bottom: 80px; right: 0; width: 380px; height: 600px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-    .quick-chips { padding: 10px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 5px; }
-    .chip { background: white; border: 1px solid var(--action-blue); color: var(--action-blue); font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; }
-    .chip:hover { background: var(--action-blue); color: white; }
+    /* Floating Chatbot */
+    #chat-window { 
+        display: none; width: 350px; height: 450px; position: fixed; 
+        bottom: 90px; right: 20px; background: white; z-index: 1000; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
+    }
+    #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
+    #chat-box { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
 
     /* Typing Animation */
-    .typing-dots span { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; display: inline-block; animation: bounce 1.4s infinite ease-in-out both; }
-    .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-    @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+    .typing { font-style: italic; color: #888; font-size: 0.8rem; }
+    
+    /* Larger chart sizes */
+    .plotly-graph-div { height: 500px !important; }
+
+    /* Reset Link Styling */
+    .reset-link { transition: all 0.2s; display: inline-block; padding: 8px 16px; }
+    .reset-link:hover { background-color: #f1f5f9; color: #1e293b !important; }
 </style>
 
 <div class="row g-3 mb-5">
@@ -66,13 +49,13 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid var(--success-green);">
+        <div class="stat-card" style="border-bottom: 4px solid #10b981;">
             <div class="stat-label fw-bold text-muted small text-uppercase">Media Outlets</div>
             <div class="stat-value">{{ unique_outlets|default:"0" }}</div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid var(--warning-amber);">
+        <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
             <div class="stat-label fw-bold text-muted small text-uppercase">Narratives</div>
             <div class="stat-value">{{ unique_intents|default:"0" }}</div>
         </div>
@@ -85,87 +68,11 @@
     </div>
 </div>
 
-<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
-
-<div class="cvi-panel shadow-sm mb-5">
-    <div class="cvi-left">
-        <form method="get" action="." id="cvi-filter-form">
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Target African Country</label>
-                <select name="calc_target_country" class="form-select">
-                    <option value="">Select Country</option>
-                    {% for country in african_countries %}
-                    <option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
-                <select name="calc_foreign_actor" class="form-select">
-                    <option value="">Select Actor</option>
-                    {% for actor in foreign_actors %}
-                    <option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-4">
-                <label class="fw-bold small text-muted">Strategic Intent (Factor Filter)</label>
-                <select name="calc_strategic_intent" class="form-select">
-                    <option value="">-- Auto-Detect Primary Factor --</option>
-                    {% for val, label in intent_choices %}
-                        <option value="{{ val }}" {% if val == selected_intent %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">
-                <i class="fas fa-calculator me-2"></i>Calculate & Filter
-            </button>
-            <div class="text-center reset-container">
-                <a href="{% url 'overview' %}" class="reset-link text-decoration-none small text-muted fw-bold">
-                    <i class="fas fa-sync-alt me-1"></i> Reset All Parameters
-                </a>
-            </div>
-        </form>
-    </div>
-
-    <div class="cvi-right">
-        {% if selected_country and selected_actor %}
-            <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
-            <div class="h5 fw-bold text-uppercase mt-2" style="letter-spacing: 1px;">Vulnerability Score</div>
-            <div class="methodology-container shadow-sm">
-                <h6 class="fw-bold mb-3"><i class="fas fa-microscope me-2 text-primary"></i>Methodology Breakdown</h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="signal-box content-signal">
-                            <span class="signal-header">1. Content Signal</span>
-                            <p class="signal-text">Measures intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong>.</p>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="signal-box contextual-signal">
-                            <span class="signal-header">2. Contextual Signal</span>
-                            <p class="signal-text">Structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong>.</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="calc-formula mt-3 mb-2" style="font-size: 0.85rem; background: #f8fafc;">(Content Signal + Contextual Signal) = Vulnerability Index</div>
-            </div>
-        {% else %}
-            <div class="text-muted opacity-50 text-center p-4">
-                <i class="fas fa-chart-line fa-4x mb-3"></i>
-                <p class="fw-bold h5">Ready for Analysis</p>
-                <p>Select parameters on the left to generate the Vulnerability Index.</p>
-            </div>
-        {% endif %}
-    </div>
-</div>
-
 <div class="row g-4 mb-5">
     <div class="col-lg-7">
         <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <div class="card-header bg-white py-3 border-bottom">
                 <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
-                <span class="badge bg-light text-dark">{{ selected_country|default:"All Countries" }}</span>
             </div>
             <div class="card-body p-0">
                 {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
@@ -180,15 +87,12 @@
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
                     {% for sub in top_subjects %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                        <div>
-                            <span class="fw-bold d-block">{{ sub.strategic_intent|title }}</span>
-                            <small class="text-muted">{{ sub.inferred_actor }} → {{ sub.target_country }}</small>
-                        </div>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
                         <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
                     </li>
                     {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No intent data found.</li>
+                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -196,24 +100,53 @@
     </div>
 </div>
 
-<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--navy-dark);">Recent Articles</h4>
-<div class="row g-4 mb-5">
+<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
+<div class="cvi-panel shadow-sm mb-5">
+    <div class="cvi-left">
+        <form method="get" action="." id="cvi-filter-form">
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">Target African Country</label>
+                <select name="calc_target_country" class="form-select">
+                    <option value="">Select Country</option>
+                    {% for country in african_countries %}<option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
+                <select name="calc_foreign_actor" class="form-select">
+                    <option value="">Select Actor</option>
+                    {% for actor in foreign_actors %}<option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">Calculate & Filter</button>
+            <div class="text-center border-top pt-2"><a href="." class="reset-link text-decoration-none small text-muted fw-bold">Reset Filters</a></div>
+        </form>
+    </div>
+    <div class="cvi-right text-center">
+        {% if selected_country and selected_actor %}
+            <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
+            <div class="h5 fw-bold text-uppercase mt-2">Vulnerability Score</div>
+            <p class="small text-muted mt-2">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
+        {% else %}
+            <div class="text-muted opacity-50"><i class="fas fa-calculator fa-3x mb-3"></i><p>Select parameters to view calculations</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
+<div class="row g-4 mb-3">
     {% for article in page_obj %}
     <div class="col-12">
         <div class="card shadow-sm border-0">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="fw-bold mb-0"><a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: #000000;">{{ article.display_title }}</a></h6>
-                    <span class="text-muted small">{{ article.posting_time|date:"M d, Y" }}</span>
-                </div>
+                <h6 class="fw-bold"><a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">{{ article.article_text|truncatewords:15 }}</a></h6>
                 <div class="mb-3 mt-2">
-                    <span class="badge badge-tone">Tone: {{ article.tone|title }}</span>
-                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|title }}</span>
+                    <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
+                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
                 </div>
-                <p class="small text-muted mb-3">{{ article.display_summary }}</p> 
                 <div class="d-flex justify-content-between align-items-center">
-                    <span class="small fw-bold text-dark">{{ article.media_outlet }}</span>
-                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-3">View Source</a>
+                    <span class="small text-muted">{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</span>
+                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">Read Full Article →</a>
                 </div>
             </div>
         </div>
@@ -221,72 +154,84 @@
     {% endfor %}
 </div>
 
-<div id="chatbot-wrapper">
-    <button onclick="toggleChat()" class="chat-btn shadow-lg d-flex align-items-center justify-content-center">
-        <i class="fas fa-comment-dots fa-2x"></i>
+<div id="chatbot-bubble">
+    <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
+        <span style="font-size: 1.5rem;">💬</span>
     </button>
+</div>
 
-    <div id="chat-window" class="shadow-lg border">
-        <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: var(--navy-dark);">
-            <div class="d-flex align-items-center">
-                <div class="bg-success rounded-circle me-2" style="width: 10px; height: 10px; border: 2px solid white;"></div>
-                <span class="fw-bold small text-uppercase" style="letter-spacing: 1px;">VI Tool Assistance</span>
-            </div>
-            <button onclick="toggleChat()" class="btn-close btn-close-white" style="font-size: 0.7rem;"></button>
+<div id="chat-window" class="border">
+    <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center rounded-top">
+        <span class="fw-bold">AI Narrative Analyst</span>
+        <button class="btn-close btn-close-white" onclick="toggleChat()"></button>
+    </div>
+    <div id="chat-box" class="p-3 bg-light" style="font-size: 0.9rem;">
+        <div class="p-2 mb-2 bg-white border rounded">
+            Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores.
         </div>
-        
-        <div id="chat-loader" class="d-flex flex-column align-items-center justify-content-center text-center p-4" style="height: calc(100% - 130px); background: #f8fafc; display: none;">
-            <div class="typing-dots mb-3"><span></span><span></span><span></span></div>
-            <span class="small text-muted">Analyzing narratives...</span>
-        </div>
-
-        <iframe id="chat-iframe" src="{% url 'chatbot_response' %}" style="width: 100%; height: calc(100% - 130px); border: none;"></iframe>
-
-        <div class="quick-chips">
-            <div class="chip" onclick="askCopilot('What is the current CVI for Senegal?')">CVI Senegal?</div>
-            <div class="chip" onclick="askCopilot('Summarize top narratives from Russia')">Russia Summary</div>
-            <div class="chip" onclick="askCopilot('Identify high-risk media outlets')">Risk Outlets</div>
+    </div>
+    <div class="p-2 border-top bg-white rounded-bottom">
+        <div class="input-group">
+            <input type="text" id="chat-input" class="form-control form-control-sm" placeholder="Ask a question...">
+            <button class="btn btn-primary btn-sm" type="button" id="send-btn">Send</button>
         </div>
     </div>
 </div>
 
 <script>
-    // Submit form on dropdown change
+    function toggleChat() {
+        const chat = document.getElementById('chat-window');
+        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
+    }
+
     document.querySelectorAll('.cvi-left select').forEach(dropdown => {
         dropdown.addEventListener('change', function() { this.closest('form').submit(); });
     });
 
-    // Chat Toggle
-    function toggleChat() {
-        const win = document.getElementById('chat-window');
-        win.style.display = (win.style.display === 'none' || win.style.display === '') ? 'block' : 'none';
-    }
+    document.getElementById('send-btn').addEventListener('click', function() {
+        const input = document.getElementById('chat-input');
+        const box = document.getElementById('chat-box');
+        const userText = input.value.trim();
+        
+        if (userText !== "") {
+            // 1. Add User Message
+            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
+            input.value = "";
+            
+            // 2. Add "Analysing" placeholder
+            const loadingId = "loading-" + Date.now();
+            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing...</span></div>`;
+            box.scrollTop = box.scrollHeight;
 
-    // Fixed askCopilot Function
-    function askCopilot(question) {
-        const iframe = document.getElementById('chat-iframe');
-        const loader = document.getElementById('chat-loader');
-        
-        // 1. Show loader and hide iframe immediately
-        loader.style.display = 'flex';
-        iframe.style.display = 'none';
-        
-        // 2. Set the new source
-        iframe.src = "{% url 'chatbot_response' %}?q=" + encodeURIComponent(question);
-        
-        // 3. Setup the hidden loader once content is ready
-        iframe.onload = function() {
-            loader.style.setProperty('display', 'none', 'important');
-            iframe.style.display = 'block';
-        };
-    }
+            // 3. Fetch from Backend
+            fetch("{% url 'chatbot_response' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ message: userText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 4. Remove loader and add real reply
+                const loader = document.getElementById(loadingId);
+                if (loader) loader.remove();
+                
+                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
+                box.scrollTop = box.scrollHeight;
+            })
+            .catch(error => {
+                document.getElementById(loadingId).innerHTML = '<span class="text-danger">Error fetching response.</span>';
+            });
+        }
+    });
 
-    // Ensure clean state on first load
-    document.addEventListener('DOMContentLoaded', function() {
-        const loader = document.getElementById('chat-loader');
-        const iframe = document.getElementById('chat-iframe');
-        if(loader) loader.style.display = 'none';
-        if(iframe) iframe.style.display = 'block';
+    // Support for Enter key
+    document.getElementById('chat-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            document.getElementById('send-btn').click();
+        }
     });
 </script>
 
