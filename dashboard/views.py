@@ -218,41 +218,45 @@ def chatbot_response(request):
     })
         
 def get_risk_data_hybrid():
-    """Tries GitHub Raw URL directly to ensure the file is always found."""
+    """Fetches risk data from private GitHub using a secure token."""
+    github_raw_url = "https://raw.githubusercontent.com/hanna-tes/Vulnerability_index_tool/refs/heads/main/final_risk_by_actor_intent_country.csv"
     
-    # URL to your specific file
-    
-    github_raw_url = "https://raw.githubusercontent.com/hanna-tes/Vulnerability_index_tool/refs/heads/main/final_risk_by_actor_intent_country.csv?token=GHSAT0AAAAAADRDAPFL7NLSZUPM54N2T52W2MYIKOQ"
+    # Securely get token from settings
+    github_token = getattr(settings, 'GITHUB_TOKEN', None)
 
-    try:
-        # We use a timeout to ensure the website doesn't hang if GitHub is slow
-        response = requests.get(github_raw_url, timeout=5)
-        
-        if response.status_code == 200:
-            df = pd.read_csv(io.StringIO(response.text))
-            logger.info("✅ Successfully loaded risk data directly from GitHub Raw.")
-            return df
-        else:
-            logger.warning(f"⚠️ GitHub Raw fetch failed with status: {response.status_code}")
-    except Exception as e:
-        logger.error(f"❌ GitHub Connection Error: {e}")
+    if github_token:
+        try:
+            headers = {'Authorization': f'token {github_token}'}
+            response = requests.get(github_raw_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                df = pd.read_csv(io.StringIO(response.text))
+                logger.info("✅ Successfully loaded risk data from Private GitHub.")
+                return df
+            else:
+                logger.warning(f"⚠️ GitHub Private fetch failed: {response.status_code}. Check if token is valid.")
+        except Exception as e:
+            logger.error(f"❌ GitHub Connection Error: {e}")
+    else:
+        logger.warning("⚠️ GITHUB_TOKEN not found in settings. Skipping GitHub fetch.")
 
-    # Final Local Fallback just in case internet is down
+    # Local Fallback
     local_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
     if os.path.exists(local_path):
-        return pd.read_csv(local_path)
-
+        try:
+            return pd.read_csv(local_path)
+        except Exception as e:
+            logger.error(f"❌ Local fallback failed: {e}")
+    
     return None
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     df = get_risk_data_hybrid()
-    
     if df is None:
         return 0.5, "Unknown"
 
     try:
-        # Standardizing inputs to handle accents (like Côte d'Ivoire)
-        # and case sensitivity issues
+        # Mapping for normalization
         country_mapping = {
             "côte d'ivoire": "CoteIvoire",
             "cote d'ivoire": "CoteIvoire",
@@ -268,12 +272,11 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
             "russia": "Russia"
         }
 
-        # Normalize the input strings
-        search_country = target_country.lower().strip()
-        search_actor = foreign_actor.lower().strip()
+        c_term = target_country.lower().strip()
+        a_term = foreign_actor.lower().strip()
 
-        formatted_country = country_mapping.get(search_country, target_country)
-        formatted_actor = actor_mapping.get(search_actor, foreign_actor)
+        formatted_country = country_mapping.get(c_term, target_country)
+        formatted_actor = actor_mapping.get(a_term, foreign_actor)
 
         mask = (df['country'].str.lower() == formatted_country.lower()) & \
                (df['actor'].str.lower() == formatted_actor.lower())
