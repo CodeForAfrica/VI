@@ -252,90 +252,42 @@ class MLInferenceService:
 
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """
-        Calculate vulnerability index using ONLY your pre-calculated CSV scores.
-        Main intent categories: Economic, Sovereignty, LGBTQ, Religious, MilitaryPresence, ResourceDependency, SocialFragility
+        Calculates index by PRIORITIZING exact CSV matches.
+        Returns the raw FinalRisk from CSV if found.
         """
         try:
             df = self._csv_risk_df
             if df.empty:
-                logger.warning("CSV risk data not loaded — using fallback")
                 return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
 
-            # Normalize inputs to match CSV format
+            # 1. Normalize Names
             country_mapping = {
-                "south africa": "South Africa",
-                "senegal": "Senegal",
-                "drc": "DRC",
-                "cote d'ivoire": "CoteIvoire",
-                "cote ivoire": "CoteIvoire",
-                "ivory coast": "CoteIvoire",
-                "ethiopia": "Ethiopia"
+                "south africa": "South Africa", "senegal": "Senegal",
+                "drc": "DRC", "ethiopia": "Ethiopia",
+                "cote d'ivoire": "CoteIvoire", "côte d'ivoire": "CoteIvoire",
+                "cote ivoire": "CoteIvoire", "ivory coast": "CoteIvoire"
             }
             actor_mapping = {
-                "uae": "UAE",
-                "china": "China",
-                "france": "France",
-                "us": "UnitedStates",
-                "united states": "UnitedStates",
-                "russia": "Russia",
-                "saudi": "Saudi",
-                "turkey": "Turkey",
-                "israel": "Israel",
-                "iran": "Iran"
+                "uae": "UAE", "china": "China", "france": "France",
+                "us": "UnitedStates", "united states": "UnitedStates",
+                "russia": "Russia", "saudi": "Saudi", "turkey": "Turkey"
             }
-
-            # Map ML-predicted intent to CSV intent format (7 main categories only)
             intent_mapping = {
-                # Economic
-                'economic dependency': 'Economic',
-                'economic': 'Economic',
-                'resource dependency': 'ResourceDependency',
-                'resourcedependency': 'ResourceDependency',
-                # Sovereignty
-                'sovereignty': 'Sovereignty',
-                'democratic interference': 'Sovereignty',
-                'election influence': 'Sovereignty',
-                'election': 'Sovereignty',
-                # Identity
-                'lgbtq': 'LGBTQ',
-                'lgbt': 'LGBTQ',
-                'sexual orientation': 'LGBTQ',
-                'religious': 'Religious',
-                'religion': 'Religious',
-                # Security
-                'military presence': 'MilitaryPresence',
-                'military': 'MilitaryPresence',
-                'defense': 'MilitaryPresence',
-                # Fragility
-                'social fragility': 'SocialFragility',
-                'social': 'SocialFragility',
-                'ethnic': 'SocialFragility',
-                'sectarian': 'SocialFragility',
-                # Default fallback
-                'unknown': 'Unknown',
-                'neutral': 'Unknown'
+                'economic dependency': 'Economic', 'economic': 'Economic',
+                'resource dependency': 'ResourceDependency', 'resourcedependency': 'ResourceDependency',
+                'sovereignty': 'Sovereignty', 'democratic interference': 'Sovereignty',
+                'election influence': 'Sovereignty', 'election': 'Sovereignty',
+                'lgbtq': 'LGBTQ', 'lgbt': 'LGBTQ', 'religious': 'Religious',
+                'religion': 'Religious', 'military presence': 'MilitaryPresence',
+                'military': 'MilitaryPresence', 'defense': 'MilitaryPresence',
+                'social fragility': 'SocialFragility', 'social': 'SocialFragility'
             }
 
-            formatted_country = country_mapping.get(target_country.lower(), target_country)
-            formatted_actor = actor_mapping.get(inferred_actor.lower(), inferred_actor)
-            formatted_intent = intent_mapping.get(strategic_intent.lower(), strategic_intent)
+            formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
+            formatted_actor = actor_mapping.get(inferred_actor.lower().strip(), inferred_actor)
+            formatted_intent = intent_mapping.get(strategic_intent.lower().strip(), "Unknown")
 
-            # Ensure we only use the 7 main intents
-            main_intents = {"Economic", "Sovereignty", "LGBTQ", "Religious", "MilitaryPresence", "ResourceDependency", "SocialFragility"}
-            if formatted_intent not in main_intents:
-                # If not a main intent, try to find any match for this country-actor pair
-                logger.warning(f"Intent '{formatted_intent}' not in main intents. Falling back to country-actor average.")
-                matching_rows = df[
-                    (df['country'] == formatted_country) &
-                    (df['actor'] == formatted_actor)
-                ]
-                if not matching_rows.empty:
-                    avg_risk = matching_rows['FinalRisk'].mean()
-                    return min(avg_risk * 0.7 + confidence * 0.3, 1.0)
-                else:
-                    return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
-
-            # Exact match lookup
+            # 2. STRATEGY A: EXACT MATCH (CSV Only)
             matching_row = df[
                 (df['country'] == formatted_country) &
                 (df['actor'] == formatted_actor) &
@@ -343,21 +295,20 @@ class MLInferenceService:
             ]
 
             if not matching_row.empty:
-                csv_risk_score = float(matching_row.iloc[0]['FinalRisk'])
-                # Weight: 80% CSV (contextual), 20% ML confidence
-                return min(csv_risk_score * 0.8 + confidence * 0.2, 1.0)
+                # RETURN PURE CSV SCORE - No ML weighting
+                return float(matching_row.iloc[0]['FinalRisk'])
 
-            # Fallback: nearest match by country-actor pair
-            country_actor_matches = df[
+            # 3. STRATEGY B: COUNTRY-ACTOR AVERAGE (If intent is missing)
+            matching_rows = df[
                 (df['country'] == formatted_country) &
                 (df['actor'] == formatted_actor)
             ]
-            if not country_actor_matches.empty:
-                avg_risk = country_actor_matches['FinalRisk'].mean()
-                return min(avg_risk * 0.7 + confidence * 0.3, 1.0)
+            
+            if not matching_rows.empty:
+                # Return the highest risk found for this pair
+                return float(matching_rows['FinalRisk'].max())
 
-            # Final fallback: use ML-only score
-            logger.warning(f"No CSV match for {formatted_country}-{formatted_actor}-{formatted_intent}")
+            # 4. FINAL FALLBACK
             return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
 
         except Exception as e:
@@ -365,26 +316,15 @@ class MLInferenceService:
             return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
 
     def _calculate_fallback_vulnerability_index(self, strategic_intent, tone, confidence):
-        """Fallback: simple weighted combination of intent/tone/confidence"""
-        # Intent scores (for main 7 categories)
+        """Standard fallback if the CSV lookup fails completely."""
         intent_scores = {
             'Economic': 0.6, 'Sovereignty': 0.8, 'LGBTQ': 0.4,
             'Religious': 0.5, 'MilitaryPresence': 0.7,
-            'ResourceDependency': 0.6, 'SocialFragility': 0.9,
-            'unknown': 0.3, 'neutral': 0.3
+            'ResourceDependency': 0.6, 'SocialFragility': 0.9
         }
-        # Tone scores
-        tone_scores = {
-            'very_negative': 1.0, 'negative': 0.8, 'critical': 0.7,
-            'skeptical': 0.6, 'neutral': 0.3, 'positive': 0.1,
-            'very_positive': 0.0, 'supportive': 0.0, 'praising': 0.0
-        }
-
-        intent_score = intent_scores.get(strategic_intent, 0.3)
-        tone_score = tone_scores.get(tone, 0.3)
-
-        # Weight: 40% intent, 30% tone, 30% confidence
-        return min(intent_score * 0.4 + tone_score * 0.3 + confidence * 0.3, 1.0)
+        # If we are here, we return a rounded, simple value
+        base = intent_scores.get(strategic_intent, 0.5)
+        return round(base, 2)
 
     def cleanup(self):
         """Clean up temporary directories"""
