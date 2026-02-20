@@ -194,16 +194,26 @@ def chat_view(request):
     
 @csrf_exempt
 def chatbot_response(request):
-    # 1. Handle Quick Chips (GET request from the buttons)
-    if request.method == "GET":
-        user_message = request.GET.get('q', '').strip()
-        if user_message:
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            user_message = data.get('message', '').strip()
             bot_reply = chatbot_instance.process_query(user_message)
-            # When using GET (for the iframe load), we return a full page
-            return render(request, 'dashboard/chat.html', {
-                'reply': bot_reply, 
-                'query': user_message
-            })
+            return JsonResponse({'reply': bot_reply, 'success': True})
+        except Exception as e:
+            return JsonResponse({'reply': f"Error: {str(e)}", 'success': False})
+
+    # When the iframe loads via GET (Initial load or Quick Chips)
+    user_query = request.GET.get('q', '').strip()
+    reply = ""
+    if user_query:
+        reply = chatbot_instance.process_query(user_query)
+    
+    # Return the tiny template we created above
+    return render(request, 'chat_iframe.html', {
+        'reply': reply,
+        'query': user_query
+    })
         # If no query, just show the empty chat page
         return render(request, 'dashboard/chat.html')
 
