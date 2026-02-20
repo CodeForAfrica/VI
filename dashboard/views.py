@@ -1,5 +1,5 @@
 # dashboard/views.py
-
+import boto3
 from django.shortcuts import render
 from django.core.cache import cache # <-- ADD THIS IMPORT IF NOT ALREADY PRESENT
 from django.db.models import Q, Count, Avg
