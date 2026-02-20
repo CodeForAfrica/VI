@@ -209,31 +209,12 @@ def chatbot_response(request):
     if user_query:
         reply = chatbot_instance.process_query(user_query)
     
-    # Return the tiny template we created above
+    # Ensure this return is indented correctly (4 spaces from the 'def')
     return render(request, 'chat_iframe.html', {
         'reply': reply,
         'query': user_query
     })
-        # If no query, just show the empty chat page
-        return render(request, 'dashboard/chat.html')
-
-    # 2. Handle Typing (POST request from your existing JS)
-    elif request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            user_message = data.get('message', '').strip()
-            bot_reply = chatbot_instance.process_query(user_message)
-            
-            return JsonResponse({
-                'reply': bot_reply, 
-                'success': True
-            })
-        except Exception as e:
-            return JsonResponse({
-                'reply': f"Error: {str(e)}", 
-                'success': False
-            })
-
+        
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
     # This function is already efficient as it reads the CSV once per call.
