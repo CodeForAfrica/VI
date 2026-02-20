@@ -215,104 +215,96 @@ def chatbot_response(request):
         'query': user_query
     })
         
-def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """Direct lookup from your CSV file - reads final_risk_by_actor_intent_country.csv"""
-    # This function is already efficient as it reads the CSV once per call.
-    # Consider caching its results based on inputs if called frequently.
-    cache_key = f"cvi_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
-    cached_result = cache.get(cache_key)
-    if cached_result:
-        logger.info(f"Cache HIT for CVI: {cache_key}")
-        return cached_result
+def get_risk_data_from_s3():
+    """Helper to fetch and cache the entire risk DataFrame from S3"""
+    cached_df = cache.get('cvi_full_dataframe')
+    if cached_df is not None:
+        return cached_df
 
     try:
-        import pandas as pd
-        import os
-        # Load YOUR CSV file with the exact path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME
+        )
         
-        # Verify the file exists
-        if not os.path.exists(csv_path):
-            logger.error(f"⚠️ CSV file NOT FOUND at: {csv_path}")
-            return 0.5, "Unknown"
+        # Pulling from your sandbox bucket defined in settings
+        obj = s3.get_object(Bucket=settings.CVI_BUCKET_NAME, Key='final_risk_by_actor_intent_country.csv')
+        df = pd.read_csv(io.BytesIO(obj['Body'].read()))
         
-        # FIX: Ensure variable name matches (csv_path)
-        df = pd.read_csv(csv_path)
-        
+        # Cache the whole dataframe for 1 hour to keep lookups instant
+        cache.set('cvi_full_dataframe', df, 3600)
+        return df
+    except Exception as e:
+        logger.error(f"Failed to fetch CSV from S3: {e}")
+        return None
+
+def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
+    """Your exact logic but using the S3 helper instead of local file paths"""
+    
+    # Check if this specific result is already in the 24-hour cache
+    cache_key = f"cvi_s3_result_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logger.info(f"Cache HIT for CVI Result: {cache_key}")
+        return cached_result
+
+    # Get the data from S3 (or the 1-hour dataframe cache)
+    df = get_risk_data_from_s3()
+    
+    if df is None:
+        logger.error("CVI data unavailable (S3 fetch failed)")
+        return 0.5, "Unknown"
+
+    try:
+        # --- YOUR ORIGINAL MAPPINGS ---
         country_mapping = {
-            "south africa": "South Africa",
-            "senegal": "Senegal",
-            "drc": "DRC",
-            "cote d'ivoire": "CoteIvoire",
-            "cote ivoire": "CoteIvoire",
-            "ivory coast": "CoteIvoire",
-            "ethiopia": "Ethiopia"
+            "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC",
+            "cote d'ivoire": "CoteIvoire", "cote ivoire": "CoteIvoire",
+            "ivory coast": "CoteIvoire", "ethiopia": "Ethiopia"
         }
         actor_mapping = {
-            "uae": "UAE",
-            "china": "China",
-            "france": "France",
-            "us": "UnitedStates",
-            "united states": "UnitedStates",
-            "russia": "Russia",
-            "saudi": "Saudi",
-            "turkey": "Turkey",
-            "israel": "Israel",
-            "iran": "Iran"
+            "uae": "UAE", "china": "China", "france": "France",
+            "us": "UnitedStates", "united states": "UnitedStates",
+            "russia": "Russia", "saudi": "Saudi", "turkey": "Turkey",
+            "israel": "Israel", "iran": "Iran"
         }
         
-        # FIX 3: Added .strip() to handle potential whitespace in user input
         formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower().strip(), foreign_actor)
-        matching_rows = df[(df['country'] == formatted_country) & (df['actor'] == formatted_actor)]
+
+        # --- YOUR ORIGINAL LOOKUP LOGIC ---
+        matching_rows = df[
+            (df['country'].str.lower() == formatted_country.lower()) & 
+            (df['actor'].str.lower() == formatted_actor.lower())
+        ]
 
         if not matching_rows.empty:
+            # First attempt: Match specific intent if provided
             if intent_filter:
                 specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
                 if not specific_match.empty:
                     row = specific_match.iloc[0]
                     result = float(row['FinalRisk']), row['intent']
-                    cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+                    cache.set(cache_key, result, timeout=60*60*24)
                     return result
+            
+            # Second attempt/Fallback: Use the max risk (idxmax)
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
-            max_score = max_row['FinalRisk']
-            max_intent = max_row['intent']
-            logger.info(f"Found max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-            result = float(max_score), max_intent
-            cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
+            result = float(max_row['FinalRisk']), max_row['intent']
+            
+            logger.info(f"Found max score {result[0]} for {formatted_country}-{formatted_actor}")
+            cache.set(cache_key, result, timeout=60*60*24)
             return result
-        else:
-            matching_rows = df[
-                (df['country'].str.lower() == formatted_country.lower()) &
-                (df['actor'].str.lower() == formatted_actor.lower())
-            ]
-            if not matching_rows.empty:
-                if intent_filter:
-                    specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
-                    if not specific_match.empty:
-                        row = specific_match.iloc[0]
-                        result = float(row['FinalRisk']), row['intent']
-                        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-                        return result
-                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
-                max_score = max_row['FinalRisk']
-                max_intent = max_row['intent']
-                logger.info(f"Found case-insensitive max score {max_score} for {formatted_country}-{formatted_actor} in {max_intent}")
-                result = float(max_score), max_intent
-                cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-                return result
 
-        logger.info(f"No score found for {target_country}-{foreign_actor} in CSV, using default")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result
+        logger.info(f"No score found for {target_country}-{foreign_actor} in S3 CSV")
+        return 0.5, "Unknown"
+
     except Exception as e:
-        logger.error(f"Contextual score lookup error: {e}")
-        result = 0.5, "Unknown"
-        cache.set(cache_key, result, timeout=60*60*24) # Cache for 24 hours
-        return result # Default fallback
-
+        logger.error(f"Contextual score calculation error: {e}")
+        return 0.5, "Unknown"
+        
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
