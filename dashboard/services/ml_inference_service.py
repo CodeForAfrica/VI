@@ -321,9 +321,10 @@ class MLInferenceService:
             print(f"MAPPED: {formatted_country} | {formatted_actor} | {formatted_intent}")
 
             # 2. STRATEGY A: EXACT MATCH (Case Insensitive)
-            mask = (df['country'].str.lower() == formatted_country.lower()) & \
-                   (df['actor'].str.lower() == formatted_actor.lower()) & \
-                   (df['intent'].str.lower() == formatted_intent.lower())
+            # Strategy A: EXACT MATCH (Aggressive Cleaning)
+            mask = (df['country'].str.strip().str.lower() == formatted_country.strip().lower()) & \
+                   (df['actor'].str.strip().str.lower() == formatted_actor.strip().lower()) & \
+                   (df['intent'].str.strip().str.lower() == formatted_intent.strip().lower())
             
             matching_row = df[mask]
 
