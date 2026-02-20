@@ -33,6 +33,7 @@ import plotly.graph_objects as go
 import os
 import re
 import io
+from botocore.exceptions import ClientError, NoCredentialsError
 
 logger = logging.getLogger(__name__)
 
@@ -217,78 +218,56 @@ def chatbot_response(request):
         'query': user_query
     })
         
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
-import os
-import logging
-
-logger = logging.getLogger(__name__)
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """
-    Directly reads the CSV from the local project root.
-    CSV Columns: FinalRisk, actor, country, intent
-    """
-    # 1. Locate the file
+    # This matches your 'ls' output perfectly
     file_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
     
     try:
-        if not os.path.exists(file_path):
-            # This is the warning you were seeing in your logs
-            logger.warning(f"⚠️ CSV file missing at: {file_path}")
-            return 0.5, "Unknown"
-        
+        # No more S3 or GitHub requests - just reading the local file
         df = pd.read_csv(file_path)
-    except Exception as e:
-        logger.error(f"❌ Failed to read CSV: {e}")
-        return 0.5, "Unknown"
+        
+        # Mapping to handle the 'Côte d'Ivoire' accents from your logs
+        country_mapping = {
+            "côte d'ivoire": "CoteIvoire",
+            "cote d'ivoire": "CoteIvoire",
+            "south africa": "South Africa",
+            "senegal": "Senegal",
+            "drc": "DRC",
+            "ethiopia": "Ethiopia"
+        }
+        
+        actor_mapping = {
+            "uae": "UAE", "china": "China", "france": "France",
+            "us": "UnitedStates", "united states": "UnitedStates",
+            "russia": "Russia"
+        }
 
-    # 2. Precise Mappings (Ensuring Côte d'Ivoire matches your UI)
-    country_mapping = {
-        "côte d'ivoire": "CoteIvoire", 
-        "cote d'ivoire": "CoteIvoire",
-        "south africa": "South Africa",
-        "senegal": "Senegal",
-        "drc": "DRC",
-        "ethiopia": "Ethiopia"
-    }
-    
-    actor_mapping = {
-        "uae": "UAE", "china": "China", "france": "France",
-        "us": "UnitedStates", "united states": "UnitedStates",
-        "russia": "Russia"
-    }
+        c_term = target_country.lower().strip()
+        a_term = foreign_actor.lower().strip()
 
-    # Normalize inputs from the dropdowns
-    c_search = target_country.lower().strip()
-    a_search = foreign_actor.lower().strip()
+        formatted_country = country_mapping.get(c_term, target_country)
+        formatted_actor = actor_mapping.get(a_search, foreign_actor)
 
-    formatted_country = country_mapping.get(c_search, target_country)
-    formatted_actor = actor_mapping.get(a_search, foreign_actor)
-
-    # 3. Filter Logic
-    try:
-        # Case-insensitive filtering against CSV columns
         mask = (df['country'].str.lower() == formatted_country.lower()) & \
                (df['actor'].str.lower() == formatted_actor.lower())
         
         matches = df[mask]
 
         if not matches.empty:
-            # Option A: User picked a specific intent (Sovereignty, Economic, etc.)
             if intent_filter:
                 intent_match = matches[matches['intent'].str.lower() == intent_filter.lower().strip()]
                 if not intent_match.empty:
                     row = intent_match.iloc[0]
                     return float(row['FinalRisk']), row['intent']
             
-            # Option B: No intent filter or specific intent not found -> Return Highest Risk
+            # Highest risk fallback
             max_row = matches.loc[matches['FinalRisk'].idxmax()]
             return float(max_row['FinalRisk']), max_row['intent']
 
     except Exception as e:
-        logger.error(f"Filtering Error: {e}")
-
+        print(f"Error: {e}")
+        
     return 0.5, "Unknown"
         
 def overview(request):
