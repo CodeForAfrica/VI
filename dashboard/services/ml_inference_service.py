@@ -1,7 +1,5 @@
 # dashboard/services/ml_inference_service.py
 
-# dashboard/services/ml_inference_service.py
-
 import boto3
 import tempfile
 import os
@@ -49,21 +47,25 @@ class MLInferenceService:
         self._csv_risk_df = self._load_csv_risks()
 
     def _load_csv_risks(self):
-        """Load pre-calculated risk scores from final_risk_by_actor_intent_country.csv"""
+        """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
         try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            csv_paths = [
-                os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv'),
-                os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country (1).csv')
-            ]
+            # This ensures we look in the project root, no matter where the script is called from
+            csv_filename = 'final_risk_by_actor_intent_country.csv'
+            path = os.path.join(settings.BASE_DIR, csv_filename)
             
-            for path in csv_paths:
-                if os.path.exists(path):
-                    df = pd.read_csv(path)
-                    logger.info(f"✅ Loaded CSV risk data from: {path}")
-                    return df
+            if os.path.exists(path):
+                df = pd.read_csv(path)
+                logger.info(f"✅ Successfully loaded CSV risk data from absolute path: {path}")
+                return df
             
-            logger.warning("⚠️ CSV risk file not found. Using fallback calculation only.")
+            # Fallback check: try one level up from BASE_DIR if BASE_DIR is pointing to 'config'
+            fallback_path = os.path.join(os.path.dirname(settings.BASE_DIR), csv_filename)
+            if os.path.exists(fallback_path):
+                df = pd.read_csv(fallback_path)
+                logger.info(f"✅ Loaded CSV risk data from fallback path: {fallback_path}")
+                return df
+
+            logger.warning(f"⚠️ CSV risk file not found. Looked in: {path} and {fallback_path}")
             return pd.DataFrame()
         except Exception as e:
             logger.error(f"❌ Failed to load CSV risk data: {e}")
