@@ -252,80 +252,105 @@ class MLInferenceService:
 
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """
-        Calculates index by PRIORITIZING exact CSV matches.
-        Returns the raw FinalRisk from CSV if found.
+        Finalized version using exact keys from final_risk_by_actor_intent_country.csv
         """
         try:
             df = self._csv_risk_df
             if df.empty:
+                logger.warning("CSV Dataframe is empty! Check file path.")
                 return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
 
-            # 1. Normalize Names
+            # 1. EXACT MAPPINGS BASED ON YOUR CSV CONTENT
             country_mapping = {
-                "south africa": "South Africa", "senegal": "Senegal",
-                "drc": "DRC", "ethiopia": "Ethiopia",
-                "cote d'ivoire": "CoteIvoire", "côte d'ivoire": "CoteIvoire",
-                "cote ivoire": "CoteIvoire", "ivory coast": "CoteIvoire"
+                "senegal": "Senegal",
+                "drc": "DRC",
+                "democratic republic of congo": "DRC",
+                "ethiopia": "Ethiopia",
+                "cote d'ivoire": "CoteIvoire",
+                "côte d'ivoire": "CoteIvoire",
+                "ivory coast": "CoteIvoire"
             }
+            
             actor_mapping = {
-                "uae": "UAE", "china": "China", "france": "France",
-                "us": "UnitedStates", "united states": "UnitedStates",
-                "russia": "Russia", "saudi": "Saudi", "turkey": "Turkey"
+                "china": "China",
+                "france": "France",
+                "russia": "Russia",
+                "united states": "UnitedStates",
+                "us": "UnitedStates",
+                "usa": "UnitedStates",
+                "saudi": "Saudi",
+                "saudi arabia": "Saudi",
+                "turkey": "Turkey",
+                "uae": "UAE",
+                "united arab emirates": "UAE",
+                "israel": "Israel",
+                "iran": "Iran",
+                "rwanda": "Rwanda"
             }
+
             intent_mapping = {
-                'economic dependency': 'Economic', 'economic': 'Economic',
-                'resource dependency': 'ResourceDependency', 'resourcedependency': 'ResourceDependency',
-                'sovereignty': 'Sovereignty', 'democratic interference': 'Sovereignty',
-                'election influence': 'Sovereignty', 'election': 'Sovereignty',
-                'lgbtq': 'LGBTQ', 'lgbt': 'LGBTQ', 'religious': 'Religious',
-                'religion': 'Religious', 'military presence': 'MilitaryPresence',
-                'military': 'MilitaryPresence', 'defense': 'MilitaryPresence',
-                'social fragility': 'SocialFragility', 'social': 'SocialFragility'
+                'economic': 'Economic',
+                'economic dependency': 'Economic',
+                'sovereignty': 'Sovereignty',
+                'lgbtq': 'LGBTQ',
+                'lgbt': 'LGBTQ',
+                'religious': 'Religious',
+                'religion': 'Religious',
+                'election': 'ElectionInfluence',
+                'election influence': 'ElectionInfluence',
+                'political interference': 'ElectionInfluence',
+                'military': 'MilitaryPresence',
+                'military presence': 'MilitaryPresence',
+                'resource dependency': 'ResourceDependency',
+                'social fragility': 'SocialFragility',
+                'ethnic': 'SocialFragility'
             }
 
-            formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
-            formatted_actor = actor_mapping.get(inferred_actor.lower().strip(), inferred_actor)
-            formatted_intent = intent_mapping.get(strategic_intent.lower().strip(), "Unknown")
+            # Normalize inputs
+            c_clean = target_country.lower().strip()
+            a_clean = inferred_actor.lower().strip()
+            i_clean = strategic_intent.lower().strip()
 
-            print("------------------------------------------")
-            print(f"RAW INPUTS: Country={target_country}, Actor={inferred_actor}, Intent={strategic_intent}")
-            print(f"MAPPED TO: Country='{formatted_country}', Actor='{formatted_actor}', Intent='{formatted_intent}'")
-            
-            # Check if the CSV actually has this country/actor at all
-            country_exists = not df[df['country'] == formatted_country].empty
-            actor_exists = not df[df['actor'] == formatted_actor].empty
-            
-            print(f"IN CSV? Country: {country_exists} | Actor: {actor_exists}")
-            print("------------------------------------------")
+            formatted_country = country_mapping.get(c_clean, target_country)
+            formatted_actor = actor_mapping.get(a_clean, inferred_actor)
+            formatted_intent = intent_mapping.get(i_clean, "Sovereignty") # Default to Sovereignty if unknown
 
-            # 2. STRATEGY A: EXACT MATCH (CSV Only)
-            matching_row = df[
-                (df['country'] == formatted_country) &
-                (df['actor'] == formatted_actor) &
-                (df['intent'] == formatted_intent)
-            ]
+            # --- DEBUG LOGS (for EC2 Terminal) ---
+            print(f"\n--- VULNERABILITY LOOKUP ---")
+            print(f"INPUT: {target_country} | {inferred_actor} | {strategic_intent}")
+            print(f"MAPPED: {formatted_country} | {formatted_actor} | {formatted_intent}")
+
+            # 2. STRATEGY A: EXACT MATCH (Case Insensitive)
+            mask = (df['country'].str.lower() == formatted_country.lower()) & \
+                   (df['actor'].str.lower() == formatted_actor.lower()) & \
+                   (df['intent'].str.lower() == formatted_intent.lower())
+            
+            matching_row = df[mask]
 
             if not matching_row.empty:
-                # RETURN PURE CSV SCORE - No ML weighting
-                return float(matching_row.iloc[0]['FinalRisk'])
+                score = float(matching_row.iloc[0]['FinalRisk'])
+                print(f"✅ SUCCESS: Found exact match. Score: {score}")
+                return score
 
-            # 3. STRATEGY B: COUNTRY-ACTOR AVERAGE (If intent is missing)
-            matching_rows = df[
-                (df['country'] == formatted_country) &
-                (df['actor'] == formatted_actor)
-            ]
+            # 3. STRATEGY B: COUNTRY-ACTOR MAX (If intent doesn't match)
+            print(f"⚠️ No exact intent match. Trying Country-Actor fallback...")
+            fallback_mask = (df['country'].str.lower() == formatted_country.lower()) & \
+                            (df['actor'].str.lower() == formatted_actor.lower())
             
+            matching_rows = df[fallback_mask]
             if not matching_rows.empty:
-                # Return the highest risk found for this pair
-                return float(matching_rows['FinalRisk'].max())
+                score = float(matching_rows['FinalRisk'].max())
+                print(f"✅ SUCCESS: Using Max Risk for {formatted_country}-{formatted_actor}: {score}")
+                return score
 
-            # 4. FINAL FALLBACK
+            # 4. FINAL FALLBACK (If Country or Actor is not in CSV)
+            print(f"❌ CRITICAL: {formatted_country} or {formatted_actor} NOT in CSV. Using generic math.")
             return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
 
         except Exception as e:
             logger.error(f"Error in calculate_vulnerability_index: {e}")
             return self._calculate_fallback_vulnerability_index(strategic_intent, tone, confidence)
-
+            
     def _calculate_fallback_vulnerability_index(self, strategic_intent, tone, confidence):
         """Standard fallback if the CSV lookup fails completely."""
         intent_scores = {
