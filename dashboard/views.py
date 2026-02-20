@@ -216,50 +216,61 @@ def chatbot_response(request):
         'query': user_query
     })
         
-def get_risk_data_from_s3():
-    """Helper to fetch and cache the entire risk DataFrame from S3"""
+def get_risk_data_hybrid():
+    """Tries S3 first, falls back to the local file in your root folder"""
     cached_df = cache.get('cvi_full_dataframe')
     if cached_df is not None:
         return cached_df
 
+    # 1. Try S3
     try:
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_S3_REGION_NAME
-        )
-        
-        # Pulling from your sandbox bucket defined in settings
-        obj = s3.get_object(Bucket=settings.S3_MODELS_BUCKET, Key='final_risk_by_actor_intent_country.csv')
-        df = pd.read_csv(io.BytesIO(obj['Body'].read()))
-        
-        # Cache the whole dataframe for 1 hour to keep lookups instant
-        cache.set('cvi_full_dataframe', df, 3600)
-        return df
+        bucket_name = getattr(settings, 'S3_MODELS_BUCKET', None)
+        if bucket_name:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            obj = s3.get_object(Bucket=bucket_name, Key='final_risk_by_actor_intent_country.csv')
+            df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+            logger.info("✅ Successfully loaded risk data from S3.")
+            cache.set('cvi_full_dataframe', df, 3600)
+            return df
     except Exception as e:
-        logger.error(f"Failed to fetch CSV from S3: {e}")
-        return None
+        logger.warning(f"⚠️ S3 fetch failed: {e}")
+
+    try:
+        # settings.BASE_DIR points to the folder containing manage.py
+        local_path = os.path.join(settings.BASE_DIR, 'final_risk_by_actor_intent_country.csv')
+        
+        if os.path.exists(local_path):
+            df = pd.read_csv(local_path)
+            logger.info(f"✅ Loaded local risk file as backup: {local_path}")
+            cache.set('cvi_full_dataframe', df, 3600)
+            return df
+    except Exception as e:
+        logger.error(f"❌ Local fallback failed: {e}")
+
+    return None
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """Your exact logic but using the S3 helper instead of local file paths"""
+    """Lookup logic using the hybrid data source - Preserves all mapping logic"""
     
-    # Check if this specific result is already in the 24-hour cache
-    cache_key = f"cvi_s3_result_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
+    # Check for specific result in cache first (24 hours)
+    cache_key = f"cvi_res_{target_country}_{foreign_actor}_{intent_filter or 'none'}"
     cached_result = cache.get(cache_key)
     if cached_result:
-        logger.info(f"Cache HIT for CVI Result: {cache_key}")
         return cached_result
 
-    # Get the data from S3 (or the 1-hour dataframe cache)
-    df = get_risk_data_from_s3()
+    # Get data from Hybrid Source
+    df = get_risk_data_hybrid()
     
     if df is None:
-        logger.error("CVI data unavailable (S3 fetch failed)")
         return 0.5, "Unknown"
 
     try:
-        # --- YOUR ORIGINAL MAPPINGS ---
+        # --- YOUR EXACT MAPPINGS ---
         country_mapping = {
             "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC",
             "cote d'ivoire": "CoteIvoire", "cote ivoire": "CoteIvoire",
@@ -275,35 +286,31 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         formatted_country = country_mapping.get(target_country.lower().strip(), target_country)
         formatted_actor = actor_mapping.get(foreign_actor.lower().strip(), foreign_actor)
 
-        # --- YOUR ORIGINAL LOOKUP LOGIC ---
-        matching_rows = df[
-            (df['country'].str.lower() == formatted_country.lower()) & 
-            (df['actor'].str.lower() == formatted_actor.lower())
-        ]
+        # Look for matches (Case-Insensitive)
+        mask = (df['country'].str.lower() == formatted_country.lower().strip()) & \
+               (df['actor'].str.lower() == formatted_actor.lower().strip())
+        matching_rows = df[mask]
 
         if not matching_rows.empty:
-            # First attempt: Match specific intent if provided
+            # 1. Filter by specific intent if user selected one
             if intent_filter:
-                specific_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
-                if not specific_match.empty:
-                    row = specific_match.iloc[0]
+                spec_match = matching_rows[matching_rows['intent'].str.lower() == intent_filter.lower().strip()]
+                if not spec_match.empty:
+                    row = spec_match.iloc[0]
                     result = float(row['FinalRisk']), row['intent']
-                    cache.set(cache_key, result, timeout=60*60*24)
+                    cache.set(cache_key, result, timeout=86400)
                     return result
             
-            # Second attempt/Fallback: Use the max risk (idxmax)
+            # 2. Fallback to highest risk (idxmax logic)
             max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
             result = float(max_row['FinalRisk']), max_row['intent']
-            
-            logger.info(f"Found max score {result[0]} for {formatted_country}-{formatted_actor}")
-            cache.set(cache_key, result, timeout=60*60*24)
+            cache.set(cache_key, result, timeout=86400)
             return result
 
-        logger.info(f"No score found for {target_country}-{foreign_actor} in S3 CSV")
         return 0.5, "Unknown"
 
     except Exception as e:
-        logger.error(f"Contextual score calculation error: {e}")
+        logger.error(f"Calculator Error: {e}")
         return 0.5, "Unknown"
         
 def overview(request):
