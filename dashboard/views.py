@@ -177,6 +177,22 @@ class DisinfoAnalysisChatbot:
 chatbot_instance = DisinfoAnalysisChatbot()
 
 @csrf_exempt
+def chat_view(request):
+    # 1. If the user is SENDING a message (AJAX)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            user_message = data.get('message', '').strip()
+            bot_reply = chatbot_instance.process_query(user_message)
+            return JsonResponse({'reply': bot_reply, 'success': True})
+        except Exception as e:
+            return JsonResponse({'reply': f"Error: {str(e)}", 'success': False})
+
+    # 2. If the IFRAME is just loading for the first time
+    # This provides the HTML structure for the typing area
+    return render(request, 'chat_inline.html') 
+    
+@csrf_exempt
 def chatbot_response(request):
     # 1. Handle Quick Chips (GET request from the buttons)
     if request.method == "GET":
