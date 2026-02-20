@@ -615,31 +615,26 @@ def media(request):
     outlet_name = request.GET.get('outlet', '')
     media_chart = ""
 
-    # We use .annotate() to create the 'article_count' field 
-    # by counting the related 'articles' for each outlet.
+    # 1. Get the top 10 outlets and their counts
     top_outlets = MediaOutlet.objects.annotate(
         article_count=Count('articles') 
     ).order_by('-article_count')[:10]
     
-    # Create DataFrame for plotting
-    data = {
+    # 2. Convert to DataFrame
+    df = pd.DataFrame({
         'name': [o.name for o in top_outlets],
         'article_count': [o.article_count for o in top_outlets]
-    }
-    df = pd.DataFrame(data)
+    })
 
-    # 1. Filter out 0s first
+    # 3. Filter out outlets with 0 articles (to avoid empty bars)
     df = df[df['article_count'] > 0].copy()
 
     if not df.empty:
-        # 2. Sort by count
+        # 4. Sort by count (ascending for the horizontal bar chart)
         df = df.sort_values('article_count', ascending=True)
         
-        # 3. CRITICAL: Reset the index so the DF internal mapping is clean
-        df = df.reset_index(drop=True)
-        
-        # 4. Create the order list from the ALREADY filtered and sorted DF
-        media_order = df['name'].tolist()
+        # 5. Get the order list ONLY from the remaining, existing data
+        final_names_list = df['name'].tolist()
 
         fig = px.bar(
             df, 
@@ -649,16 +644,16 @@ def media(request):
             color='name',
             template='plotly_white',
             labels={'article_count': 'Total Articles', 'name': 'Media Outlet'},
-            # Use the order derived directly from the final dataframe
-            category_orders={"name": media_order} 
+            # Use the clean list we just made
+            category_orders={"name": final_names_list} 
         )
         
         fig.update_layout(
             showlegend=False,
             margin=dict(l=20, r=20, t=40, b=20),
             height=400,
-            # Force the Y-axis to follow our specific list
-            yaxis={'categoryorder':'array', 'categoryarray': media_order}
+            # Ensure the Y-axis respects the order of our list
+            yaxis={'categoryorder':'array', 'categoryarray': final_names_list}
         )
         media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
         
