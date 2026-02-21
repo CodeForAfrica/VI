@@ -157,5 +157,26 @@ def main():
 
     print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed: {failed_count}")
 
+def lambda_handler(event, context):
+    """
+    AWS Lambda starts here.
+    """
+    # 1. Pull the keys you standardized
+    os.environ['MEDIACLOUD_API_KEY'] = os.environ.get('MEDIACLOUD_API_KEY')
+    
+    # 2. Execute the ingestion
+    try:
+        main() 
+        return {
+            'statusCode': 200,
+            'body': 'Daily ingestion completed successfully'
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': f'Error during ingestion: {str(e)}'
+        }
+
 if __name__ == "__main__":
     main()
+
