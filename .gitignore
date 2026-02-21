@@ -4,3 +4,7 @@ venv/
 .env
 staticfiles/
 db.sqlite3
+lambda_dist/
+deployment_package.zip
+.terraform/
+terraform.tfstate*
