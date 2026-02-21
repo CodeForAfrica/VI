@@ -33,7 +33,7 @@ def lambda_handler(event, context):
     conn = None
     try:
         # Map Environment Variables (Ensures consistency)
-        os.environ['MEDIA_CLOUD_API_KEY'] = os.environ.get('MEDIACLOUD_API_KEY', '')
+        os.environ['API_KEY'] = os.environ.get('MEDIACLOUD_API_KEY', '')
         
         conn = get_db_connection()
         
