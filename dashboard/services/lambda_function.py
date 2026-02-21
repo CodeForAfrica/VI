@@ -77,7 +77,6 @@ def get_count(conn):
 def run_ml_inference_on_new_articles(conn):
     processed_count = 0
     with conn.cursor() as cursor:
-        # SQL Fixed: Use TABLE_NAME and match the ingestion date filter
         cursor.execute(f"""
             SELECT id, article_text, target_country, inferred_actor 
             FROM {TABLE_NAME} 
@@ -103,11 +102,19 @@ def run_ml_inference_on_new_articles(conn):
                     vulnerability_index = %s, lang_detect = %s, ml_processed_at = NOW()
                     WHERE id = %s
                 """, (res['strategic_intent'], res['tone'], res['confidence'], v_index, res['lang_detect'], art_id))
+                
                 processed_count += 1
+                
+                # COMMIT EVERY 10 ARTICLES
+                if processed_count % 10 == 0:
+                    conn.commit()
+                    logger.info(f"Committed batch of 10. Total processed: {processed_count}")
+
             except Exception as e:
                 logger.error(f"Art {art_id} error: {e}")
+                conn.rollback() # Rollback only the failed article's update
         
-        conn.commit()
+        conn.commit() # Final commit for remaining articles
     return processed_count
 
 def run_quality_validation(conn):
