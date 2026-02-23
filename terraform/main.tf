@@ -78,7 +78,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   filename   = "lambda_layer.zip" # Terraform will look for this file relative to where you run terraform
   layer_name = "mediacloud-dependencies"
 
-  compatible_runtimes = ["python3.9", "python3.10", "python3.11"]
+  compatible_runtimes = ["python3.9", "python3.10", "python3.11","python3.12"]
 }
 
 # Lambda Function for MediaCloud Ingestion
