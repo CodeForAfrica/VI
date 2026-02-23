@@ -2,31 +2,22 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- LAMBDA LAYER ---
-# We comment this out so Terraform doesn't try to upload the 720MB zip
-/*
-resource "aws_lambda_layer_version" "dependencies" {
-  filename   = "lambda_layer.zip"
-  layer_name = "mediacloud-dependencies"
-  compatible_runtimes = ["python3.9", "python3.10", "python3.11", "python3.12"]
-}
-*/
-
 # --- LAMBDA FUNCTION ---
 resource "aws_lambda_function" "mediacloud_ingestion" {
   filename         = "deployment_package.zip"
   source_code_hash = filebase64sha256("deployment_package.zip")
   function_name    = "mediacloud-ingestion-function"
   
-  role             = var.lambda_role_arn
+  # We hardcode the Role ARN string directly here. 
+  # This is NOT an IAM resource call; it's just a text string property.
+  role             = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
-  # UPDATE: Changed from manage.lambda_handler to your actual script name
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.12"
   timeout          = 900
   memory_size      = 3008
 
-  # UPDATE: Reference the ARN 
+  # Use the ARN 
   layers = [
     "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   ]
