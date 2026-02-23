@@ -4,7 +4,7 @@ provider "aws" {
 
 # --- REFERENCE EXISTING ROLE ---
 # use a data source to fetch the role created manually.
-data "aws_iam_role" "existing_lambda_role" {
+data lambda_role_arn {
   name = "VulnerabilityIndex-MediaCloud-Lambda-Role" 
 }
 
