@@ -28,6 +28,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # 1. Logging Permissions
       {
         Effect = "Allow"
         Action = [
@@ -37,6 +38,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
         Resource = "arn:aws:logs:*:*:*"
       },
+      # 2. VPC / Network Permissions (Required for RDS access)
       {
         Effect = "Allow"
         Action = [
@@ -46,6 +48,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
         Resource = "*"
       },
+      # 3. RDS Permissions
       {
         Effect = "Allow"
         Action = [
@@ -53,6 +56,18 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "rds:List*"
         ]
         Resource = "*"
+      },
+      # 4. S3 Model Access (The part we just added)
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.s3_models_bucket}",
+          "arn:aws:s3:::${var.s3_models_bucket}/*"
+        ]
       }
     ]
   })
@@ -68,7 +83,7 @@ resource "aws_lambda_layer_version" "dependencies" {
 
 # Lambda Function for MediaCloud Ingestion
 resource "aws_lambda_function" "mediacloud_ingestion" {
-  filename         = "lambda_function.zip"
+  filename = "deployment_package.zip"
   function_name    = "mediacloud-ingestion-function"
   role            = aws_iam_role.lambda_role.arn
   handler         = "lambda_function.lambda_handler"
@@ -82,7 +97,10 @@ resource "aws_lambda_function" "mediacloud_ingestion" {
 
   environment {
     variables = {
+      # The keys your Python logic expects
+      API_KEY            = var.mediacloud_api_key
       MEDIACLOUD_API_KEY = var.mediacloud_api_key
+      GROQ_API_KEY       = var.groq_api_key  # <--- Add this
       DB_HOST            = var.db_host
       DB_NAME            = var.db_name
       DB_USER            = var.db_user
