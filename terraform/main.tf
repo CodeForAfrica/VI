@@ -47,7 +47,7 @@ resource "aws_lambda_function" "mediacloud_ingestion" {
   function_name = "mediacloud-ingestion-function"
   
   # Point to the DATA source ARN instead of a RESOURCE ARN
-  role          = role = var.lambda_role_arn
+  role          = var.lambda_role_arn
   
   handler       = "manage.lambda_handler"
   runtime       = "python3.12"
