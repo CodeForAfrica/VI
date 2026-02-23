@@ -39,3 +39,7 @@ variable "security_group_ids" {
   type    = list(string)
   default = []
 }
+variable "lambda_role_arn" {
+  description = "ARN of the pre-created IAM role for Lambda"
+  type        = string
+}
