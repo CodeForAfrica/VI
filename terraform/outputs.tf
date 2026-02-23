@@ -10,7 +10,7 @@ output "eventbridge_rule" {
 
 output "lambda_role_arn" {
   description = "ARN of the Lambda IAM role"
-  value       = var.lambda_role_arn
+  type       = string
 }
 
 output "lambda_function_arn" {
