@@ -2,11 +2,12 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- REFERENCE EXISTING ROLE ---
+/*# --- REFERENCE EXISTING ROLE ---
 # use a data source to fetch the role created manually.
-data "aws_iam_role" "existing_lambda_role" {
+data "" "existing_lambda_role" {
   name = "VulnerabilityIndex-MediaCloud-Lambda-Role"
 }
+*/
 
 /* #IAM Role creation
 resource "aws_iam_role" "lambda_role" {
