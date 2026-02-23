@@ -87,7 +87,7 @@ resource "aws_lambda_function" "mediacloud_ingestion" {
   function_name    = "mediacloud-ingestion-function"
   role            = aws_iam_role.lambda_role.arn
   handler         = "manage.lambda_handler"
-  runtime         = "python3.11"
+  runtime         = "python3.12"
   timeout         = 900  # 15 minutes (maximum for Lambda)
   memory_size     = 3008  # Maximum memory for better performance
 
