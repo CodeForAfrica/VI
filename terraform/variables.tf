@@ -39,7 +39,3 @@ variable "security_group_ids" {
   type    = list(string)
   default = []
 }
-variable "ARN_of_the_Lambda_IAM_role" {
-  type    = string
-  default = "VulnerabilityIndex-MediaCloud-Lambda-Role"
-}
