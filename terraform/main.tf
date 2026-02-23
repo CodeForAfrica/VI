@@ -2,60 +2,33 @@ provider "aws" {
   region = var.aws_region
 }
 
-/*# --- REFERENCE EXISTING ROLE ---
-# use a data source to fetch the role created manually.
-data "" "existing_lambda_role" {
-  name = "VulnerabilityIndex-MediaCloud-Lambda-Role"
-}
-*/
-
-/* #IAM Role creation
-resource "aws_iam_role" "lambda_role" {
-  name = "mediacloud_lambda_role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-# IAM Policy attachment
-resource "aws_iam_role_policy" "lambda_policy" {
-  name = "mediacloud_lambda_policy"
-  role = aws_iam_role.lambda_role.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [...] # (Your policy statements)
-  })
-}
-*/
-
 # --- LAMBDA LAYER ---
+# We comment this out so Terraform doesn't try to upload the 720MB zip
+/*
 resource "aws_lambda_layer_version" "dependencies" {
   filename   = "lambda_layer.zip"
   layer_name = "mediacloud-dependencies"
-
   compatible_runtimes = ["python3.9", "python3.10", "python3.11", "python3.12"]
 }
+*/
 
 # --- LAMBDA FUNCTION ---
 resource "aws_lambda_function" "mediacloud_ingestion" {
-  filename      = "deployment_package.zip"
-  function_name = "mediacloud-ingestion-function"
+  filename         = "deployment_package.zip"
+  source_code_hash = filebase64sha256("deployment_package.zip")
+  function_name    = "mediacloud-ingestion-function"
   
-  # Point to the DATA source ARN instead of a RESOURCE ARN
-  role          = var.lambda_role_arn
+  role             = var.lambda_role_arn
   
-  handler       = "manage.lambda_handler"
-  runtime       = "python3.12"
-  timeout       = 900
-  memory_size   = 3008
+  # UPDATE: Changed from manage.lambda_handler to your actual script name
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 900
+  memory_size      = 3008
 
+  # UPDATE: Reference the ARN 
   layers = [
-    aws_lambda_layer_version.dependencies.arn
+    "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   ]
 
   environment {
