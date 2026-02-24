@@ -1,16 +1,18 @@
-# Define variables
-IMAGE_NAME = vulnerability-tool
-REGION = us-east-1 # Change to your region
-ACCOUNT_ID = 123456789012 # Change to your AWS Account ID
+# Default configuration
+IMAGE_NAME ?= vulnerability-tool
+REGION     ?= us-west-1
+ACCOUNT_ID ?= 499665620971
+ECR_REGISTRY = $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
+ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 
 .PHONY: build push
 
-# Now, 'make build' just runs the Docker command
+# Build the image
 build:
-	docker build -t $(IMAGE_NAME) .
+	docker build -t $(IMAGE_NAME):latest .
 
-# 'make push' handles authentication and deployment
+# Login to ECR and push the image
 push:
-	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
-	docker tag $(IMAGE_NAME):latest $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME):latest
-	docker push $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME):latest
+	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_REGISTRY)
+	docker tag $(IMAGE_NAME):latest $(ECR_URI):latest
+	docker push $(ECR_URI):latest
