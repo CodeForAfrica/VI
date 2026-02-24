@@ -3,7 +3,7 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (required for psycopg2/math libraries)
+# Install system dependencies for database (psycopg2) and networking
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Expose Django port
+# Expose port 8000 for Django/Gunicorn
 EXPOSE 8000
 
-# Start Gunicorn (Production server)
+# Start Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "dashboard.wsgi:application"]
