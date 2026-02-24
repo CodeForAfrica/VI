@@ -16,3 +16,5 @@ deployment_package.zip
 # --- Build Artifacts ---
 *.zip
 lambda_layer/
+# Keep the lock file
+!terraform/.terraform.lock.hcl
