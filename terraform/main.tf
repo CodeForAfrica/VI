@@ -23,8 +23,8 @@ resource "aws_lambda_function" "my_lambda" {
   
   image_uri     = "${aws_ecr_repository.vulnerability_repo.repository_url}:latest"
   
-  memory_size   = 2048
-  timeout       = 300
+  memory_size   = 3008
+  timeout       = 900
 
   environment {
     variables = {
