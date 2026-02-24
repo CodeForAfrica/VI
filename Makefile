@@ -1,29 +1,16 @@
 # Define variables
-PYTHON_PKG_DIR = layer_build/python/lib/python3.11/site-packages
-LAYER_ZIP = terraform/lambda_layer.zip
+IMAGE_NAME = vulnerability-tool
+REGION = us-east-1 # Change to your region
+ACCOUNT_ID = 123456789012 # Change to your AWS Account ID
 
-.PHONY: build_layer clean
+.PHONY: build push
 
-build_layer:
-	@echo "--- Cleaning old build artifacts ---"
-	rm -rf layer_build
-	mkdir -p $(PYTHON_PKG_DIR)
-	
-	@echo "--- Installing dependencies ---"
-	# We use --only-binary=:all: to ensure we get the smaller, pre-compiled wheels
-	pip install pandas numpy scikit-learn trafilatura torch -t $(PYTHON_PKG_DIR) \
-		--only-binary=:all: --platform manylinux2014_x86_64
-	
-	@echo "--- Pruning unnecessary files to reduce size ---"
-	find layer_build/ -type d -name "tests" -exec rm -rf {} +
-	find layer_build/ -type d -name "__pycache__" -exec rm -rf {} +
-	find layer_build/ -type d -name "*.dist-info" -exec rm -rf {} +
-	find layer_build/ -name "*.so" -exec strip {} \;
-	
-	@echo "--- Zipping the layer ---"
-	cd layer_build && zip -r9 ../$(LAYER_ZIP) .
-	@echo "Successfully created $(LAYER_ZIP)"
+# Now, 'make build' just runs the Docker command
+build:
+	docker build -t $(IMAGE_NAME) .
 
-clean:
-	rm -rf layer_build
-	rm -f $(LAYER_ZIP)
+# 'make push' handles authentication and deployment
+push:
+	aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
+	docker tag $(IMAGE_NAME):latest $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME):latest
+	docker push $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(IMAGE_NAME):latest
