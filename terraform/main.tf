@@ -64,3 +64,14 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily_ingestion.arn
 }
+resource "aws_ecr_repository" "vulnerability_repo" {
+  name = "vulnerability-tool"
+}
+
+resource "aws_lambda_function" "my_lambda" {
+  function_name = "vulnerability-tool"
+  package_type  = "Image"
+  image_uri     = "${aws_ecr_repository.vulnerability_repo.repository_url}:latest"
+  memory_size   = 2048 # High memory is recommended for Torch/Transformers
+  timeout       = 300
+}
