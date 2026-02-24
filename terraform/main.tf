@@ -2,12 +2,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- LOOKUP EXISTING IAM ROLE ---
-# This looks up the existing role by name provided by your environment.
-data "aws_iam_role" "existing_role" {
-  name = "VulnerabilityIndex-MediaCloud-Lambda-Role"
-}
-
 # --- ECR REPOSITORY ---
 resource "aws_ecr_repository" "vulnerability_repo" {
   name = "vulnerability-tool"
@@ -18,8 +12,8 @@ resource "aws_lambda_function" "my_lambda" {
   function_name = "vulnerability-tool"
   package_type  = "Image"
   
-  # Reference the ARN from the existing role lookup
-  role          = data.aws_iam_role.existing_role.arn
+  # Directly provide the string to avoid permission checks
+  role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
   image_uri     = "${aws_ecr_repository.vulnerability_repo.repository_url}:latest"
   
