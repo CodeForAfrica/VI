@@ -6,5 +6,13 @@ staticfiles/
 db.sqlite3
 lambda_dist/
 deployment_package.zip
+
+# --- Terraform ---
 .terraform/
-terraform.tfstate*
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# --- Build Artifacts ---
+*.zip
+lambda_layer/
