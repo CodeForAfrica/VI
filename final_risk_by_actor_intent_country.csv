@@ -1,0 +1,441 @@
+intent,actor,country,FinalRisk
+Economic,China,Senegal,0.0816245140820455
+Economic,China,DRC,0.5536375606503081
+Economic,China,CoteIvoire,0.07184373676134936
+Economic,China,Ethiopia,0.5951291040084087
+Economic,China,South Africa,0.08583547676092658
+Economic,France,Senegal,0.025111096562747612
+Economic,France,DRC,0.050004805574020775
+Economic,France,CoteIvoire,0.12062157762890821
+Economic,France,Ethiopia,0.07822668050999665
+Economic,France,South Africa,0.024210656801892553
+Economic,UnitedStates,Senegal,0.221985283020336
+Economic,UnitedStates,DRC,0.0724470836348341
+Economic,UnitedStates,CoteIvoire,0.03713951584220195
+Economic,UnitedStates,Ethiopia,0.12241250295467827
+Economic,UnitedStates,South Africa,0.17843579977260465
+Economic,Russia,Senegal,1.012959114642212e-06
+Economic,Russia,DRC,0.10000458092413284
+Economic,Russia,CoteIvoire,1.3545413723973928e-06
+Economic,Russia,Ethiopia,0.0641861361627246
+Economic,Russia,South Africa,0.03358038661204161
+Economic,Rwanda,Senegal,5.222666227164533e-07
+Economic,Rwanda,DRC,0.023628509089299046
+Economic,Rwanda,CoteIvoire,1.192600649346787e-07
+Economic,Rwanda,Ethiopia,0.08442444065608151
+Economic,Rwanda,South Africa,0.08715088863622737
+Economic,Saudi,Senegal,0.018173599126692395
+Economic,Saudi,DRC,0.023628509089299046
+Economic,Saudi,CoteIvoire,0.03713951584220195
+Economic,Saudi,Ethiopia,0.2104305270107883
+Economic,Saudi,South Africa,0.12366485309077828
+Economic,Turkey,Senegal,1.329657302171972e-06
+Economic,Turkey,DRC,0.023628509089299046
+Economic,Turkey,CoteIvoire,1.1030954680232222e-06
+Economic,Turkey,Ethiopia,0.3008010788917843
+Economic,Turkey,South Africa,0.05000309020220218
+Economic,UAE,Senegal,0.001953358065261251
+Economic,UAE,DRC,0.023628509089299046
+Economic,UAE,CoteIvoire,3.086456937186692e-07
+Economic,UAE,Ethiopia,0.2551262554358564
+Economic,UAE,South Africa,0.09078212021436485
+Economic,Israel,Senegal,1.6932601738517403e-06
+Economic,Israel,DRC,0.023628509089299046
+Economic,Israel,CoteIvoire,3.780555744015146e-07
+Economic,Israel,Ethiopia,0.13038633373514621
+Economic,Israel,South Africa,0.14192183531805375
+Economic,Iran,Senegal,4.753201210405678e-07
+Economic,Iran,DRC,0.023628509089299046
+Economic,Iran,CoteIvoire,0.03713951584220195
+Economic,Iran,Ethiopia,0.08449768670082902
+Economic,Iran,South Africa,0.11453636197714055
+Economic,NonState,Senegal,0.06420129244920936
+Economic,NonState,DRC,0.0724470836348341
+Economic,NonState,CoteIvoire,0.08528254005009187
+Economic,NonState,Ethiopia,0.13020321862327744
+Economic,NonState,South Africa,0.8995865977499851
+Sovereignty,China,Senegal,0.2616596520374158
+Sovereignty,China,DRC,0.22462639895105346
+Sovereignty,China,CoteIvoire,0.11582971986071527
+Sovereignty,China,Ethiopia,0.2133859308998476
+Sovereignty,China,South Africa,0.17342321821138998
+Sovereignty,France,Senegal,0.09800036544981099
+Sovereignty,France,DRC,0.3177712343138862
+Sovereignty,France,CoteIvoire,0.40774305046828924
+Sovereignty,France,Ethiopia,0.0698371045284636
+Sovereignty,France,South Africa,0.31777826511341434
+Sovereignty,UnitedStates,Senegal,0.3053796933353864
+Sovereignty,UnitedStates,DRC,0.28906746205723977
+Sovereignty,UnitedStates,CoteIvoire,0.5358293329060888
+Sovereignty,UnitedStates,Ethiopia,0.2859991407363193
+Sovereignty,UnitedStates,South Africa,0.4360060636964499
+Sovereignty,Russia,Senegal,0.05570730047950298
+Sovereignty,Russia,DRC,0.22454279363369223
+Sovereignty,Russia,CoteIvoire,0.1202481243767485
+Sovereignty,Russia,Ethiopia,0.2104700561637095
+Sovereignty,Russia,South Africa,0.2135999887590599
+Sovereignty,Rwanda,Senegal,0.0716397333614348
+Sovereignty,Rwanda,DRC,0.2551358099925478
+Sovereignty,Rwanda,CoteIvoire,0.04800533109810195
+Sovereignty,Rwanda,Ethiopia,0.004506865366434917
+Sovereignty,Rwanda,South Africa,0.02213404279134481
+Sovereignty,Saudi,Senegal,0.026639863997439304
+Sovereignty,Saudi,DRC,0.004024404130503745
+Sovereignty,Saudi,CoteIvoire,0.0270283455992821
+Sovereignty,Saudi,Ethiopia,0.16271369737819993
+Sovereignty,Saudi,South Africa,0.05945717092907974
+Sovereignty,Turkey,Senegal,0.02558590444598574
+Sovereignty,Turkey,DRC,0.004522641046896689
+Sovereignty,Turkey,CoteIvoire,0.11290381223281133
+Sovereignty,Turkey,Ethiopia,0.1283543150657667
+Sovereignty,Turkey,South Africa,0.04951415529855889
+Sovereignty,UAE,Senegal,0.035333791280849805
+Sovereignty,UAE,DRC,0.004522641046896689
+Sovereignty,UAE,CoteIvoire,0.044012305385515774
+Sovereignty,UAE,Ethiopia,0.1541787505877926
+Sovereignty,UAE,South Africa,0.23589728730935994
+Sovereignty,Israel,Senegal,0.04392294507101175
+Sovereignty,Israel,DRC,0.004522641046896689
+Sovereignty,Israel,CoteIvoire,0.031957830688916125
+Sovereignty,Israel,Ethiopia,0.1499918775296011
+Sovereignty,Israel,South Africa,0.23860818599020742
+Sovereignty,Iran,Senegal,0.027690403660759262
+Sovereignty,Iran,DRC,0.004522641046896689
+Sovereignty,Iran,CoteIvoire,0.035616998286299786
+Sovereignty,Iran,Ethiopia,0.005076287439445316
+Sovereignty,Iran,South Africa,0.04950433675901709
+Sovereignty,NonState,Senegal,0.02421153166895328
+Sovereignty,NonState,DRC,0.8432964537151223
+Sovereignty,NonState,CoteIvoire,0.06138295634735284
+Sovereignty,NonState,Ethiopia,0.1715369348263262
+Sovereignty,NonState,South Africa,0.18349343135674018
+LGBTQ,China,Senegal,0.15616578530170666
+LGBTQ,China,DRC,0.10726910177739574
+LGBTQ,China,CoteIvoire,0.15720411237282644
+LGBTQ,China,Ethiopia,0.141726559333907
+LGBTQ,China,South Africa,0.14907936239221076
+LGBTQ,France,Senegal,0.2133716073908773
+LGBTQ,France,DRC,0.1336147395429495
+LGBTQ,France,CoteIvoire,0.6413900595273554
+LGBTQ,France,Ethiopia,0.1778873092456339
+LGBTQ,France,South Africa,0.5134438977485516
+LGBTQ,UnitedStates,Senegal,0.22030990705670433
+LGBTQ,UnitedStates,DRC,0.10304616984813365
+LGBTQ,UnitedStates,CoteIvoire,0.16738501910438403
+LGBTQ,UnitedStates,Ethiopia,0.23986167486121765
+LGBTQ,UnitedStates,South Africa,0.5545642235175668
+LGBTQ,Russia,Senegal,0.10225176424444234
+LGBTQ,Russia,DRC,0.04346570032757192
+LGBTQ,Russia,CoteIvoire,0.11474115688483968
+LGBTQ,Russia,Ethiopia,0.17913227123059097
+LGBTQ,Russia,South Africa,0.243002884659673
+LGBTQ,Rwanda,Senegal,0.10555632868680388
+LGBTQ,Rwanda,DRC,0.17184172117125077
+LGBTQ,Rwanda,CoteIvoire,0.06366396929964953
+LGBTQ,Rwanda,Ethiopia,0.07332065504612113
+LGBTQ,Rwanda,South Africa,0.14600250011304894
+LGBTQ,Saudi,Senegal,0.131878060130747
+LGBTQ,Saudi,DRC,0.03643127364808757
+LGBTQ,Saudi,CoteIvoire,0.10985408369412782
+LGBTQ,Saudi,Ethiopia,0.11581969986896248
+LGBTQ,Saudi,South Africa,0.1315916839007233
+LGBTQ,Turkey,Senegal,0.07872198364438229
+LGBTQ,Turkey,DRC,0.04300310072676905
+LGBTQ,Turkey,CoteIvoire,0.13121744841884114
+LGBTQ,Turkey,Ethiopia,0.12202673780174837
+LGBTQ,Turkey,South Africa,0.14807157773689536
+LGBTQ,UAE,Senegal,0.12893098497520858
+LGBTQ,UAE,DRC,0.04416375956468072
+LGBTQ,UAE,CoteIvoire,0.19783813156859403
+LGBTQ,UAE,Ethiopia,0.1699948876570909
+LGBTQ,UAE,South Africa,0.19998475872815963
+LGBTQ,Israel,Senegal,0.21006351970679515
+LGBTQ,Israel,DRC,0.03483963648487934
+LGBTQ,Israel,CoteIvoire,0.09419278495576444
+LGBTQ,Israel,Ethiopia,0.1417853609679306
+LGBTQ,Israel,South Africa,0.3112465260143832
+LGBTQ,Iran,Senegal,0.27589202979207034
+LGBTQ,Iran,DRC,0.036349097764895054
+LGBTQ,Iran,CoteIvoire,0.1121488333854096
+LGBTQ,Iran,Ethiopia,0.0755283595916569
+LGBTQ,Iran,South Africa,0.12240217791025473
+LGBTQ,NonState,Senegal,0.12669570624916307
+LGBTQ,NonState,DRC,0.0530085460846106
+LGBTQ,NonState,CoteIvoire,0.14184438304809058
+LGBTQ,NonState,Ethiopia,0.1419635694871492
+LGBTQ,NonState,South Africa,0.35903195716481956
+Religious,China,Senegal,0.27196005481196867
+Religious,China,DRC,0.24072263067751615
+Religious,China,CoteIvoire,0.10579747369578121
+Religious,China,Ethiopia,0.23259907438445207
+Religious,China,South Africa,0.23299282150332098
+Religious,France,Senegal,0.20852706486408468
+Religious,France,DRC,0.32477679624468836
+Religious,France,CoteIvoire,0.6058912935936831
+Religious,France,Ethiopia,0.1506447594982699
+Religious,France,South Africa,0.5983657327325449
+Religious,UnitedStates,Senegal,0.4750538601451494
+Religious,UnitedStates,DRC,0.29516660171902664
+Religious,UnitedStates,CoteIvoire,0.5464533971615353
+Religious,UnitedStates,Ethiopia,0.4241934282674222
+Religious,UnitedStates,South Africa,0.43396349312246135
+Religious,Russia,Senegal,0.060997382751716005
+Religious,Russia,DRC,0.22545755778858076
+Religious,Russia,CoteIvoire,0.11709339381754369
+Religious,Russia,Ethiopia,0.3303229858385735
+Religious,Russia,South Africa,0.2132193274185203
+Religious,Rwanda,Senegal,0.05424674594670876
+Religious,Rwanda,DRC,0.26152605165607534
+Religious,Rwanda,CoteIvoire,0.047009537531994244
+Religious,Rwanda,Ethiopia,0.0007695067547455666
+Religious,Rwanda,South Africa,0.018592585869679375
+Religious,Saudi,Senegal,0.05264307678739667
+Religious,Saudi,DRC,0.012568948000330864
+Religious,Saudi,CoteIvoire,0.04929798499678848
+Religious,Saudi,Ethiopia,0.19728483709297898
+Religious,Saudi,South Africa,0.05605088411892825
+Religious,Turkey,Senegal,0.09447132771316166
+Religious,Turkey,DRC,0.013062910507584324
+Religious,Turkey,CoteIvoire,0.06209068740965329
+Religious,Turkey,Ethiopia,0.19063474753581083
+Religious,Turkey,South Africa,0.04870398413911568
+Religious,UAE,Senegal,0.023648837574326207
+Religious,UAE,DRC,0.013062910507584324
+Religious,UAE,CoteIvoire,0.03572980407168505
+Religious,UAE,Ethiopia,0.23392189715687853
+Religious,UAE,South Africa,0.23563677674951214
+Religious,Israel,Senegal,0.017727380104362936
+Religious,Israel,DRC,0.013062910507584324
+Religious,Israel,CoteIvoire,0.022814632538938832
+Religious,Israel,Ethiopia,0.24163053146374705
+Religious,Israel,South Africa,0.23585071571532287
+Religious,Iran,Senegal,0.01375493836030363
+Religious,Iran,DRC,0.013062910507584324
+Religious,Iran,CoteIvoire,0.057690058269200185
+Religious,Iran,Ethiopia,0.005765659220971839
+Religious,Iran,South Africa,0.046062004585795215
+Religious,NonState,Senegal,0.04304958895739563
+Religious,NonState,DRC,0.8446408243315727
+Religious,NonState,CoteIvoire,0.08286627808643529
+Religious,NonState,Ethiopia,0.16842665363665926
+Religious,NonState,South Africa,0.18053635649613128
+ElectionInfluence,China,Senegal,0.22919165776603284
+ElectionInfluence,China,DRC,0.2218826269815859
+ElectionInfluence,China,CoteIvoire,0.08324298669807484
+ElectionInfluence,China,Ethiopia,0.21263997836083312
+ElectionInfluence,China,South Africa,0.17273846999450357
+ElectionInfluence,France,Senegal,0.0722624584717608
+ElectionInfluence,France,DRC,0.31324324324324326
+ElectionInfluence,France,CoteIvoire,0.3963749549266066
+ElectionInfluence,France,Ethiopia,0.0680110497237569
+ElectionInfluence,France,South Africa,0.31686676135259556
+ElectionInfluence,UnitedStates,Senegal,0.2899242219135512
+ElectionInfluence,UnitedStates,DRC,0.28655172413793106
+ElectionInfluence,UnitedStates,CoteIvoire,0.527109375
+ElectionInfluence,UnitedStates,Ethiopia,0.28276666666666667
+ElectionInfluence,UnitedStates,South Africa,0.43333333333333335
+ElectionInfluence,Russia,Senegal,0.0125
+ElectionInfluence,Russia,DRC,0.21971800791556728
+ElectionInfluence,Russia,CoteIvoire,0.07766608391608391
+ElectionInfluence,Russia,Ethiopia,0.20960540540540543
+ElectionInfluence,Russia,South Africa,0.2125301204819277
+ElectionInfluence,Rwanda,Senegal,0.005000000000000001
+ElectionInfluence,Rwanda,DRC,0.2525
+ElectionInfluence,Rwanda,CoteIvoire,0.043750000000000004
+ElectionInfluence,Rwanda,Ethiopia,0.0
+ElectionInfluence,Rwanda,South Africa,0.0175
+ElectionInfluence,Saudi,Senegal,0.0049823633156966494
+ElectionInfluence,Saudi,DRC,0.0005
+ElectionInfluence,Saudi,CoteIvoire,0.00875
+ElectionInfluence,Saudi,Ethiopia,0.15892307692307692
+ElectionInfluence,Saudi,South Africa,0.055
+ElectionInfluence,Turkey,Senegal,0.0025
+ElectionInfluence,Turkey,DRC,0.001
+ElectionInfluence,Turkey,CoteIvoire,0.0175
+ElectionInfluence,Turkey,Ethiopia,0.1272
+ElectionInfluence,Turkey,South Africa,0.0475
+ElectionInfluence,UAE,Senegal,0.003215992588333014
+ElectionInfluence,UAE,DRC,0.001
+ElectionInfluence,UAE,CoteIvoire,0.0175
+ElectionInfluence,UAE,Ethiopia,0.15293086419753085
+ElectionInfluence,UAE,South Africa,0.23500000000000001
+ElectionInfluence,Israel,Senegal,0.0015
+ElectionInfluence,Israel,DRC,0.001
+ElectionInfluence,Israel,CoteIvoire,0.0175
+ElectionInfluence,Israel,Ethiopia,0.146143661971831
+ElectionInfluence,Israel,South Africa,0.23500000000000001
+ElectionInfluence,Iran,Senegal,0.001
+ElectionInfluence,Iran,DRC,0.001
+ElectionInfluence,Iran,CoteIvoire,0.0175
+ElectionInfluence,Iran,Ethiopia,0.000572
+ElectionInfluence,Iran,South Africa,0.045
+ElectionInfluence,NonState,Senegal,0.0025
+ElectionInfluence,NonState,DRC,0.842741935483871
+ElectionInfluence,NonState,CoteIvoire,0.043750000000000004
+ElectionInfluence,NonState,Ethiopia,0.16778625954198473
+ElectionInfluence,NonState,South Africa,0.17962406015037594
+MilitaryPresence,China,Senegal,0.31210997456486006
+MilitaryPresence,China,DRC,0.3037835652112183
+MilitaryPresence,China,CoteIvoire,0.009167899237346892
+MilitaryPresence,China,Ethiopia,0.2828853754940711
+MilitaryPresence,China,South Africa,0.19160770499175536
+MilitaryPresence,France,Senegal,0.008357142857142856
+MilitaryPresence,France,DRC,0.33
+MilitaryPresence,France,CoteIvoire,0.1418389889968157
+MilitaryPresence,France,Ethiopia,0.0016
+MilitaryPresence,France,South Africa,0.3309443861490032
+MilitaryPresence,UnitedStates,Senegal,0.34594868985453187
+MilitaryPresence,UnitedStates,DRC,0.33
+MilitaryPresence,UnitedStates,CoteIvoire,0.66
+MilitaryPresence,UnitedStates,Ethiopia,0.3304
+MilitaryPresence,UnitedStates,South Africa,0.66
+MilitaryPresence,Russia,Senegal,0.0
+MilitaryPresence,Russia,DRC,0.33
+MilitaryPresence,Russia,CoteIvoire,0.1
+MilitaryPresence,Russia,Ethiopia,0.2502
+MilitaryPresence,Russia,South Africa,0.33
+MilitaryPresence,Rwanda,Senegal,0.0
+MilitaryPresence,Rwanda,DRC,0.33
+MilitaryPresence,Rwanda,CoteIvoire,0.0
+MilitaryPresence,Rwanda,Ethiopia,0.0
+MilitaryPresence,Rwanda,South Africa,0.0
+MilitaryPresence,Saudi,Senegal,0.003273809523809524
+MilitaryPresence,Saudi,DRC,0.0
+MilitaryPresence,Saudi,CoteIvoire,0.0
+MilitaryPresence,Saudi,Ethiopia,0.227
+MilitaryPresence,Saudi,South Africa,0.0
+MilitaryPresence,Turkey,Senegal,0.0
+MilitaryPresence,Turkey,DRC,0.0
+MilitaryPresence,Turkey,CoteIvoire,0.0
+MilitaryPresence,Turkey,Ethiopia,0.1658
+MilitaryPresence,Turkey,South Africa,0.0
+MilitaryPresence,UAE,Senegal,0.0019523809523809524
+MilitaryPresence,UAE,DRC,0.0
+MilitaryPresence,UAE,CoteIvoire,0.0
+MilitaryPresence,UAE,Ethiopia,0.16540000000000002
+MilitaryPresence,UAE,South Africa,0.33
+MilitaryPresence,Israel,Senegal,0.0
+MilitaryPresence,Israel,DRC,0.0
+MilitaryPresence,Israel,CoteIvoire,0.0
+MilitaryPresence,Israel,Ethiopia,0.1652
+MilitaryPresence,Israel,South Africa,0.33
+MilitaryPresence,Iran,Senegal,0.0
+MilitaryPresence,Iran,DRC,0.0
+MilitaryPresence,Iran,CoteIvoire,0.0
+MilitaryPresence,Iran,Ethiopia,8e-05
+MilitaryPresence,Iran,South Africa,0.0
+MilitaryPresence,NonState,Senegal,0.0
+MilitaryPresence,NonState,DRC,1.0
+MilitaryPresence,NonState,CoteIvoire,0.0
+MilitaryPresence,NonState,Ethiopia,0.33
+MilitaryPresence,NonState,South Africa,0.33
+ResourceDependency,China,Senegal,0.08162330290125093
+ResourceDependency,China,DRC,0.5428354437783187
+ResourceDependency,China,CoteIvoire,0.07184255923484971
+ResourceDependency,China,Ethiopia,0.5943873517786561
+ResourceDependency,China,South Africa,0.08583420776495279
+ResourceDependency,France,Senegal,0.02511001642036125
+ResourceDependency,France,DRC,0.05
+ResourceDependency,France,CoteIvoire,0.12062072220450727
+ResourceDependency,France,Ethiopia,0.06595155709342561
+ResourceDependency,France,South Africa,0.024206265927147353
+ResourceDependency,UnitedStates,Senegal,0.2101784548675867
+ResourceDependency,UnitedStates,DRC,0.05
+ResourceDependency,UnitedStates,CoteIvoire,0.0
+ResourceDependency,UnitedStates,Ethiopia,0.041490909090909085
+ResourceDependency,UnitedStates,South Africa,0.1
+ResourceDependency,Russia,Senegal,0.0
+ResourceDependency,Russia,DRC,0.1
+ResourceDependency,Russia,CoteIvoire,0.0
+ResourceDependency,Russia,Ethiopia,0.0502
+ResourceDependency,Russia,South Africa,0.03
+ResourceDependency,Rwanda,Senegal,0.0
+ResourceDependency,Rwanda,DRC,0.0
+ResourceDependency,Rwanda,CoteIvoire,0.0
+ResourceDependency,Rwanda,Ethiopia,0.0
+ResourceDependency,Rwanda,South Africa,0.0
+ResourceDependency,Saudi,Senegal,0.003273809523809524
+ResourceDependency,Saudi,DRC,0.0
+ResourceDependency,Saudi,CoteIvoire,0.0
+ResourceDependency,Saudi,Ethiopia,0.137625
+ResourceDependency,Saudi,South Africa,0.04
+ResourceDependency,Turkey,Senegal,0.0
+ResourceDependency,Turkey,DRC,0.0
+ResourceDependency,Turkey,CoteIvoire,0.0
+ResourceDependency,Turkey,Ethiopia,0.3008
+ResourceDependency,Turkey,South Africa,0.05
+ResourceDependency,UAE,Senegal,0.0019523809523809524
+ResourceDependency,UAE,DRC,0.0
+ResourceDependency,UAE,CoteIvoire,0.0
+ResourceDependency,UAE,Ethiopia,0.2504
+ResourceDependency,UAE,South Africa,0.09
+ResourceDependency,Israel,Senegal,0.0
+ResourceDependency,Israel,DRC,0.0
+ResourceDependency,Israel,CoteIvoire,0.0
+ResourceDependency,Israel,Ethiopia,0.0502
+ResourceDependency,Israel,South Africa,0.06
+ResourceDependency,Iran,Senegal,0.0
+ResourceDependency,Iran,DRC,0.0
+ResourceDependency,Iran,CoteIvoire,0.0
+ResourceDependency,Iran,Ethiopia,8e-05
+ResourceDependency,Iran,South Africa,0.03
+ResourceDependency,NonState,Senegal,0.05
+ResourceDependency,NonState,DRC,0.05
+ResourceDependency,NonState,CoteIvoire,0.05
+ResourceDependency,NonState,Ethiopia,0.05
+ResourceDependency,NonState,South Africa,0.89
+SocialFragility,China,Senegal,0.28881910062151356
+SocialFragility,China,DRC,0.36504413084421117
+SocialFragility,China,CoteIvoire,0.243752434730634
+SocialFragility,China,Ethiopia,0.27904281033976175
+SocialFragility,China,South Africa,0.22315241405996386
+SocialFragility,France,Senegal,0.3133342639429476
+SocialFragility,France,DRC,0.3596428085604467
+SocialFragility,France,CoteIvoire,0.31869231183679736
+SocialFragility,France,Ethiopia,0.35856503419396024
+SocialFragility,France,South Africa,0.30848666555979565
+SocialFragility,UnitedStates,Senegal,0.33508488187484503
+SocialFragility,UnitedStates,DRC,0.26668508118821943
+SocialFragility,UnitedStates,CoteIvoire,0.500897984534578
+SocialFragility,UnitedStates,Ethiopia,0.3496884353741497
+SocialFragility,UnitedStates,South Africa,0.5032463218969243
+SocialFragility,Russia,Senegal,0.12783673469387757
+SocialFragility,Russia,DRC,0.38767905073409703
+SocialFragility,Russia,CoteIvoire,0.11638209134582755
+SocialFragility,Russia,Ethiopia,0.33504829931972785
+SocialFragility,Russia,South Africa,0.34009651981727135
+SocialFragility,Rwanda,Senegal,0.06391836734693879
+SocialFragility,Rwanda,DRC,0.40700000000000003
+SocialFragility,Rwanda,CoteIvoire,0.07751020408163264
+SocialFragility,Rwanda,Ethiopia,0.0388265306122449
+SocialFragility,Rwanda,South Africa,0.10685714285714284
+SocialFragility,Saudi,Senegal,0.051778857253426194
+SocialFragility,Saudi,DRC,0.008642857142857143
+SocialFragility,Saudi,CoteIvoire,0.012918367346938775
+SocialFragility,Saudi,Ethiopia,0.1981969877734204
+SocialFragility,Saudi,South Africa,0.22342857142857142
+SocialFragility,Turkey,Senegal,0.10653061224489797
+SocialFragility,Turkey,DRC,0.017285714285714286
+SocialFragility,Turkey,CoteIvoire,0.012918367346938775
+SocialFragility,Turkey,Ethiopia,0.21407074829931974
+SocialFragility,Turkey,South Africa,0.22342857142857142
+SocialFragility,UAE,Senegal,0.04177061766948896
+SocialFragility,UAE,DRC,0.017285714285714286
+SocialFragility,UAE,CoteIvoire,0.012918367346938775
+SocialFragility,UAE,Ethiopia,0.26557278911564625
+SocialFragility,UAE,South Africa,0.32233923598339553
+SocialFragility,Israel,Senegal,0.05326530612244899
+SocialFragility,Israel,DRC,0.017285714285714286
+SocialFragility,Israel,CoteIvoire,0.012918367346938775
+SocialFragility,Israel,Ethiopia,0.16340227285795175
+SocialFragility,Israel,South Africa,0.33985714285714286
+SocialFragility,Iran,Senegal,0.04261224489795919
+SocialFragility,Iran,DRC,0.017285714285714286
+SocialFragility,Iran,CoteIvoire,0.012918367346938775
+SocialFragility,Iran,Ethiopia,0.00117304786821301
+SocialFragility,Iran,South Africa,0.20399999999999996
+SocialFragility,NonState,Senegal,0.22371428571428573
+SocialFragility,NonState,DRC,0.7765714285714286
+SocialFragility,NonState,CoteIvoire,0.28420408163265304
+SocialFragility,NonState,Ethiopia,0.39802027507079607
+SocialFragility,NonState,South Africa,0.3179392728090958
