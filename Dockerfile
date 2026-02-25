@@ -9,7 +9,8 @@ WORKDIR /app
 # Combine update and installation into ONE command to ensure consistency.
 # Including 'pkgconf' as it is the modern equivalent of 'pkg-config'.
 # We also add 'libffi-dev' and 'libssl-dev' which are often required for cryptography/pyHanko.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
     libcairo2-dev \
@@ -17,8 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     libpq-dev \
     libffi-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libssl-dev && \
+    # VERIFY: If these commands fail, the build will stop immediately
+    command -v pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip first to use the latest dependency resolver
 RUN pip install --no-cache-dir --upgrade pip
