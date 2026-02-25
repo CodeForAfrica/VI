@@ -11,9 +11,9 @@ WORKDIR /app
 # We also add 'libffi-dev' and 'libssl-dev' which are often required for cryptography/pyHanko.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libcairo2-dev \
     pkg-config \
-    pkgconf \
+    libcairo2-dev \
+    libgirepository1.0-dev \
     python3-dev \
     libpq-dev \
     libffi-dev \
