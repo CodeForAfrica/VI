@@ -7,10 +7,9 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Combine update and installation of system dependencies in ONE command.
-# This includes Cairo (libcairo2-dev) and GObject Introspection (libgirepository1.0-dev)
-# which are required for pycairo (needed by xhtml2pdf via svglib).
-# Also include pkg-config (modern name for pkgconf), build tools, Python dev headers,
-# PostgreSQL dev headers (libpq-dev), libffi-dev, and libssl-dev.
+# Install pkg-config, Cairo dev libraries, GObject Introspection, build tools,
+# Python dev headers, PostgreSQL dev headers, libffi-dev, and libssl-dev.
+# Also install pkgconf explicitly as the underlying tool.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -21,16 +20,16 @@ RUN apt-get update && \
     libpq-dev \
     libffi-dev \
     libssl-dev \
-    # Explicitly install pkgconf as pkg-config might be an alias or symlink
     pkgconf \
-    # Install pkg-config data files for cairo if needed (sometimes necessary)
-    # libcairo-gobject2 might also be needed depending on the exact build process
+    # Install pkg-config data files for cairo explicitly (sometimes needed)
     libcairo-gobject2 \
     && \
+    # Verify pkg-config binary exists and is in PATH during build
+    command -v pkg-config && \
+    # Verify pkg-config can find cairo libraries during build
+    pkg-config --exists cairo && \
     # Clean up apt cache to reduce image size
-    rm -rf /var/lib/apt/lists/* \
-    # Verify that pkg-config can find cairo (optional, for debugging during build)
-    && pkg-config --exists cairo || echo "Warning: pkg-config cannot find cairo, but continuing..."
+    rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip first to use the latest dependency resolver
 RUN pip install --no-cache-dir --upgrade pip
@@ -38,8 +37,9 @@ RUN pip install --no-cache-dir --upgrade pip
 # Copy requirements.txt
 COPY requirements.txt .
 
-# Now install Python requirements using pip
+# Install Python requirements using pip
 # The system dependencies installed above should make pycairo build successfully
+# if pkg-config can find the libraries.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project files
