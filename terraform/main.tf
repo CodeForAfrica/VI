@@ -10,7 +10,7 @@ resource "aws_lambda_function" "my_lambda" {
   # Directly provide the string to avoid permission checks
   role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
-  image_uri = "your-dockerhub-username/vulnerability-tool:latest"
+  image_uri = "hannateshager/vulnerability-tool:latest"
 
   # This tells the Lambda to run your function, ignoring the Gunicorn CMD in the Dockerfile
   image_config {
