@@ -28,6 +28,10 @@ RUN apt-get update && \
     command -v pkg-config && \
     # Verify pkg-config can find cairo libraries during build
     pkg-config --exists cairo && \
+    # Print the PATH where pkg-config was found (debugging aid)
+    echo "pkg-config found at: $(which pkg-config)" && \
+    # Print where Cairo.pc might be (debugging aid)
+    find /usr -name cairo.pc -type f 2>/dev/null && \
     # Clean up apt cache to reduce image size
     rm -rf /var/lib/apt/lists/*
 
@@ -39,8 +43,12 @@ COPY requirements.txt .
 
 # Install Python requirements using pip
 # The system dependencies installed above should make pycairo build successfully
-# if pkg-config can find the libraries.
-RUN pip install --no-cache-dir -r requirements.txt
+# IF pkg-config is correctly found during the build process.
+# Explicitly set PATH and PKG_CONFIG_PATH for the pip install command.
+# PKG_CONFIG_PATH often points to directories like /usr/lib/pkgconfig or /usr/share/pkgconfig
+RUN PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig:$PKG_CONFIG_PATH" \
+    PATH="$PATH:/usr/bin:/usr/local/bin" \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project files
 COPY . .
