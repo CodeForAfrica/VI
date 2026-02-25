@@ -10,8 +10,8 @@ resource "aws_lambda_function" "my_lambda" {
   
   role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
-  # Public Docker Hub
-  image_uri     = "hannateshager/vulnerability-tool:latest"
+  # FIXED: Use the correct image name
+  image_uri     = "hannateshager/django-vi:latest"
 
   image_config {
     command = ["lambda_function.lambda_handler"]
@@ -21,7 +21,7 @@ resource "aws_lambda_function" "my_lambda" {
   timeout       = 900
 }
 
-  environment {
+environment {
     variables = {
       API_KEY      = var.mediacloud_api_key
       GROQ_API_KEY = var.groq_api_key
