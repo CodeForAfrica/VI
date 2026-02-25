@@ -1,5 +1,5 @@
-# Use an Alpine base image
-FROM python:3.11-alpine
+# Use Debian-based slim image
+FROM python:3.11-slim
 
 # Set environment variables for better Python behavior
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -7,22 +7,19 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies for compilation using apk (Alpine's package manager)
-# Corrected package names for Alpine Linux
-RUN apk add --no-cache \
-    build-base \
-    cairo-dev \
-    cairo-gobject-dev \
-    pkgconf \
-    python3-dev \
-    postgresql-dev \
-    musl-dev \
-    linux-headers \
-    # Additional dependencies that might be needed
-    libffi-dev \
-    openssl-dev
+# Install system dependencies for compilation
+# These are the correct package names for Debian/Ubuntu
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    pkg-config \
+    libcairo2-dev \
+    libgirepository1.0-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip, setuptools, and wheel within the Alpine environment
+# Upgrade pip, setuptools, and wheel
 RUN pip install --upgrade pip setuptools wheel
 
 # Copy requirements.txt
