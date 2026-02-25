@@ -1,12 +1,19 @@
 FROM python:3.11-slim
 
-# Set working directory
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Install system dependencies for database (psycopg2) and networking
+# Install system dependencies
+# Added libpq-dev for PostgreSQL support
 RUN apt-get update && apt-get install -y \
-    libpq-dev \
+    libcairo2-dev \
+    pkg-config \
+    python3-dev \
     gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
@@ -16,8 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Expose port 8000 for Django/Gunicorn
+# Expose port
 EXPOSE 8000
 
 # Start Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "dashboard.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
