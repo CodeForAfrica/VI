@@ -2,11 +2,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- ECR REPOSITORY ---
-resource "aws_ecr_repository" "vulnerability_repo" {
-  name = "vulnerability-tool"
-}
-
 # --- LAMBDA FUNCTION (Container-based) ---
 resource "aws_lambda_function" "my_lambda" {
   function_name = "vulnerability-tool"
@@ -15,7 +10,7 @@ resource "aws_lambda_function" "my_lambda" {
   # Directly provide the string to avoid permission checks
   role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
-  image_uri     = "${aws_ecr_repository.vulnerability_repo.repository_url}:latest"
+  image_uri = "your-dockerhub-username/vulnerability-tool:latest"
   
   memory_size   = 3008
   timeout       = 900
