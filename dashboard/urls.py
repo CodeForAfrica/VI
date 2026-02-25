@@ -15,4 +15,5 @@ urlpatterns = [
     path('generate-report/', views.generate_report, name='generate_report'),
     #path('chatbot-response/', views.chatbot_response, name='chatbot_response'),
     path('chat/', views.chatbot_response, name='chatbot_response'),
+    path('clear-cache/', views.clear_cache_view, name='clear_cache'),
 ]
