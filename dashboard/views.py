@@ -1237,3 +1237,6 @@ def dashboard_home(request):
     }
     return render(request, 'dashboard/home.html', context)
 
+def clear_cache_view(request):
+    cache.clear()
+    return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
