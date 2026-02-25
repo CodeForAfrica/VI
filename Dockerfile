@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Use an Alpine base image
+FROM python:3.11-alpine
 
 # Set environment variables for better Python behavior
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -6,38 +7,28 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies needed for compilation *if* wheels are unavailable,
-# and crucially, for pkg-config to find the libraries (needed for wheel builds too).
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    pkg-config \
-    libcairo2-dev \
-    libgirepository1.0-dev \
+# Install system dependencies for compilation using apk (Alpine's package manager)
+# Includes musl-dev for standard C library headers, which might be needed by Cairo build tools.
+# The names of the packages are often different in Alpine.
+RUN apk add --no-cache \
+    build-base \
+    cairo-dev \
+    glib-dev \
+    pkgconfig \
     python3-dev \
-    libpq-dev \
-    libffi-dev \
-    libssl-dev \
-    pkgconf \
-    libcairo-gobject2 \
-    && \
-    # Verify pkg-config exists and can find cairo (optional, for debugging during build)
-    command -v pkg-config && \
-    pkg-config --exists cairo && \
-    # Clean up apt cache
-    rm -rf /var/lib/apt/lists/*
+    postgresql-dev \
+    musl-dev \
+    linux-headers \
+    # Cairo GObject library (sometimes needed)
+    cairo-gobject-dev
 
-# Upgrade pip, setuptools, and wheel to the latest versions *before* installing requirements.
-# This is the crucial step for Strategy 1 to find pre-compiled wheels effectively.
+# Upgrade pip, setuptools, and wheel within the Alpine environment
 RUN pip install --upgrade pip setuptools wheel
 
 # Copy requirements.txt
 COPY requirements.txt .
 
-# Install Python requirements using pip.
-# With an upgraded pip, this should now preferentially download and install
-# pre-compiled wheels for packages like pycairo (via rlpycairo -> svglib -> xhtml2pdf)
-# if available on PyPI for the target platform (aarch64, cp311).
+# Install Python requirements using pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project files
