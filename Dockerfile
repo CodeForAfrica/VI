@@ -8,19 +8,19 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies for compilation using apk (Alpine's package manager)
-# Includes musl-dev for standard C library headers, which might be needed by Cairo build tools.
-# The names of the packages are often different in Alpine.
+# Corrected package names for Alpine Linux
 RUN apk add --no-cache \
     build-base \
     cairo-dev \
-    glib-dev \
-    pkgconfig \
+    cairo-gobject-dev \
+    pkgconf \
     python3-dev \
     postgresql-dev \
     musl-dev \
     linux-headers \
-    # Cairo GObject library (sometimes needed)
-    cairo-gobject-dev
+    # Additional dependencies that might be needed
+    libffi-dev \
+    openssl-dev
 
 # Upgrade pip, setuptools, and wheel within the Alpine environment
 RUN pip install --upgrade pip setuptools wheel
