@@ -11,6 +11,11 @@ resource "aws_lambda_function" "my_lambda" {
   role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
   image_uri = "your-dockerhub-username/vulnerability-tool:latest"
+
+  # This tells the Lambda to run your function, ignoring the Gunicorn CMD in the Dockerfile
+  image_config {
+    command = ["lambda_function.lambda_handler"]
+  }
   
   memory_size   = 3008
   timeout       = 900
