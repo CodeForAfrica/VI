@@ -2,23 +2,24 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- LAMBDA FUNCTION (Container-based) ---
 resource "aws_lambda_function" "my_lambda" {
   function_name = "vulnerability-tool"
+  
+  # MANDATORY: This tells Lambda to treat this as a container
   package_type  = "Image"
   
-  # Directly provide the string to avoid permission checks
   role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
   
-  image_uri = "hannateshager/vulnerability-tool:latest"
+  # Public Docker Hub
+  image_uri     = "hannateshager/vulnerability-tool:latest"
 
-  # This tells the Lambda to run your function, ignoring the Gunicorn CMD in the Dockerfile
   image_config {
     command = ["lambda_function.lambda_handler"]
   }
   
   memory_size   = 3008
   timeout       = 900
+}
 
   environment {
     variables = {
