@@ -1,7 +1,7 @@
 import logging
 import trafilatura
 from django.core.management.base import BaseCommand
-from dashboard.models import Article
+from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class Command(BaseCommand):
         
         self.stdout.write(f"--- Starting Pipeline (Dry Run: {dry_run}) ---")
         
-        articles = Article.objects.filter(full_text__isnull=True)[:limit]
+        articles = articles = MediaNarrative.objects.filter(article_text__isnull=True)[:limit]
 
         for article in articles:
             try:
