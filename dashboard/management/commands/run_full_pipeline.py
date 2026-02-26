@@ -20,7 +20,7 @@ class Command(BaseCommand):
         
         self.stdout.write(f"--- Starting Pipeline (Dry Run: {dry_run}) ---")
         
-        articles = Article.objects.filter(full_text__isnull=True)[:limit]
+        articles = MediaNarrative.objects.filter(article_text__isnull=True)[:limit]  
 
         for article in articles:
             try:
@@ -50,12 +50,11 @@ class Command(BaseCommand):
                 if dry_run:
                     self.stdout.write(self.style.WARNING(f"[DRY RUN] {msg}"))
                 else:
-                    article.full_text = text
+                    article.article_text = text
                     article.strategic_intent = results['strategic_intent']
                     article.tone = results['tone']
-                    article.vulnerability_score = score
+                    article.vulnerability_index = score
                     article.save()
-                    self.stdout.write(self.style.SUCCESS(f"[SAVED] {msg}"))
                     
             except Exception as e:
                 logger.error(f"Failed to process {article.title}: {e}")
