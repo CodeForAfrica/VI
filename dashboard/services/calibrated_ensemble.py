@@ -318,7 +318,7 @@ class CalibratedStrategicClassifier:
                 print(f"✅ Hybrid calibrator loaded")
             else:
                 # Legacy VennAbersStrategicCalibrator
-                calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
+                calibrator = VennAbersStrategicCalibrator.load_from_file(calibrator_path)
                 print(f"✅ Venn-Abers calibrator loaded")
         else:
             # Fallback to old path for backward compatibility
