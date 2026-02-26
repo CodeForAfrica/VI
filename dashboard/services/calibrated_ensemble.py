@@ -8,6 +8,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from peft import PeftModel
 from sklearn.preprocessing import LabelEncoder
 import joblib
+from dashboard.services.calibrated_ensemble import VennAbersStrategicCalibrator
 
 class VennAbersStrategicCalibrator:
     """Venn-Abers calibrator for strategic intent (from your notebook)"""
