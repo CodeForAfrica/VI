@@ -121,7 +121,7 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
         
-        if not self._download_directory_from_s3('models/calibrated_contrastive_peft/', temp_dir):
+        if not self._download_directory_from_s3('calibrated_contrastive_peft/', temp_dir):
             raise Exception("Failed to download strategic classifier from S3")
         
         from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
@@ -145,7 +145,7 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
-        if not self._download_directory_from_s3('models/calibrated_stacked_ensemble/', temp_dir):
+        if not self._download_directory_from_s3('calibrated_stacked_ensemble/', temp_dir):
             raise Exception("Failed to download tone classifier from S3")
         
         from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
