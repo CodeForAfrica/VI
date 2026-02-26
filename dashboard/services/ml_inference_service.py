@@ -23,16 +23,20 @@ logger = logging.getLogger(__name__)
 class MLInferenceService:
     def __init__(self):
         # Only initialize S3 client if AWS credentials are available
-        if hasattr(settings, 'AWS_ACCESS_KEY_ID') and settings.AWS_ACCESS_KEY_ID and \
-           hasattr(settings, 'AWS_SECRET_ACCESS_KEY') and settings.AWS_SECRET_ACCESS_KEY and \
-           hasattr(settings, 'S3_MODELS_BUCKET') and settings.S3_MODELS_BUCKET:
+        # Check Django settings first, then fall back to environment variables
+        aws_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None) or os.environ.get('AWS_ACCESS_KEY_ID')
+        aws_secret = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None) or os.environ.get('AWS_SECRET_ACCESS_KEY')
+        aws_bucket = getattr(settings, 'S3_MODELS_BUCKET', None) or os.environ.get('S3_MODELS_BUCKET')
+        aws_region = getattr(settings, 'AWS_S3_REGION_NAME', None) or os.environ.get('AWS_S3_REGION_NAME', 'eu-west-1')
+        
+        if aws_key and aws_secret and aws_bucket:
             self.s3_client = boto3.client(
                 's3',
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'eu-west-1')
+                aws_access_key_id=aws_key,
+                aws_secret_access_key=aws_secret,
+                region_name=aws_region
             )
-            self.bucket_name = settings.S3_MODELS_BUCKET
+            self.bucket_name = aws_bucket
         else:
             self.s3_client = None
             self.bucket_name = None
