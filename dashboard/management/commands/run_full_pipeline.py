@@ -1,7 +1,7 @@
 import logging
 import trafilatura
 from django.core.management.base import BaseCommand
-from dashboard.models import Article
+from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
 
 logger = logging.getLogger(__name__)
