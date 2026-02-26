@@ -47,7 +47,7 @@ print("---------------------------------------------")
 # =========================
 
 COUNTRIES = [
-    "Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"
+    "Senegal", "Ethiopia", "Côte d'Ivoire", "CoteIvoire", "DRC", "South Africa"
 ]
 FOREIGN_ACTORS = [
     "US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda"
@@ -61,6 +61,7 @@ INTENT_CHOICES = [
     ('Military presence', 'Military presence'),
     ('Resource Dependency', 'Resource Dependency'),
     ('Social Fragility', 'Social Fragility'),
+    ('ElectionInfluence', 'ElectionInfluence'),
 ]
 
 # =========================
