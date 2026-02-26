@@ -121,9 +121,28 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
         
+        # Download the base model from S3 first
+        base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
+        if not os.path.exists(base_model_dir):
+            os.makedirs(base_model_dir, exist_ok=True)
+            if self.s3_client:
+                try:
+                    base_prefix = 'microsoft_mdeberta-v3-base/'
+                    pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
+                    for obj in pages.get('Contents', []):
+                        key = obj['Key']
+                        filename = key.replace(base_prefix, '')
+                        local_path = os.path.join(base_model_dir, filename)
+                        self.s3_client.download_file(self.bucket_name, key, local_path)
+                    print(f"Downloaded base model to {base_model_dir}")
+                except Exception as e:
+                    print(f"Could not download base model: {e}")
+        
+        # Now download the classifier
         if not self._download_directory_from_s3('calibrated_contrastive_peft/', temp_dir):
             raise Exception("Failed to download strategic classifier from S3")
         
+        # Load the classifier
         from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
         classifier = CalibratedStrategicClassifier.load(temp_dir)
         
@@ -136,7 +155,7 @@ class MLInferenceService:
                 self._strategic_label_encoder = pickle.load(f)
         
         return classifier
-
+        
     def _load_tone_classifier(self):
         """Load calibrated tone classifier from S3"""
         if 'tone' in self._model_cache:
@@ -145,9 +164,28 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
+        # Download the base model from S3 if needed (depends on tone model architecture)
+        base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
+        if not os.path.exists(base_model_dir):
+            os.makedirs(base_model_dir, exist_ok=True)
+            if self.s3_client:
+                try:
+                    base_prefix = 'microsoft_mdeberta-v3-base/'
+                    pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
+                    for obj in pages.get('Contents', []):
+                        key = obj['Key']
+                        filename = key.replace(base_prefix, '')
+                        local_path = os.path.join(base_model_dir, filename)
+                        self.s3_client.download_file(self.bucket_name, key, local_path)
+                    print(f"Downloaded base model to {base_model_dir}")
+                except Exception as e:
+                    print(f"Could not download base model: {e}")
+        
+        # Now download the tone classifier
         if not self._download_directory_from_s3('calibrated_stacked_ensemble/', temp_dir):
             raise Exception("Failed to download tone classifier from S3")
         
+        # Load the classifier
         from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
         classifier = CalibratedStackedEnsemble.load(temp_dir)
         
