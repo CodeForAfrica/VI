@@ -49,10 +49,51 @@ COLLECTIONS = {
 }
 
 QUERY_BY_COUNTRY = {
-    "Ethiopia": '(("infrastructure project" OR "debt relief" OR "railway" OR "industrial park" OR "investment" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease" OR "energy cooperation" OR "mosque" OR "church" OR "religious diplomacy" OR "propaganda" OR "disinformation" OR "social media campaign" OR "broadcast in Amharic") OR ("ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ " OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ"))',
-    "Senegal": '(("multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Senegal" OR "Senegalais" OR "Dakar" OR "Diamniadio" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue")) OR (("tàmbali" OR "jàngoro" OR "politique" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo"OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan") AND ("Senegaal"))',
-    "DRC": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("République démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi")) OR (("bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "5G" OR "Huawei" OR "IA" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya") AND ("RDC"))',
-    "SA": '(("South Africa" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS") AND ("trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism" OR "propaganda" OR "disinformation" OR "5G" OR "Huawei" OR "AI" OR "vaccine")) OR (("iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS") AND ("uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo"))'
+    "Ethiopia": '''
+        (Ethiopia OR "Addis Ababa" OR Amhara OR Oromia OR Tigray) 
+        AND 
+        (China OR Chinese OR Russia OR Russian OR USA OR American OR France OR French 
+         OR Saudi OR Turkish OR Turkey OR UAE OR Israel OR Israeli OR Iran OR Iranian 
+         OR Rwanda OR Rwandan)
+        AND NOT (Olympics OR "World Cup" OR "football" OR "soccer" OR "Premier League" 
+                 OR "Champions League" OR "tennis" OR "marathon" OR "athletics")
+    ''',
+    "Senegal": '''
+        (Senegal OR Dakar OR "Macky Sall" OR "Bassirou Diomaye Faye" OR "Ousmane Sonko") 
+        AND 
+        (China OR Chinese OR Russia OR Russian OR USA OR American OR France OR French 
+         OR Saudi OR Turkish OR Turkey OR UAE OR Israel OR Israeli OR Iran OR Iranian 
+         OR Rwanda OR Rwandan)
+        AND NOT (Olympics OR "World Cup" OR "football" OR "soccer" OR "Premier League" 
+                 OR "Champions League" OR "tennis" OR "marathon" OR "athletics")
+    ''',
+    "DRC": '''
+        (DRC OR "Democratic Republic of Congo" OR Kinshasa OR Congo OR Kivu) 
+        AND 
+        (China OR Chinese OR Russia OR Russian OR USA OR American OR France OR French 
+         OR Saudi OR Turkish OR Turkey OR UAE OR Israel OR Israeli OR Iran OR Iranian 
+         OR Rwanda OR Rwandan)
+        AND NOT (Olympics OR "World Cup" OR "football" OR "soccer" OR "Premier League" 
+                 OR "Champions League" OR "tennis" OR "marathon" OR "athletics")
+    ''',
+    "CoteIvoire": '''
+        (CoteIvoire OR "Ivory Coast" OR Abidjan OR "Yamoussoukro" OR "Alassane Ouattara") 
+        AND 
+        (China OR Chinese OR Russia OR Russian OR USA OR American OR France OR French 
+         OR Saudi OR Turkish OR Turkey OR UAE OR Israel OR Israeli OR Iran OR Iranian 
+         OR Rwanda OR Rwandan)
+        AND NOT (Olympics OR "World Cup" OR "football" OR "soccer" OR "Premier League" 
+                 OR "Champions League" OR "tennis" OR "marathon" OR "athletics")
+    ''',
+    "SouthAfrica": '''
+        (SouthAfrica OR "South Africa" OR Pretoria OR Johannesburg OR "Cape Town" OR Ramaphosa OR ANC) 
+        AND 
+        (China OR Chinese OR Russia OR Russian OR USA OR American OR France OR French 
+         OR Saudi OR Turkish OR Turkey OR UAE OR Israel OR Israeli OR Iran OR Iranian 
+         OR Rwanda OR Rwandan)
+        AND NOT (Olympics OR "World Cup" OR "football" OR "soccer" OR "Premier League" 
+                 OR "Champions League" OR "tennis" OR "marathon" OR "athletics")
+    '''
 }
 
 scraper = cloudscraper.create_scraper()
