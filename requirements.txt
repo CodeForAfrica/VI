@@ -24,7 +24,7 @@ langdetect==1.0.9
 python-dotenv==1.0.0
 groq
 cloudscraper
-spacy>=3.7.0
+spacy
 
 # Database & PDF
 sqlalchemy
