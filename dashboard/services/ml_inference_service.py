@@ -219,40 +219,40 @@ class MLInferenceService:
             return 'und'
             
     def extract_entities_from_content(self, text):
-    """
-    Extract target country and foreign actor from article content using spaCy NER
-    """
-    try:
-        import spacy
-        # Load spaCy model
+        """
+        Extract target country and foreign actor from article content using spaCy NER
+        """
         try:
-            nlp = spacy.load("en_core_web_sm")
-        except:
-            # Download if not exists
-            import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
-            nlp = spacy.load("en_core_web_sm")
-        
-        doc = nlp(text[:5000])  # Limit text length for performance
-        
-        # Extract GPE (countries/cities)
-        gpe_entities = [ent.text for ent in doc.ents if ent.label_ in ['GPE', 'LOC', 'FAC']]
-        
-        # Extract ORG (organizations)
-        org_entities = [ent.text for ent in doc.ents if ent.label_ == 'ORG']
-        
-        # Extract PERSON
-        person_entities = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
-        
-        return {
-            'countries': gpe_entities,
-            'organizations': org_entities,
-            'persons': person_entities
-        }
-    except Exception as e:
-        logger.error(f"Error in entity extraction: {e}")
-        return {'countries': [], 'organizations': [], 'persons': []}
-        
+            import spacy
+            # Load spaCy model
+            try:
+                nlp = spacy.load("en_core_web_sm")
+            except:
+                # Download if not exists
+                import subprocess
+                subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+                nlp = spacy.load("en_core_web_sm")
+            
+            doc = nlp(text[:5000])  # Limit text length for performance
+            
+            # Extract GPE (countries/cities)
+            gpe_entities = [ent.text for ent in doc.ents if ent.label_ in ['GPE', 'LOC', 'FAC']]
+            
+            # Extract ORG (organizations)
+            org_entities = [ent.text for ent in doc.ents if ent.label_ == 'ORG']
+            
+            # Extract PERSON
+            person_entities = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
+            
+            return {
+                'countries': gpe_entities,
+                'organizations': org_entities,
+                'persons': person_entities
+            }
+        except Exception as e:
+            logger.error(f"Error in entity extraction: {e}")
+            return {'countries': [], 'organizations': [], 'persons': []}
+
     def is_low_resource_lang(self, lang_code):
         """Check if language is low resource"""
         lowres_langs = ['ha','yo','am','sw','wo','ig','ff','pt','bm','mg','zu']
