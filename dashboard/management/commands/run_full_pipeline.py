@@ -64,6 +64,7 @@ class Command(BaseCommand):
                 entities = ml_service.extract_entities_from_content(text)
                 target_country = entities['countries'][0] if entities['countries'] else article.target_country or 'Unknown'
                 inferred_actor = entities['organizations'][0] if entities['organizations'] else article.inferred_actor or 'Unknown'
+                
                 # Step 3.1: VALIDATE - Only keep articles about our target countries and actors
                 valid_countries = ['senegal', 'drc', 'ethiopia', 'coteivoire', 'ivory coast', 'south africa']
                 valid_actors = ['china', 'france', 'russia', 'unitedstates', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
@@ -74,7 +75,6 @@ class Command(BaseCommand):
                     continue
                 
                 self.stdout.write(f"✅ Valid: {target_country} | Actor: {inferred_actor}")
-                self.stdout.write(f"🎯 Target: {target_country} | Actor: {inferred_actor}")
                 
                 # Step 4: ML Inference (if not skipped)
                 if not skip_ml:
