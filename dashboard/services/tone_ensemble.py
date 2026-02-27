@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.preprocessing import LabelEncoder
 import joblib
+from dashboard.services.calibrators import ProbabilitiesEstimator
 
 class ToneProbabilitiesEstimator:
     """Helper class for tone calibration"""
