@@ -1,3 +1,6 @@
+# MediaCloud
+mediacloud>=4.1.0
+
 # Data Science & ML
 pandas>=2.2.0
 numpy>=1.26.0
