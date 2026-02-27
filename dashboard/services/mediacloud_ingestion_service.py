@@ -6,7 +6,7 @@ import trafilatura
 import cloudscraper 
 import requests
 import logging
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy import create_engine, text
 from urllib.parse import urlparse
 import os
@@ -22,7 +22,7 @@ if not settings.configured:
                 'NAME': os.getenv('DB_NAME', 'postgres'),
                 'USER': os.getenv('DB_USER', 'postgres'),
                 'PASSWORD': os.getenv('DB_PASSWORD'),
-                'HOST': DB_HOST,
+                'HOST': os.getenv('DB_HOST'),
                 'PORT': os.getenv('DB_PORT', '5432'),
             }
         },
@@ -174,12 +174,9 @@ def main():
         import mediacloud.api
         mc_search = mediacloud.api.SearchApi(api_key)
         
-        # Use your exact queries for all 4 countries
+        # Search each target country's query across each actor country's media collection
         for country, base_query in QUERY_BY_COUNTRY.items():
-            # Use generic collection IDs since the real ones might not exist
-            generic_collection_ids = [1, 2, 3, 4]  # Placeholder IDs
-            
-            for coll_id in generic_collection_ids[:1]:  # Just use first one to avoid duplicates
+            for actor_name, coll_id in ACTOR_COLLECTION_IDS.items():
                 try:
                     stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[coll_id])
                     for s in stories:
@@ -188,24 +185,20 @@ def main():
                             "URL": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
                             "media_outlet": s.get("media_name"),
-                            "inferred_actor": "Unknown Actor",  # Will be updated later
+                            "inferred_actor": actor_name,
                             "target_country": country,
                             "lang_detect": s.get("language"),
                             "confidence": s.get("score")
                         })
                         all_records.append(record)
-                    break  # Break after first iteration to avoid multiple collection IDs
                 except Exception as e:
-                    logging.error(f"MediaCloud Error {country}: {e}")
-                    
+                    logging.error(f"MediaCloud Error {country}/{actor_name}: {e}")
+
     except ImportError:
         # If original library not available, use safe method
         print("Using safe API method...")
         for country, base_query in QUERY_BY_COUNTRY.items():
-            # Use generic collection IDs
-            generic_collection_ids = [1, 2, 3, 4]  # Placeholder IDs
-            
-            for coll_id in generic_collection_ids[:1]:  # Just use first one to avoid duplicates
+            for actor_name, coll_id in ACTOR_COLLECTION_IDS.items():
                 try:
                     stories, _ = safe_mediacloud_search(base_query, START_DATE, END_DATE, [coll_id], api_key)
                     for s in stories:
@@ -214,15 +207,14 @@ def main():
                             "URL": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
                             "media_outlet": s.get("media_name"),
-                            "inferred_actor": "Unknown Actor",  # Will be updated later
+                            "inferred_actor": actor_name,
                             "target_country": country,
                             "lang_detect": s.get("language"),
                             "confidence": s.get("score")
                         })
                         all_records.append(record)
-                    break  # Break after first iteration to avoid multiple collection IDs
                 except Exception as e:
-                    logging.error(f"Safe API Error {country}: {e}")
+                    logging.error(f"Safe API Error {country}/{actor_name}: {e}")
     
     df = pd.DataFrame(all_records)
     if df.empty:
@@ -261,10 +253,32 @@ def main():
     print("\nFinished. Check your database now.")
 
 # Your original constants preserved exactly
-API_KEY = os.getenv('MEDIA_CLOUD_API_KEY', '42caaa0601bd290fc5adada8bb804cdfc0604a7a')
+API_KEY = os.getenv('MEDIA_CLOUD_API_KEY')
 
-START_DATE = date(2025, 1, 1)
-END_DATE = date(2026, 1, 28)
+# MediaCloud collection IDs — actor countries whose media is searched for narratives about target countries
+ACTOR_COLLECTION_IDS = {
+    "USA":          34412234,
+    "France":       34412146,
+    "China":        34412193,
+    "Russia":       34412232,
+    "Turkey":       34412131,
+    "Saudi Arabia": 34412050,
+    "Israel":       34412391,
+    "Iran":         34412284,
+    "UAE":          34412114,
+}
+
+# MediaCloud collection IDs — target African countries being monitored
+TARGET_COLLECTION_IDS = {
+    "Ethiopia":       34412034,
+    "Senegal":        38380807,
+    "DRC":            34412042,
+    "SA":             34412238,
+    "Côte d'Ivoire":  34412173,
+}
+
+START_DATE = date.today() - timedelta(days=1)
+END_DATE   = date.today()
 
 # Use your exact queries for all 4 countries
 QUERY_BY_COUNTRY = {
