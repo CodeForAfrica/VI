@@ -230,7 +230,7 @@ class MLInferenceService:
             predictions, probabilities = classifier.predict(
                 texts=[article_text],
                 batch_size=1,
-                calibrated=True,
+                calibrated=False,
                 return_probs=True
             )
             pred_idx = predictions[0]
