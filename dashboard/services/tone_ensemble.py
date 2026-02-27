@@ -8,6 +8,22 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.preprocessing import LabelEncoder
 import joblib
 
+class ToneProbabilitiesEstimator:
+    """Helper class for tone calibration"""
+    def __init__(self):
+        self.classes_ = None
+        self.n_classes_ = None
+    
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        self.n_classes_ = len(self.classes_)
+        return self
+    
+    def predict_proba(self, X):
+        return X
+    
+    def predict(self, X):
+        return np.argmax(X, axis=1)
 class StackedEnsemble:
     """Simplified Stacked Ensemble for inference only (from your notebook)"""
     def __init__(self, base_models, tokenizers, label_encoder, meta_model, device=None):
@@ -86,27 +102,8 @@ class VennAbersCalibrator:
                 if 'shuffle' in kwargs and kwargs['shuffle'] is None:
                     kwargs['shuffle'] = True
                 return sklearn_tts(*args, **kwargs)
-            venn_abers.venn_abers.train_test_split = custom_tts
-            
-            # Create an estimator wrapper for your pre-computed probabilities
-            class ProbabilitiesEstimator:
-                def __init__(self):
-                    self.classes_ = None
-                    self.n_classes_ = None
-                def fit(self, X, y):
-                    # X is ignored (we already have probabilities)
-                    # We just store the class labels
-                    self.classes_ = np.unique(y)
-                    self.n_classes_ = len(self.classes_)
-                    return self
-                def predict_proba(self, X):
-                    """Return pre-computed probabilities."""
-                    return X
-                def predict(self, X):
-                    probs = self.predict_proba(X)
-                    return np.argmax(probs, axis=1)
-            
-            estimator = ProbabilitiesEstimator()
+            venn_abers.venn_abers.train_test_split = custom_tts            
+            estimator = ToneProbabilitiesEstimator()
             estimator.fit(probabilities, labels)
             
             self.va_multi = VennAbersMultiClass(estimator=estimator, inductive=True)
