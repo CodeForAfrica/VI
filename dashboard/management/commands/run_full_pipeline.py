@@ -60,10 +60,12 @@ class Command(BaseCommand):
                 else:
                     text = article.article_text
                 
-                # Step 3: Extract target country and foreign actor
-                # (This would use your NLP/entity extraction here)
-                target_country = article.target_country or 'Unknown'
-                inferred_actor = article.inferred_actor or 'Unknown'
+                # Step 3: Extract target country and foreign actor using NER
+                entities = ml_service.extract_entities_from_content(text)
+                target_country = entities['countries'][0] if entities['countries'] else article.target_country or 'Unknown'
+                inferred_actor = entities['organizations'][0] if entities['organizations'] else article.inferred_actor or 'Unknown'
+                
+                self.stdout.write(f"🎯 Target: {target_country} | Actor: {inferred_actor}")
                 
                 # Step 4: ML Inference (if not skipped)
                 if not skip_ml:
