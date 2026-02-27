@@ -8,89 +8,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from peft import PeftModel
 from sklearn.preprocessing import LabelEncoder
 import joblib
-
-class VennAbersStrategicCalibrator:
-    """Venn-Abers calibrator for strategic intent (from your notebook)"""
-    def __init__(self):
-        self.va_multi = None
-        self.calibrated = False
-    
-    def fit(self, probabilities, labels):
-        """Fit Venn-Abers calibrator"""
-        try:
-            from venn_abers import VennAbersMultiClass
-            import venn_abers.venn_abers
-            from sklearn.model_selection import train_test_split as sklearn_tts
-            
-            # PATCH: Fix for sklearn InvalidParameterError (shuffle=None) in venn-abers library
-            def custom_tts(*args, **kwargs):
-                if 'shuffle' in kwargs and kwargs['shuffle'] is None:
-                    kwargs['shuffle'] = True
-                return sklearn_tts(*args, **kwargs)
-            venn_abers.venn_abers.train_test_split = custom_tts
-            
-            # Create an estimator wrapper for your pre-computed probabilities
-            class ProbabilitiesEstimator:
-                def __init__(self):
-                    self.classes_ = None
-                    self.n_classes_ = None
-                def fit(self, X, y):
-                    # X is ignored (we already have probabilities)
-                    # We just store the class labels
-                    self.classes_ = np.unique(y)
-                    self.n_classes_ = len(self.classes_)
-                    return self
-                def predict_proba(self, X):
-                    """Return pre-computed probabilities."""
-                    return X
-                def predict(self, X):
-                    probs = self.predict_proba(X)
-                    return np.argmax(probs, axis=1)
-            
-            estimator = ProbabilitiesEstimator()
-            estimator.fit(probabilities, labels)
-            
-            self.va_multi = VennAbersMultiClass(estimator=estimator, inductive=True)
-            self.va_multi.fit(probabilities, labels)
-            self.calibrated = True
-            print(f"✅ Venn-Abers calibrator fitted on {len(probabilities)} samples")
-            return self
-        except Exception as e:
-            print(f"❌ Venn-Abers calibration failed: {e}")
-            return self
-    
-    def calibrate(self, probabilities):
-        """Calibrate probabilities"""
-        if not self.calibrated or self.va_multi is None:
-            return probabilities
-        calibrated_probs = self.va_multi.predict_proba(probabilities)
-        
-        # Handle output format
-        if isinstance(calibrated_probs, tuple):
-            if len(calibrated_probs) >= 2:
-                p0, p1 = calibrated_probs[:2]
-                calibrated_probs = p1 / (p0 + p1 + 1e-15)
-        
-        # Ensure probabilities sum to 1
-        if isinstance(calibrated_probs, np.ndarray) and calibrated_probs.ndim == 2:
-            calibrated_probs = calibrated_probs / calibrated_probs.sum(axis=1, keepdims=True)
-        
-        return calibrated_probs
-    
-    def save(self, save_path):
-        """Save calibrator"""
-        if self.calibrated:
-            with open(save_path, 'wb') as f:
-                pickle.dump(self.va_multi, f)
-            print(f"✅ Venn-Abers calibrator saved to {save_path}")
-    
-    def load(self, load_path):
-        """Load calibrator"""
-        with open(load_path, 'rb') as f:
-            self.va_multi = pickle.load(f)
-        self.calibrated = True
-        print(f"✅ Venn-Abers calibrator loaded from {load_path}")
-        return self
+from dashboard.services.calibrators import VennAbersStrategicCalibrator
 
 class StrategicEnsemble:
     """
@@ -317,7 +235,7 @@ class CalibratedStrategicClassifier:
                 print(f"✅ Hybrid calibrator loaded")
             else:
                 # Legacy VennAbersStrategicCalibrator
-                calibrator = VennAbersStrategicCalibrator.load_from_file(calibrator_path)
+                calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
                 print(f"✅ Venn-Abers calibrator loaded")
         else:
             # Fallback to old path for backward compatibility
