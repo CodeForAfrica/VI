@@ -343,6 +343,8 @@ class MLInferenceService:
                 "drc": "DRC",
                 "democratic republic of congo": "DRC",
                 "ethiopia": "Ethiopia",
+                "South Africa": "South Africa",
+                "south africa": "South Africa",
                 "cote d'ivoire": "CoteIvoire",
                 "côte d'ivoire": "CoteIvoire",
                 "ivory coast": "CoteIvoire"
