@@ -1,7 +1,7 @@
 # MediaCloud
 mediacloud>=4.1.0
 
-# Data Science & ML
+# ML
 pandas>=2.2.0
 numpy>=1.26.0
 scikit-learn>=1.6.0
@@ -24,6 +24,7 @@ langdetect==1.0.9
 python-dotenv==1.0.0
 groq
 cloudscraper
+spacy>=3.7.0
 
 # Database & PDF
 sqlalchemy
