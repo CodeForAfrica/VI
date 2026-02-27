@@ -1,6 +1,24 @@
 import pickle
 import numpy as np
 
+class ProbabilitiesEstimator:
+    """Helper class for Venn-Abers calibration"""
+    def __init__(self):
+        self.classes_ = None
+        self.n_classes_ = None
+    
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        self.n_classes_ = len(self.classes_)
+        return self
+    
+    def predict_proba(self, X):
+        return X
+    
+    def predict(self, X):
+        return np.argmax(X, axis=1)
+
+
 class VennAbersStrategicCalibrator:
     """Venn-Abers calibrator for strategic intent"""
     def __init__(self):
@@ -14,26 +32,13 @@ class VennAbersStrategicCalibrator:
             import venn_abers.venn_abers
             from sklearn.model_selection import train_test_split as sklearn_tts
             
-            # PATCH: Fix for sklearn InvalidParameterError
             def custom_tts(*args, **kwargs):
                 if 'shuffle' in kwargs and kwargs['shuffle'] is None:
                     kwargs['shuffle'] = True
                 return sklearn_tts(*args, **kwargs)
             venn_abers.venn_abers.train_test_split = custom_tts
             
-            class ProbabilitiesEstimator:
-                def __init__(self):
-                    self.classes_ = None
-                    self.n_classes_ = None
-                def fit(self, X, y):
-                    self.classes_ = np.unique(y)
-                    self.n_classes_ = len(self.classes_)
-                    return self
-                def predict_proba(self, X):
-                    return X
-                def predict(self, X):
-                    return np.argmax(X, axis=1)
-            
+            # Use the module-level class
             estimator = ProbabilitiesEstimator()
             estimator.fit(probabilities, labels)
             
