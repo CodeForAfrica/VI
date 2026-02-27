@@ -160,7 +160,8 @@ class MLInferenceService:
         """Load calibrated tone classifier from S3"""
         if 'tone' in self._model_cache:
             return self._model_cache['tone']
-        
+            
+        from dashboard.services.calibrators import ProbabilitiesEstimator
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
