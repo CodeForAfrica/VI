@@ -1,5 +1,6 @@
 import logging
 import trafilatura
+import django.utils.timezone
 from django.core.management.base import BaseCommand
 from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
@@ -26,10 +27,14 @@ class Command(BaseCommand):
         self.stdout.write(f"Limit: {limit} articles")
         
         # Step 1: Get articles that need processing
-        # Articles that need any processing
         articles = MediaNarrative.objects.filter(
             article_text__isnull=True
-        )[:limit]
+        ) | MediaNarrative.objects.filter(
+            ml_processed_at__isnull=True
+        )
+        
+        # Get unique articles and limit
+        articles = articles.distinct()[:limit]
         
         total_count = articles.count()
         self.stdout.write(f"Found {total_count} articles to process")
@@ -44,7 +49,8 @@ class Command(BaseCommand):
         
         for article in articles:
             try:
-                self.stdout.write(f"\n📄 Processing: {article.id} - {article.url[:50]}...")
+                self.stdout.write(f"\n📄 Processing ID: {article.id}")
+                self.stdout.write(f"   URL: {article.url[:60]}...")
                 
                 # Step 2: Extract full article text from URL
                 if not skip_extraction:
@@ -60,21 +66,43 @@ class Command(BaseCommand):
                 else:
                     text = article.article_text
                 
-                # Step 3: Extract target country and foreign actor using NER
-                entities = ml_service.extract_entities_from_content(text)
-                target_country = entities['countries'][0] if entities['countries'] else article.target_country or 'Unknown'
-                inferred_actor = entities['organizations'][0] if entities['organizations'] else article.inferred_actor or 'Unknown'
+                # Step 3: Get target country from MediaCloud DB
+                target_country = article.target_country or 'Unknown'
                 
-                # Step 3.1: VALIDATE - Only keep articles about our target countries and actors
-                valid_countries = ['senegal', 'drc', 'ethiopia', 'coteivoire', 'ivory coast', 'south africa']
-                valid_actors = ['china', 'france', 'russia', 'unitedstates', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
+                # Step 3.1: Get inferred actor (3-step priority)
+                # Priority 1: MediaCloud DB
+                inferred_actor = article.inferred_actor
                 
-                if target_country.lower() not in valid_countries or inferred_actor.lower() not in valid_actors:
-                    self.stdout.write(self.style.WARNING(f"⚠️ Skipping {article.id}: Target={target_country}, Actor={inferred_actor} (not in valid list)"))
+                # Priority 2: Media Outlet Name
+                if not inferred_actor or inferred_actor == 'Unknown':
+                    media_outlet = article.media_outlet or ''
+                    inferred_actor = ml_service.get_actor_from_media_outlet(media_outlet)
+                
+                # Priority 3: Content (NER)
+                if not inferred_actor or inferred_actor == 'Unknown':
+                    entities = ml_service.extract_entities_from_content(text)
+                    extracted_orgs = entities.get('organizations', [])
+                    inferred_actor = ml_service.extract_actor_from_content(text, organizations=extracted_orgs)
+                
+                # Final fallback
+                if not inferred_actor or inferred_actor == 'Unknown':
+                    inferred_actor = article.inferred_actor or 'Unknown'
+                
+                # Step 3.2: VALIDATE (handle case-insensitive)
+                valid_countries = ['senegal', 'drc', 'ethiopia', 'coteivoire', 'ivory coast', 'south africa', 'southafrica']
+                valid_actors = ['china', 'france', 'russia', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
+                
+                if target_country.lower().replace(' ', '') not in [c.replace(' ', '') for c in valid_countries]:
+                    self.stdout.write(self.style.WARNING(f"⚠️ Skipping {article.id}: Target={target_country} (not in valid list)"))
                     skipped += 1
                     continue
                 
-                self.stdout.write(f"✅ Valid: {target_country} | Actor: {inferred_actor}")
+                if inferred_actor.lower().replace(' ', '') not in [a.replace(' ', '') for a in valid_actors]:
+                    self.stdout.write(self.style.WARNING(f"⚠️ Skipping {article.id}: Actor={inferred_actor} (not in valid list)"))
+                    skipped += 1
+                    continue
+                
+                self.stdout.write(f"   ✅ Valid: {target_country} | Actor: {inferred_actor}")
                 
                 # Step 4: ML Inference (if not skipped)
                 if not skip_ml:
@@ -85,7 +113,7 @@ class Command(BaseCommand):
                     confidence = results['confidence']
                     lang_detect = results['lang_detect']
                     
-                    self.stdout.write(f"🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {confidence:.2f}")
+                    self.stdout.write(f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {confidence:.2f}")
                 else:
                     strategic_intent = article.strategic_intent or 'Unknown'
                     tone = article.tone or 'neutral'
@@ -101,19 +129,21 @@ class Command(BaseCommand):
                         inferred_actor, 
                         confidence
                     )
-                    self.stdout.write(f"📊 Vulnerability Index: {vulnerability_index}")
+                    self.stdout.write(f"   📊 Vulnerability Index: {vulnerability_index}")
                 else:
                     vulnerability_index = article.vulnerability_index or 0.0
                 
                 # Step 6: Save to database (or dry run)
                 if dry_run:
-                    self.stdout.write(self.style.WARNING(f"[DRY RUN] Would save:"))
-                    self.stdout.write(f"  - article_text: {len(text)} chars")
-                    self.stdout.write(f"  - strategic_intent: {strategic_intent}")
-                    self.stdout.write(f"  - tone: {tone}")
-                    self.stdout.write(f"  - vulnerability_index: {vulnerability_index}")
+                    self.stdout.write(self.style.WARNING(f"   [DRY RUN] Would save:"))
+                    self.stdout.write(f"       - article_text: {len(text)} chars")
+                    self.stdout.write(f"       - strategic_intent: {strategic_intent}")
+                    self.stdout.write(f"       - tone: {tone}")
+                    self.stdout.write(f"       - vulnerability_index: {vulnerability_index}")
                 else:
                     article.article_text = text
+                    article.target_country = target_country
+                    article.inferred_actor = inferred_actor
                     article.strategic_intent = strategic_intent
                     article.tone = tone
                     article.confidence = confidence
@@ -122,13 +152,13 @@ class Command(BaseCommand):
                     article.ml_processed_at = django.utils.timezone.now()
                     article.save()
                     
-                    self.stdout.write(self.style.SUCCESS(f"✅ Saved: ID {article.id}"))
+                    self.stdout.write(self.style.SUCCESS(f"   ✅ Saved: ID {article.id}"))
                 
                 processed += 1
                 
             except Exception as e:
                 logger.error(f"❌ Error processing {article.id}: {e}")
-                self.stdout.write(self.style.ERROR(f"❌ Error: {str(e)[:50]}"))
+                self.stdout.write(self.style.ERROR(f"   ❌ Error: {str(e)[:100]}"))
                 errors += 1
         
         # Cleanup
