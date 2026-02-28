@@ -276,7 +276,163 @@ class MLInferenceService:
         """Check if language is low resource"""
         lowres_langs = ['ha','yo','am','sw','wo','ig','ff','pt','bm','mg','zu']
         return lang_code in lowres_langs
-
+        
+    def get_actor_from_media_outlet(self, media_outlet):
+        """Extract foreign actor from media outlet name"""
+        if not media_outlet:
+            return 'Unknown'
+        
+        media_outlet_lower = media_outlet.lower()
+        
+        # Map media outlets to actors
+        media_actor_mapping = {
+            # France
+            'france24': 'France',
+            'france 24': 'France',
+            'le monde': 'France',
+            'lefigaro': 'France',
+            'french': 'France',
+            'france': 'France',
+            
+            # China
+            'china daily': 'China',
+            'xinhua': 'China',
+            'cgtn': 'China',
+            'china': 'China',
+            'chinese': 'China',
+            'cctv': 'China',
+            
+            # USA
+            'bbc': 'USA',
+            'cnn': 'USA',
+            'nytimes': 'USA',
+            'washington post': 'USA',
+            'reuters': 'USA',
+            'ap news': 'USA',
+            'associated press': 'USA',
+            'voa': 'USA',
+            'american': 'USA',
+            'usa': 'USA',
+            
+            # Russia
+            'rt': 'Russia',
+            'sputnik': 'Russia',
+            'tass': 'Russia',
+            'russia today': 'Russia',
+            'russian': 'Russia',
+            'moscow times': 'Russia',
+            
+            # Saudi
+            'saudi': 'Saudi',
+            'arab news': 'Saudi',
+            
+            # Turkey
+            'turkish': 'Turkey',
+            'turkey': 'Turkey',
+            'anadolu': 'Turkey',
+            
+            # UAE
+            'uae': 'UAE',
+            'emirates': 'UAE',
+            'gulf news': 'UAE',
+            
+            # Israel
+            'israeli': 'Israel',
+            'israel': 'Israel',
+            'times of israel': 'Israel',
+            
+            # Iran
+            'iranian': 'Iran',
+            'iran': 'Iran',
+            'tehran times': 'Iran',
+            
+            # Rwanda
+            'rwandan': 'Rwanda',
+            'rwanda': 'Rwanda',
+            'new times': 'Rwanda',
+        }
+        
+        # Check for partial matches
+        for media_name, actor in media_actor_mapping.items():
+            if media_name in media_outlet_lower:
+                return actor
+        
+        return 'Unknown'
+        def extract_actor_from_content(self, text, organizations=None, persons=None):
+            """Extract foreign actor from article content using NER and keywords"""
+            try:
+                text_lower = text.lower()
+                
+                # Priority 1: Check organizations from NER
+                if organizations:
+                    for org in organizations:
+                        org_lower = org.lower()
+                        if 'china' in org_lower or 'chinese' in org_lower:
+                            return 'China'
+                        if 'russia' in org_lower or 'russian' in org_lower:
+                            return 'Russia'
+                        if 'france' in org_lower or 'french' in org_lower:
+                            return 'France'
+                        if 'united states' in org_lower or 'usa' in org_lower or 'american' in org_lower:
+                            return 'USA'
+                        if 'saudi' in org_lower:
+                            return 'Saudi'
+                        if 'turkey' in org_lower or 'turkish' in org_lower:
+                            return 'Turkey'
+                        if 'uae' in org_lower or 'emirates' in org_lower:
+                            return 'UAE'
+                        if 'israel' in org_lower or 'israeli' in org_lower:
+                            return 'Israel'
+                        if 'iran' in org_lower or 'iranian' in org_lower:
+                            return 'Iran'
+                        if 'rwanda' in org_lower or 'rwandan' in org_lower:
+                            return 'Rwanda'
+                
+                # Priority 2: Check persons from NER
+                if persons:
+                    for person in persons:
+                        person_lower = person.lower()
+                        if 'xi' in person_lower or 'jinping' in person_lower:
+                            return 'China'
+                        if 'putin' in person_lower:
+                            return 'Russia'
+                        if 'macron' in person_lower:
+                            return 'France'
+                        if 'trump' in person_lower or 'biden' in person_lower:
+                            return 'USA'
+                        if 'erdogan' in person_lower:
+                            return 'Turkey'
+                        if 'netany' in person_lower:
+                            return 'Israel'
+                        if 'raisi' in person_lower or 'khamenei' in person_lower:
+                            return 'Iran'
+                        if 'kagame' in person_lower:
+                            return 'Rwanda'
+                
+                # Priority 3: Keyword search in full text
+                actor_keywords = {
+                    'china': ['china', 'chinese', 'beijing', 'xi jinping', 'cgtn', 'xinhua'],
+                    'russia': ['russia', 'russian', 'moscow', 'putin', 'kremlin', 'sputnik', 'rt'],
+                    'france': ['france', 'french', 'paris', 'macron', 'le monde', 'france24'],
+                    'usa': ['united states', 'usa', 'america', 'american', 'washington', 'cnn', 'bbc', 'reuters'],
+                    'saudi': ['saudi', 'riyadh', 'king salman', 'crown prince'],
+                    'turkey': ['turkey', 'turkish', 'ankara', 'erdogan', 'anadolu'],
+                    'uae': ['uae', 'emirates', 'dubai', 'abu dhabi'],
+                    'israel': ['israel', 'israeli', 'tel aviv', 'netanyahu'],
+                    'iran': ['iran', 'iranian', 'tehran', 'raisi', 'khamenei'],
+                    'rwanda': ['rwanda', 'rwandan', 'kigali', 'kagame'],
+                }
+                
+                for actor, keywords in actor_keywords.items():
+                    for keyword in keywords:
+                        if keyword in text_lower:
+                            return actor.title()
+                
+                return 'Unknown'
+            except Exception as e:
+                logger.error(f"Error extracting actor from content: {e}")
+                return 'Unknown'
+            
     def perform_strategic_intent_inference(self, article_text):
         """Perform strategic intent inference"""
         try:
