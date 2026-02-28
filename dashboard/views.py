@@ -75,7 +75,70 @@ class DisinfoAnalysisChatbot:
 
     def process_query(self, query):
         query_l = query.lower().strip()
+        # 1. Actor Stats Query
+        if 'statistics' in query_l or 'stats' in query_l or 'most active' in query_l:
+            # Extract country if mentioned
+            country = None
+            countries = ['senegal', 'ethiopia', 'drc', 'coteivoire', 'ivory coast', 'south africa']
+            for c in countries:
+                if c in query_l:
+                    country = c.title()
+                    break
+            
+            stats = self.get_actor_stats(country)
+            if stats:
+                lines = ["📊 Actor Statistics" + (f" for {country}" if country else "")]
+                for s in stats[:5]:
+                    lines.append(f"• {s['inferred_actor']}: {s['article_count']} articles, "
+                              f"Avg Vulnerability: {s['avg_vulnerability']:.3f}")
+                return "\n".join(lines)
+            return "No statistics available."
         
+        # 2. Compare Actors
+        if 'compare' in query_l:
+            actors = ['china', 'russia', 'france', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
+            found_actors = [a.title() for a in actors if a in query_l]
+            
+            country = None
+            countries = ['senegal', 'ethiopia', 'drc', 'coteivoire', 'ivory coast', 'south africa']
+            for c in countries:
+                if c in query_l:
+                    country = c.title()
+                    break
+            
+            if len(found_actors) >= 2:
+                result = self.compare_actors(found_actors[0], found_actors[1], country)
+                lines = [f"⚖️ Comparison: {found_actors[0]} vs {found_actors[1]}" + (f" in {country}" if country else "")]
+                for actor, data in result.items():
+                    lines.append(f"\n{actor}:")
+                    lines.append(f"  Articles: {data['articles']}")
+                    lines.append(f"  Avg Vulnerability: {data['avg_vulnerability']}")
+                    lines.append(f"  Top Intent: {data['top_intent']}")
+                return "\n".join(lines)
+        
+        # 3. Tone Breakdown
+        if 'tone' in query_l or 'coverage' in query_l:
+            actors = ['china', 'russia', 'france', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
+            found_actor = None
+            for a in actors:
+                if a in query_l:
+                    found_actor = a.title()
+                    break
+            
+            country = None
+            countries = ['senegal', 'ethiopia', 'drc', 'coteivoire', 'ivory coast', 'south africa']
+            for c in countries:
+                if c in query_l:
+                    country = c.title()
+                    break
+            
+            if found_actor:
+                tones = self.get_tone_breakdown(found_actor, country)
+                lines = [f"📻 Tone Analysis: {found_actor}" + (f" in {country}" if country else "")]
+                for t in tones:
+                    lines.append(f"  {t['tone']}: {t['count']} articles")
+                return "\n".join(lines)
+
         # Quick Relevance Check - Focus on foreign influence
         irrelevant = ['football', 'soccer', 'entertainment', 'music', 'celebrity', 'local sport', 'local entertainment']
         if any(word in query_l for word in irrelevant) and not any(actor in query_l for actor in ['france', 'china', 'usa', 'us', 'russia', 'united states', 'unitedstates']):
@@ -181,7 +244,72 @@ class DisinfoAnalysisChatbot:
             return chat_completion.choices[0].message.content
         except Exception as e:
             return f"AI Error: {str(e)}"
-
+            
+    def get_actor_stats(self, country=None):
+        """Get aggregated stats for actors"""
+        qs = MediaNarrative.objects.exclude(
+            inferred_actor__in=['', 'Unknown', None]
+        )
+        if country:
+            qs = qs.filter(target_country__iexact=country)
+        
+        return qs.values('inferred_actor').annotate(
+            article_count=Count('id'),
+            avg_vulnerability=Avg('vulnerability_index'),
+            avg_confidence=Avg('confidence')
+        ).order_by('-article_count')
+    
+    def get_intent_breakdown(self, actor, country=None):
+        """Get intent breakdown for an actor"""
+        qs = MediaNarrative.objects.filter(
+            inferred_actor__iexact=actor
+        ).exclude(strategic_intent__in=['', None])
+        
+        if country:
+            qs = qs.filter(target_country__iexact=country)
+        
+        return qs.values('strategic_intent').annotate(
+            count=Count('id')
+        ).order_by('-count')
+    
+    def get_tone_breakdown(self, actor, country=None):
+        """Get tone breakdown for an actor"""
+        qs = MediaNarrative.objects.filter(
+            inferred_actor__iexact=actor
+        ).exclude(tone__in=['', None])
+        
+        if country:
+            qs = qs.filter(target_country__iexact=country)
+        
+        return qs.values('tone').annotate(
+            count=Count('id')
+        ).order_by('-count')
+    
+    def compare_actors(self, actor1, actor2, country=None):
+        """Compare two actors in a country"""
+        from django.db.models import Avg
+        
+        stats = {}
+        for actor in [actor1, actor2]:
+            qs = MediaNarrative.objects.filter(
+                inferred_actor__iexact=actor
+            )
+            if country:
+                qs = qs.filter(target_country__iexact=country)
+            
+            top_intent = qs.exclude(strategic_intent__in=['', None]).values(
+                'strategic_intent'
+            ).annotate(c=Count('id')).order_by('-c').first()
+            
+            stats[actor] = {
+                'articles': qs.count(),
+                'avg_vulnerability': round(
+                    qs.aggregate(Avg('vulnerability_index'))['vulnerability_index__avg'] or 0, 
+                    3
+                ),
+                'top_intent': top_intent['strategic_intent'] if top_intent else 'N/A'
+            }
+        return stats
 # Instantiate the chatbot once
 chatbot_instance = DisinfoAnalysisChatbot()
 
