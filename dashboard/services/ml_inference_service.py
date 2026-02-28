@@ -89,28 +89,44 @@ class MLInferenceService:
 
     def _download_directory_from_s3(self, s3_prefix, local_dir):
         """Download entire directory from S3 to local directory"""
+        print(f"\n🔍 === DOWNLOAD DEBUG ===")
+        print(f"📍 Prefix: {s3_prefix}")
+        print(f"📁 Local dir: {local_dir}")
+        print(f"🪣 Bucket: {self.bucket_name}")
+        
         if not self.s3_client:
+            print("❌ S3 client is None!")
             raise Exception("AWS S3 credentials not configured")
         
         try:
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=s3_prefix)
+            print(f"📂 Listing objects with prefix: '{s3_prefix}'")
+            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=s3_prefix)
             
-            for page in pages:
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    if key.endswith('/'):
-                        continue
-                    
-                    rel_path = key[len(s3_prefix):].lstrip('/')
-                    local_file_path = os.path.join(local_dir, rel_path)
-                    
-                    os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-                    self.s3_client.download_file(self.bucket_name, key, local_file_path)
+            if 'Contents' not in response:
+                print(f"❌ No files found with prefix: {s3_prefix}")
+                print(f"📋 Response: {response}")
+                return False
             
+            print(f"✅ Found {len(response['Contents'])} files")
+            
+            for obj in response.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('/'):
+                    continue
+                
+                rel_path = key[len(s3_prefix):].lstrip('/')
+                local_file_path = os.path.join(local_dir, rel_path)
+                
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                print(f"⬇️ Downloading: {key} -> {local_file_path}")
+                self.s3_client.download_file(self.bucket_name, key, local_file_path)
+            
+            print(f"✅ Successfully downloaded all files")
             return True
         except Exception as e:
-            logger.error(f"Error downloading directory {s3_prefix}: {e}")
+            print(f"❌ Error downloading directory {s3_prefix}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def _load_strategic_classifier(self):
