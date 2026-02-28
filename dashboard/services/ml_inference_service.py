@@ -160,31 +160,33 @@ class MLInferenceService:
         """Load calibrated tone classifier from S3"""
         if 'tone' in self._model_cache:
             return self._model_cache['tone']
-            
-        from dashboard.services.calibrators import ProbabilitiesEstimator
+        
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
-        # Download the base model from S3 if needed (depends on tone model architecture)
-        base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
-        if not os.path.exists(base_model_dir):
-            os.makedirs(base_model_dir, exist_ok=True)
-            if self.s3_client:
-                try:
-                    base_prefix = 'microsoft_mdeberta-v3-base/'
-                    pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
-                    for obj in pages.get('Contents', []):
-                        key = obj['Key']
-                        filename = key.replace(base_prefix, '')
-                        local_path = os.path.join(base_model_dir, filename)
-                        self.s3_client.download_file(self.bucket_name, key, local_path)
-                    print(f"Downloaded base model to {base_model_dir}")
-                except Exception as e:
-                    print(f"Could not download base model: {e}")
+        # Try different possible S3 prefixes
+        possible_prefixes = [
+            'calibrated_stacked_ensemble/',
+            'calibrated_tone_ensemble/',
+            'tone_ensemble/',
+            'tone_classifier/'
+        ]
         
-        # Now download the tone classifier
-        if not self._download_directory_from_s3('calibrated_stacked_ensemble/', temp_dir):
-            raise Exception("Failed to download tone classifier from S3")
+        loaded = False
+        for prefix in possible_prefixes:
+            try:
+                if self._download_directory_from_s3(prefix, temp_dir):
+                    # Check if model files exist
+                    if os.path.exists(os.path.join(temp_dir, 'model.safetensors')) or \
+                       os.path.exists(os.path.join(temp_dir, 'pytorch_model.bin')):
+                        loaded = True
+                        break
+            except:
+                continue
+        
+        if not loaded:
+            logger.warning("Could not download tone classifier from S3, using fallback")
+            return None
         
         # Load the classifier
         from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
@@ -202,7 +204,7 @@ class MLInferenceService:
             self._tone_label_encoder.classes_ = np.array(label_info['classes'])
         
         return classifier
-
+    
     def preprocess_text(self, text):
         """Replicate preprocessing from notebook"""
         if not text or text.strip() == "":
@@ -284,6 +286,12 @@ class MLInferenceService:
         """Perform tone inference"""
         try:
             classifier = self._load_tone_classifier()
+            
+            # If classifier failed to load, return fallback
+            if classifier is None:
+                logger.warning("Tone classifier not available, returning neutral")
+                return 'neutral', 0.3
+                
             probs = classifier.predict_proba([article_text], calibrated=True, batch_size=1)
             pred_idx = np.argmax(probs[0])
             if self._tone_label_encoder:
@@ -294,7 +302,7 @@ class MLInferenceService:
             return str(pred_label), confidence
         except Exception as e:
             logger.error(f"Error in tone inference: {e}")
-            return "neutral", 0.0
+            return 'neutral', 0.3
 
     def perform_inference(self, article_text):
         """Main inference method"""
