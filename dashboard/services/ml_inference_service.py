@@ -180,13 +180,22 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
-        # Only try the working prefix
-        prefix = 'calibrated_stacked_ensemble/'
+        # ONLY use the working prefix - NO LOOP
+        tone_prefix = 'calibrated_stacked_ensemble/'
         
-        if self._download_directory_from_s3(prefix, temp_dir):
-            # Check if model files exist
-            if os.path.exists(os.path.join(temp_dir, 'model.safetensors')) or \
-               os.path.exists(os.path.join(temp_dir, 'pytorch_model.bin')):
+        print(f"\n🔍 === TONE MODEL DOWNLOAD ===")
+        print(f"📍 Prefix: {tone_prefix}")
+        print(f"📁 Local dir: {temp_dir}")
+        
+        try:
+            # Download the model
+            if self._download_directory_from_s3(tone_prefix, temp_dir):
+                print(f"✅ Tone model downloaded successfully!")
+                
+                # Check what files we have
+                print(f"   Files in temp_dir: {os.listdir(temp_dir)}")
+                
+                # Load the classifier
                 from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
                 classifier = CalibratedStackedEnsemble.load(temp_dir)
                 self._model_cache['tone'] = classifier
@@ -199,8 +208,15 @@ class MLInferenceService:
                     from sklearn.preprocessing import LabelEncoder
                     self._tone_label_encoder = LabelEncoder()
                     self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                    print(f"✅ Tone classifier loaded with labels: {label_info['classes']}")
                 
+                print(f"✅ SUCCESS: Tone classifier ready!")
                 return classifier
+        
+        except Exception as e:
+            print(f"❌ Error loading tone classifier: {e}")
+            import traceback
+            traceback.print_exc()
         
         logger.warning("Could not download tone classifier from S3, using fallback")
         return None
