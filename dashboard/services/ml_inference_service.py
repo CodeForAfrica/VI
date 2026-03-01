@@ -180,29 +180,30 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
-        # Try different possible S3 prefixes
-        possible_prefixes = [
-            'calibrated_stacked_ensemble/',
-            'calibrated_tone_ensemble/',
-            'tone_ensemble/',
-            'tone_classifier/'
-        ]
+        # Only try the working prefix
+        prefix = 'calibrated_stacked_ensemble/'
         
-        loaded = False
-        for prefix in possible_prefixes:
-            try:
-                if self._download_directory_from_s3(prefix, temp_dir):
-                    # Check if model files exist
-                    if os.path.exists(os.path.join(temp_dir, 'model.safetensors')) or \
-                       os.path.exists(os.path.join(temp_dir, 'pytorch_model.bin')):
-                        loaded = True
-                        break
-            except:
-                continue
+        if self._download_directory_from_s3(prefix, temp_dir):
+            # Check if model files exist
+            if os.path.exists(os.path.join(temp_dir, 'model.safetensors')) or \
+               os.path.exists(os.path.join(temp_dir, 'pytorch_model.bin')):
+                from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
+                classifier = CalibratedStackedEnsemble.load(temp_dir)
+                self._model_cache['tone'] = classifier
+                
+                # Load label encoder
+                label_enc_path = os.path.join(temp_dir, 'label_info.json')
+                if os.path.exists(label_enc_path):
+                    with open(label_enc_path, 'r') as f:
+                        label_info = json.load(f)
+                    from sklearn.preprocessing import LabelEncoder
+                    self._tone_label_encoder = LabelEncoder()
+                    self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                
+                return classifier
         
-        if not loaded:
-            logger.warning("Could not download tone classifier from S3, using fallback")
-            return None
+        logger.warning("Could not download tone classifier from S3, using fallback")
+        return None
         
         # Load the classifier
         from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
