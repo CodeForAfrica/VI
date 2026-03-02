@@ -177,13 +177,24 @@ class CalibratedStrategicClassifier:
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             
-            # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_dir)
+            # Load tokenizer from LOCAL directory
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True)
             
-            # Load the PEFT config to get base model name
+            # Get PEFT config
             from peft import PeftConfig
             peft_config = PeftConfig.from_pretrained(model_dir)
-            base_model_name = peft_config.base_model_name_or_path
+            
+            # CHECK: Is the base model downloaded locally?
+            base_model_local_path = os.path.join(save_dir, 'microsoft_mdeberta-v3-base')
+            
+            if os.path.exists(base_model_local_path) and os.path.isdir(base_model_local_path):
+                # ✅ Use LOCAL base model
+                base_model_name = base_model_local_path
+                print(f"  Using local base model: {base_model_name}")
+            else:
+                # ❌ Fall back to HuggingFace (will fail if no token)
+                base_model_name = peft_config.base_model_name_or_path
+                print(f"  Using HuggingFace base model: {base_model_name}")
             
             # Load base model config with correct num_labels
             from transformers import AutoConfig
@@ -198,8 +209,8 @@ class CalibratedStrategicClassifier:
                 base_model_name,
                 config=config,
                 ignore_mismatched_sizes=True,
-                torch_dtype=torch.float32,  # Use float32 for better compatibility
-                low_cpu_mem_usage=True      # Memory efficient loading
+                torch_dtype=torch.float32,
+                low_cpu_mem_usage=True
             )
             
             # Load PEFT adapter on top
