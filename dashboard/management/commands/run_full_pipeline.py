@@ -63,9 +63,19 @@ class Command(BaseCommand):
                             include_tables=False,
                             with_metadata=True
                         )
+                        
+                        # Check if we got enough content
+                        if text and len(text) >= 50:
+                            self.stdout.write(self.style.SUCCESS(f"✅ Extracted {len(text)} characters"))
+                        else:
+                            self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction failed or empty"))
+                            skipped += 1
+                            continue
                     else:
                         text = None
-                
+                        self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Download failed"))
+                        skipped += 1
+                        continue
                 # Step 3: Get target country from MediaCloud DB
                 target_country = article.target_country or 'Unknown'
                 
