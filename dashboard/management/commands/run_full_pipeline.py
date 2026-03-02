@@ -55,16 +55,16 @@ class Command(BaseCommand):
                 # Step 2: Extract full article text from URL
                 if not skip_extraction:
                     downloaded = trafilatura.fetch_url(article.url)
-                    text = trafilatura.extract(downloaded) if downloaded else None
-                    
-                    if not text or len(text.strip()) < 50:
-                        self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction failed or empty"))
-                        skipped += 1
-                        continue
-                    
-                    self.stdout.write(f"✅ Extracted {len(text)} characters")
-                else:
-                    text = article.article_text
+                    if downloaded:
+                        # Extract with full text
+                        text = trafilatura.extract(
+                            downloaded,
+                            include_comments=False,
+                            include_tables=False,
+                            with_metadata=True
+                        )
+                    else:
+                        text = None
                 
                 # Step 3: Get target country from MediaCloud DB
                 target_country = article.target_country or 'Unknown'
