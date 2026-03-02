@@ -137,6 +137,9 @@ class MLInferenceService:
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
         
+        print(f"\n🔍 === STRATEGIC MODEL DOWNLOAD ===")
+        print(f"📁 Temp dir: {temp_dir}")
+        
         # Download the base model from S3 first
         base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
         if not os.path.exists(base_model_dir):
@@ -144,19 +147,33 @@ class MLInferenceService:
             if self.s3_client:
                 try:
                     base_prefix = 'microsoft_mdeberta-v3-base/'
+                    print(f"📂 Looking for base model in S3: {base_prefix}")
                     pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
-                    for obj in pages.get('Contents', []):
+                    contents = pages.get('Contents', [])
+                    print(f"   Found {len(contents)} files")
+                    
+                    for obj in contents:
                         key = obj['Key']
                         filename = key.replace(base_prefix, '')
                         local_path = os.path.join(base_model_dir, filename)
+                        os.makedirs(os.path.dirname(local_path), exist_ok=True)
                         self.s3_client.download_file(self.bucket_name, key, local_path)
-                    print(f"Downloaded base model to {base_model_dir}")
+                    print(f"✅ Downloaded base model to {base_model_dir}")
+                    print(f"   Files: {os.listdir(base_model_dir)}")
                 except Exception as e:
-                    print(f"Could not download base model: {e}")
+                    print(f"❌ Could not download base model: {e}")
+        
+        # Check what we have
+        print(f"📂 Files in temp_dir: {os.listdir(temp_dir)}")
         
         # Now download the classifier
-        if not self._download_directory_from_s3('calibrated_contrastive_peft/', temp_dir):
+        classifier_prefix = 'calibrated_contrastive_peft/'
+        print(f"📂 Downloading classifier from: {classifier_prefix}")
+        
+        if not self._download_directory_from_s3(classifier_prefix, temp_dir):
             raise Exception("Failed to download strategic classifier from S3")
+        
+        print(f"📂 Files after classifier download: {os.listdir(temp_dir)}")
         
         # Load the classifier
         from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
@@ -170,6 +187,7 @@ class MLInferenceService:
             with open(label_enc_path, 'rb') as f:
                 self._strategic_label_encoder = pickle.load(f)
         
+        print(f"✅ Strategic classifier loaded!")
         return classifier
         
     def _load_tone_classifier(self):
