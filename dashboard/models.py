@@ -68,11 +68,14 @@ class MediaNarrative(Model):
     pseudo_weight = FloatField(default=0.0)
     llm_strat_id = IntegerField(blank=True, null=True)
     strategic_intent_id = IntegerField(blank=True, null=True)
-    author = CharField(max_length=255, blank=True, null=True, default="Unknown")  # Add back if removed
+    author = CharField(max_length=255, blank=True, null=True, default="Unknown")
+    # Add back if removed
 
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     vulnerability_index = FloatField(null=True, blank=True)
+    ml_processed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ['-posting_time']
         verbose_name = "Media Narrative"
