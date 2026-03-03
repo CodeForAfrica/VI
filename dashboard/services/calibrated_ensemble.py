@@ -185,7 +185,7 @@ class CalibratedStrategicClassifier:
             peft_config = PeftConfig.from_pretrained(model_dir)
             
             # CHECK: Is the base model downloaded locally?
-            base_model_local_path = os.path.join(save_dir, 'microsoft_mdeberta-v3-base')
+            base_model_local_path = os.path.join(save_dir, 'microsoft_deberta-v3-large')
             
             if os.path.exists(base_model_local_path) and os.path.isdir(base_model_local_path):
                 # ✅ Use LOCAL base model
