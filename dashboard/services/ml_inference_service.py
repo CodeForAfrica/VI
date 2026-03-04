@@ -17,7 +17,9 @@ from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
 import time
 import botocore
-from botocore.s3.transfer import TransferConfig
+
+
+TransferConfig = None
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
@@ -132,25 +134,14 @@ class MLInferenceService:
                 # Retry logic for each file
                 for attempt in range(max_retries):
                     try:
-                        # Use multipart download for large files
-                        self.s3_client.download_file(
-                            self.bucket_name, 
-                            key, 
-                            local_file_path,
-                            Config=TransferConfig(
-                                multipart_threshold=8 * 1024 * 1024,
-                                multipart_chunksize=8 * 1024 * 1024,
-                                max_concurrency=10,
-                                max_io_queue=100,
-                                use_threads=True
-                            )
-                        )
+                        # Use default download (no TransferConfig)
+                        self.s3_client.download_file(self.bucket_name, key, local_file_path)
                         print(f"✅ Downloaded: {key}")
                         break
                     except Exception as e:
                         if attempt < max_retries - 1:
                             print(f"⚠️ Retry {attempt + 1}/{max_retries} for {key}: {e}")
-                            time.sleep(2 ** attempt)  # Exponential backoff
+                            time.sleep(2 ** attempt)
                         else:
                             print(f"❌ Failed to download {key} after {max_retries} retries")
                             raise
@@ -162,6 +153,7 @@ class MLInferenceService:
             import traceback
             traceback.print_exc()
             return False
+        
     def _load_strategic_classifier(self):
         """Load calibrated strategic classifier from S3"""
         if 'strategic' in self._model_cache:
