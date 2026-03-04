@@ -4,7 +4,7 @@ import django.utils.timezone
 from django.core.management.base import BaseCommand
 from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
-
+import cloudscraper
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
@@ -54,28 +54,33 @@ class Command(BaseCommand):
                 
                 # Step 2: Extract full article text from URL
                 if not skip_extraction:
-                    downloaded = trafilatura.fetch_url(article.url)
-                    if downloaded:
-                        # Extract with full text
-                        text = trafilatura.extract(
-                            downloaded,
-                            include_comments=False,
-                            include_tables=False,
-                            with_metadata=True
-                        )
+                    try:
+                        # Use cloudscraper for better extraction (handles JS/anti-bot)
+                        scraper = cloudscraper.create_scraper()
                         
-                        # Check if we got enough content
-                        if text and len(text) >= 50:
-                            self.stdout.write(self.style.SUCCESS(f"✅ Extracted {len(text)} characters"))
+                        response = scraper.get(article.url, timeout=30)
+                        
+                        if response.status_code == 200:
+                            # Extract text from raw HTML
+                            text = trafilatura.extract(response.text)
+                            
+                            if text and len(text.strip()) >= 50:
+                                self.stdout.write(self.style.SUCCESS(f"✅ Extracted {len(text)} characters"))
+                            else:
+                                self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction failed or empty"))
+                                skipped += 1
+                                continue
                         else:
-                            self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction failed or empty"))
+                            self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: HTTP {response.status_code}"))
                             skipped += 1
                             continue
-                    else:
-                        text = None
-                        self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Download failed"))
+                            
+                    except Exception as e:
+                        self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Error {str(e)[:50]}"))
                         skipped += 1
                         continue
+                else:
+                    text = article.article_text
                 # Step 3: Get target country from MediaCloud DB
                 target_country = article.target_country or 'Unknown'
                 
