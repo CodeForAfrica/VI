@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import ProbabilitiesEstimator
-from scipy.stats import probables
+#from scipy.stats import probables
 
 class ToneProbabilitiesEstimator:
     """Helper class for tone calibration"""
