@@ -87,7 +87,7 @@ class MLInferenceService:
             logger.error(f"Error downloading {s3_key}: {e}")
             return False
 
-    def _download_directory_from_s3(self, s3_prefix, local_dir, max_retries=3):
+    def _download_directory_from_s3(self, s3_prefix, local_dir, max_retries=5):
         """Download entire directory from S3 to local directory with retry logic"""
         print(f"\n🔍 === DOWNLOAD DEBUG ===")
         print(f"📍 Prefix: {s3_prefix}")
@@ -104,7 +104,6 @@ class MLInferenceService:
             
             if 'Contents' not in response:
                 print(f"❌ No files found with prefix: {s3_prefix}")
-                print(f"📋 Response: {response}")
                 return False
             
             print(f"✅ Found {len(response['Contents'])} files")
@@ -123,7 +122,19 @@ class MLInferenceService:
                 # Retry logic for each file
                 for attempt in range(max_retries):
                     try:
-                        self.s3_client.download_file(self.bucket_name, key, local_file_path)
+                        # Use multipart download for large files
+                        self.s3_client.download_file(
+                            self.bucket_name, 
+                            key, 
+                            local_file_path,
+                            Config=botocore.s3.transfer.TransferConfig(
+                                multipart_threshold=8 * 1024 * 1024,  # 8MB
+                                multipart_chunksize=8 * 1024 * 1024,  # 8MB
+                                max_concurrency=10,
+                                max_io_queue=100,
+                                use_threads=True
+                            )
+                        )
                         print(f"✅ Downloaded: {key}")
                         break
                     except Exception as e:
