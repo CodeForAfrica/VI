@@ -17,7 +17,7 @@ from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
 import time
 import botocore
-
+from botocore.s3.transfer import TransferConfig
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
@@ -137,9 +137,9 @@ class MLInferenceService:
                             self.bucket_name, 
                             key, 
                             local_file_path,
-                            Config=botocore.s3.transfer.TransferConfig(
-                                multipart_threshold=8 * 1024 * 1024,  # 8MB
-                                multipart_chunksize=8 * 1024 * 1024,  # 8MB
+                            Config=TransferConfig(
+                                multipart_threshold=8 * 1024 * 1024,
+                                multipart_chunksize=8 * 1024 * 1024,
                                 max_concurrency=10,
                                 max_io_queue=100,
                                 use_threads=True
@@ -274,23 +274,6 @@ class MLInferenceService:
         logger.warning("Could not download tone classifier from S3, using fallback")
         return None
         
-        # Load the classifier
-        from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
-        classifier = CalibratedStackedEnsemble.load(temp_dir)
-        
-        self._model_cache['tone'] = classifier
-        
-        # Load label encoder
-        label_enc_path = os.path.join(temp_dir, 'label_info.json')
-        if os.path.exists(label_enc_path):
-            with open(label_enc_path, 'r') as f:
-                label_info = json.load(f)
-            from sklearn.preprocessing import LabelEncoder
-            self._tone_label_encoder = LabelEncoder()
-            self._tone_label_encoder.classes_ = np.array(label_info['classes'])
-        
-        return classifier
-    
     def preprocess_text(self, text):
         """Replicate preprocessing from notebook"""
         if not text or text.strip() == "":
@@ -428,80 +411,80 @@ class MLInferenceService:
                 return actor
         
         return 'Unknown'
-        def extract_actor_from_content(self, text, organizations=None, persons=None):
-            """Extract foreign actor from article content using NER and keywords"""
-            try:
-                text_lower = text.lower()
-                
-                # Priority 1: Check organizations from NER
-                if organizations:
-                    for org in organizations:
-                        org_lower = org.lower()
-                        if 'china' in org_lower or 'chinese' in org_lower:
-                            return 'China'
-                        if 'russia' in org_lower or 'russian' in org_lower:
-                            return 'Russia'
-                        if 'france' in org_lower or 'french' in org_lower:
-                            return 'France'
-                        if 'united states' in org_lower or 'usa' in org_lower or 'american' in org_lower:
-                            return 'USA'
-                        if 'saudi' in org_lower:
-                            return 'Saudi'
-                        if 'turkey' in org_lower or 'turkish' in org_lower:
-                            return 'Turkey'
-                        if 'uae' in org_lower or 'emirates' in org_lower:
-                            return 'UAE'
-                        if 'israel' in org_lower or 'israeli' in org_lower:
-                            return 'Israel'
-                        if 'iran' in org_lower or 'iranian' in org_lower:
-                            return 'Iran'
-                        if 'rwanda' in org_lower or 'rwandan' in org_lower:
-                            return 'Rwanda'
-                
-                # Priority 2: Check persons from NER
-                if persons:
-                    for person in persons:
-                        person_lower = person.lower()
-                        if 'xi' in person_lower or 'jinping' in person_lower:
-                            return 'China'
-                        if 'putin' in person_lower:
-                            return 'Russia'
-                        if 'macron' in person_lower:
-                            return 'France'
-                        if 'trump' in person_lower or 'biden' in person_lower:
-                            return 'USA'
-                        if 'erdogan' in person_lower:
-                            return 'Turkey'
-                        if 'netany' in person_lower:
-                            return 'Israel'
-                        if 'raisi' in person_lower or 'khamenei' in person_lower:
-                            return 'Iran'
-                        if 'kagame' in person_lower:
-                            return 'Rwanda'
-                
-                # Priority 3: Keyword search in full text
-                actor_keywords = {
-                    'china': ['china', 'chinese', 'beijing', 'xi jinping', 'cgtn', 'xinhua'],
-                    'russia': ['russia', 'russian', 'moscow', 'putin', 'kremlin', 'sputnik', 'rt'],
-                    'france': ['france', 'french', 'paris', 'macron', 'le monde', 'france24'],
-                    'usa': ['united states', 'usa', 'america', 'american', 'washington', 'cnn', 'bbc', 'reuters'],
-                    'saudi': ['saudi', 'riyadh', 'king salman', 'crown prince'],
-                    'turkey': ['turkey', 'turkish', 'ankara', 'erdogan', 'anadolu'],
-                    'uae': ['uae', 'emirates', 'dubai', 'abu dhabi'],
-                    'israel': ['israel', 'israeli', 'tel aviv', 'netanyahu'],
-                    'iran': ['iran', 'iranian', 'tehran', 'raisi', 'khamenei'],
-                    'rwanda': ['rwanda', 'rwandan', 'kigali', 'kagame'],
-                }
-                
-                for actor, keywords in actor_keywords.items():
-                    for keyword in keywords:
-                        if keyword in text_lower:
-                            return actor.title()
-                
-                return 'Unknown'
-            except Exception as e:
-                logger.error(f"Error extracting actor from content: {e}")
-                return 'Unknown'
+    def extract_actor_from_content(self, text, organizations=None, persons=None):
+        """Extract foreign actor from article content using NER and keywords"""
+        try:
+            text_lower = text.lower()
+            
+            # Priority 1: Check organizations from NER
+            if organizations:
+                for org in organizations:
+                    org_lower = org.lower()
+                    if 'china' in org_lower or 'chinese' in org_lower:
+                        return 'China'
+                    if 'russia' in org_lower or 'russian' in org_lower:
+                        return 'Russia'
+                    if 'france' in org_lower or 'french' in org_lower:
+                        return 'France'
+                    if 'united states' in org_lower or 'usa' in org_lower or 'american' in org_lower:
+                        return 'USA'
+                    if 'saudi' in org_lower:
+                        return 'Saudi'
+                    if 'turkey' in org_lower or 'turkish' in org_lower:
+                        return 'Turkey'
+                    if 'uae' in org_lower or 'emirates' in org_lower:
+                        return 'UAE'
+                    if 'israel' in org_lower or 'israeli' in org_lower:
+                        return 'Israel'
+                    if 'iran' in org_lower or 'iranian' in org_lower:
+                        return 'Iran'
+                    if 'rwanda' in org_lower or 'rwandan' in org_lower:
+                        return 'Rwanda'
+            
+            # Priority 2: Check persons from NER
+            if persons:
+                for person in persons:
+                    person_lower = person.lower()
+                    if 'xi' in person_lower or 'jinping' in person_lower:
+                        return 'China'
+                    if 'putin' in person_lower:
+                        return 'Russia'
+                    if 'macron' in person_lower:
+                        return 'France'
+                    if 'trump' in person_lower or 'biden' in person_lower:
+                        return 'USA'
+                    if 'erdogan' in person_lower:
+                        return 'Turkey'
+                    if 'netany' in person_lower:
+                        return 'Israel'
+                    if 'raisi' in person_lower or 'khamenei' in person_lower:
+                        return 'Iran'
+                    if 'kagame' in person_lower:
+                        return 'Rwanda'
+            
+            # Priority 3: Keyword search in full text
+            actor_keywords = {
+                'china': ['china', 'chinese', 'beijing', 'xi jinping', 'cgtn', 'xinhua'],
+                'russia': ['russia', 'russian', 'moscow', 'putin', 'kremlin', 'sputnik', 'rt'],
+                'france': ['france', 'french', 'paris', 'macron', 'le monde', 'france24'],
+                'usa': ['united states', 'usa', 'america', 'american', 'washington', 'cnn', 'bbc', 'reuters'],
+                'saudi': ['saudi', 'riyadh', 'king salman', 'crown prince'],
+                'turkey': ['turkey', 'turkish', 'ankara', 'erdogan', 'anadolu'],
+                'uae': ['uae', 'emirates', 'dubai', 'abu dhabi'],
+                'israel': ['israel', 'israeli', 'tel aviv', 'netanyahu'],
+                'iran': ['iran', 'iranian', 'tehran', 'raisi', 'khamenei'],
+                'rwanda': ['rwanda', 'rwandan', 'kigali', 'kagame'],
+            }
+            
+            for actor, keywords in actor_keywords.items():
+                for keyword in keywords:
+                    if keyword in text_lower:
+                        return actor.title()
+            
+            return 'Unknown'
+        except Exception as e:
+            logger.error(f"Error extracting actor from content: {e}")
+            return 'Unknown'
             
     def perform_strategic_intent_inference(self, article_text):
         """Perform strategic intent inference"""
