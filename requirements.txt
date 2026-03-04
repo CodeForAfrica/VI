@@ -25,6 +25,7 @@ python-dotenv==1.0.0
 groq
 cloudscraper
 spacy
+botocore
 
 # Database & PDF
 sqlalchemy
