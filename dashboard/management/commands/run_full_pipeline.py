@@ -23,6 +23,8 @@ class Command(BaseCommand):
         skip_ml = options['skip_ml']
         ml_service = get_ml_service()
         
+        scraper = cloudscraper.create_scraper()
+        
         self.stdout.write(self.style.SUCCESS(f"--- Starting Full Pipeline (Dry Run: {dry_run}) ---"))
         self.stdout.write(f"Limit: {limit} articles")
         
@@ -55,9 +57,7 @@ class Command(BaseCommand):
                 # Step 2: Extract full article text from URL
                 if not skip_extraction:
                     try:
-                        # Use cloudscraper for better extraction (handles JS/anti-bot)
-                        scraper = cloudscraper.create_scraper()
-                        
+                        # Use cloudscraper for better extraction (handles JS/anti-bot)                        
                         response = scraper.get(article.url, timeout=30)
                         
                         if response.status_code == 200:
