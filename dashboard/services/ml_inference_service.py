@@ -16,6 +16,8 @@ import importlib.util
 from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
 import time
+import botocore
+
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,15 @@ class MLInferenceService:
                 's3',
                 aws_access_key_id=aws_key,
                 aws_secret_access_key=aws_secret,
-                region_name=aws_region
+                region_name=aws_region,
+                config=botocore.config.Config(
+                    retries={
+                        'max_attempts': 10,
+                        'mode': 'adaptive'
+                    },
+                    connect_timeout=60,
+                    read_timeout=300
+                )
             )
             self.bucket_name = aws_bucket
         else:
