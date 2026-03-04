@@ -15,7 +15,7 @@ import json
 import importlib.util
 from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
-
+import time
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
