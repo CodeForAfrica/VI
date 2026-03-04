@@ -87,8 +87,8 @@ class MLInferenceService:
             logger.error(f"Error downloading {s3_key}: {e}")
             return False
 
-    def _download_directory_from_s3(self, s3_prefix, local_dir):
-        """Download entire directory from S3 to local directory"""
+    def _download_directory_from_s3(self, s3_prefix, local_dir, max_retries=3):
+        """Download entire directory from S3 to local directory with retry logic"""
         print(f"\n🔍 === DOWNLOAD DEBUG ===")
         print(f"📍 Prefix: {s3_prefix}")
         print(f"📁 Local dir: {local_dir}")
@@ -119,7 +119,20 @@ class MLInferenceService:
                 
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
                 print(f"⬇️ Downloading: {key} -> {local_file_path}")
-                self.s3_client.download_file(self.bucket_name, key, local_file_path)
+                
+                # Retry logic for each file
+                for attempt in range(max_retries):
+                    try:
+                        self.s3_client.download_file(self.bucket_name, key, local_file_path)
+                        print(f"✅ Downloaded: {key}")
+                        break
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            print(f"⚠️ Retry {attempt + 1}/{max_retries} for {key}: {e}")
+                            time.sleep(2 ** attempt)  # Exponential backoff
+                        else:
+                            print(f"❌ Failed to download {key} after {max_retries} retries")
+                            raise
             
             print(f"✅ Successfully downloaded all files")
             return True
@@ -128,7 +141,6 @@ class MLInferenceService:
             import traceback
             traceback.print_exc()
             return False
-
     def _load_strategic_classifier(self):
         """Load calibrated strategic classifier from S3"""
         if 'strategic' in self._model_cache:
@@ -192,7 +204,9 @@ class MLInferenceService:
         
     def _load_tone_classifier(self):
         """Load calibrated tone classifier from S3"""
+        # ✅ Check cache first - return immediately if cached
         if 'tone' in self._model_cache:
+            print("✅ Using cached tone classifier")
             return self._model_cache['tone']
         
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
