@@ -5,6 +5,8 @@ from django.core.management.base import BaseCommand
 from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
 import cloudscraper
+from django.db.models import Q
+
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
