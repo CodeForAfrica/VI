@@ -159,23 +159,79 @@ class MLInferenceService:
             import traceback
             traceback.print_exc()
             return False
+            
     def _load_from_persistent_cache(self, model_type):
         """Load model from persistent cache directory"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
         if cache_path.exists():
             print(f"✅ Loading {model_type} model from persistent cache: {cache_path}")
-            # You would load the model from cache_path here
-            # For now, return False to trigger fresh load
-            return False
+            
+            if model_type == 'strategic':
+                # Load strategic classifier from cache
+                from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+                classifier = CalibratedStrategicClassifier.load(str(cache_path))
+                self._model_cache['strategic'] = classifier
+                
+                # Load label encoder
+                label_enc_path = cache_path / 'label_encoder.pkl'
+                if label_enc_path.exists():
+                    with open(label_enc_path, 'rb') as f:
+                        self._strategic_label_encoder = pickle.load(f)
+                
+                print(f"✅ Strategic classifier loaded from cache!")
+                return True
+            
+            elif model_type == 'tone':
+                # Load tone classifier from cache
+                from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
+                classifier = CalibratedStackedEnsemble.load(str(cache_path))
+                self._model_cache['tone'] = classifier
+                
+                # Load label encoder
+                label_enc_path = cache_path / 'label_info.json'
+                if label_enc_path.exists():
+                    with open(label_enc_path, 'r') as f:
+                        label_info = json.load(f)
+                    from sklearn.preprocessing import LabelEncoder
+                    self._tone_label_encoder = LabelEncoder()
+                    self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                
+                print(f"✅ Tone classifier loaded from cache!")
+                return True
+        
         return False
 
-    def _save_to_persistent_cache(self, model_type, model):
+    def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
-        if not cache_path.exists():
-            cache_path.mkdir(parents=True, exist_ok=True)
-        # You would save the model to cache_path here
-        print(f"✅ Saved {model_type} model to persistent cache: {cache_path}")
+        cache_path.mkdir(parents=True, exist_ok=True)
+        
+        if model_type == 'strategic':
+            # Save classifier to cache
+            model.save(str(cache_path))
+            
+            # Save label encoder
+            if self._strategic_label_encoder:
+                label_enc_path = cache_path / 'label_encoder.pkl'
+                with open(label_enc_path, 'wb') as f:
+                    pickle.dump(self._strategic_label_encoder, f)
+            
+            print(f"✅ Saved strategic model to persistent cache: {cache_path}")
+        
+        elif model_type == 'tone':
+            # Save classifier to cache
+            model.save(str(cache_path))
+            
+            # Save label encoder info
+            if self._tone_label_encoder:
+                label_info = {
+                    'classes': self._tone_label_encoder.classes_.tolist()
+                }
+                label_enc_path = cache_path / 'label_info.json'
+                with open(label_enc_path, 'w') as f:
+                    json.dump(label_info, f)
+            
+            print(f"✅ Saved tone model to persistent cache: {cache_path}")
     
     def _load_strategic_classifier(self):
         """Load calibrated strategic classifier from S3"""
@@ -240,6 +296,8 @@ class MLInferenceService:
                 self._strategic_label_encoder = pickle.load(f)
         
         print(f"✅ Strategic classifier loaded!")
+        # ✅ Save to persistent cache
+        self._save_to_persistent_cache('strategic', classifier)
         return classifier
         
     def _load_tone_classifier(self):
@@ -287,6 +345,8 @@ class MLInferenceService:
                     print(f"✅ Tone classifier loaded with labels: {label_info['classes']}")
                 
                 print(f"✅ SUCCESS: Tone classifier ready!")
+                # ✅ Save to persistent cache
+                self._save_to_persistent_cache('tone', classifier)
                 return classifier
         
         except Exception as e:
