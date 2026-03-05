@@ -30,9 +30,10 @@ class Command(BaseCommand):
         
         # Step 1: Get articles that need processing
         articles = MediaNarrative.objects.filter(
-            article_text__isnull=True
-        ) | MediaNarrative.objects.filter(
-            ml_processed_at__isnull=True
+            Q(strategic_intent__isnull=True) |
+            Q(tone__isnull=True) |
+            Q(target_country__isnull=True) |
+            Q(inferred_actor__isnull=True)
         )
         
         # Get unique articles and limit
