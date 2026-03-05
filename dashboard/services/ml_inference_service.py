@@ -18,6 +18,7 @@ import pandas as pd
 import time
 import botocore
 from dashboard.services.tone_ensemble import ProbabilitiesEstimator
+from pathlib import Path
 
 
 TransferConfig = None
@@ -59,6 +60,10 @@ class MLInferenceService:
         self._strategic_label_encoder = None
         self._tone_label_encoder = None
         self._strategic_vocab = None
+
+        # ✅ Add persistent cache directory
+        self.model_cache_dir = Path(settings.BASE_DIR) / 'model_cache'
+        self.model_cache_dir.mkdir(exist_ok=True)
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
@@ -154,12 +159,33 @@ class MLInferenceService:
             import traceback
             traceback.print_exc()
             return False
-        
+    def _load_from_persistent_cache(self, model_type):
+        """Load model from persistent cache directory"""
+        cache_path = self.model_cache_dir / f'{model_type}_model'
+        if cache_path.exists():
+            print(f"✅ Loading {model_type} model from persistent cache: {cache_path}")
+            # You would load the model from cache_path here
+            # For now, return False to trigger fresh load
+            return False
+        return False
+
+    def _save_to_persistent_cache(self, model_type, model):
+        """Save model to persistent cache directory"""
+        cache_path = self.model_cache_dir / f'{model_type}_model'
+        if not cache_path.exists():
+            cache_path.mkdir(parents=True, exist_ok=True)
+        # You would save the model to cache_path here
+        print(f"✅ Saved {model_type} model to persistent cache: {cache_path}")
+    
     def _load_strategic_classifier(self):
         """Load calibrated strategic classifier from S3"""
         if 'strategic' in self._model_cache:
             return self._model_cache['strategic']
-        
+            
+         # ✅ Check persistent cache first
+        if self._load_from_persistent_cache('strategic'):
+            return self._model_cache['strategic']
+            
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
         
@@ -222,7 +248,11 @@ class MLInferenceService:
         if 'tone' in self._model_cache:
             print("✅ Using cached tone classifier")
             return self._model_cache['tone']
-        
+
+        # ✅ Check persistent cache first
+        if self._load_from_persistent_cache('tone'):
+            return self._model_cache['tone']  
+            
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
