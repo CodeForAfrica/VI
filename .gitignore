@@ -1,20 +1,60 @@
+# --- Python ---
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.so
+
+# --- Virtual Environment ---
 venv/
+env/
+.venv/
+ENV/
+
+# --- Environment Variables ---
 .env
-staticfiles/
+.env.local
+.env.*.local
+
+# --- Django ---
 db.sqlite3
-lambda_dist/
-deployment_package.zip
+*.sqlite3
+staticfiles/
+media/
+
+# --- Model Cache (CRITICAL - Download from S3, NOT git) ---
+model_cache/
+deberta-v3-large/
+microsoft_mdeberta-v3-base/
+calibrated_contrastive_peft/
+calibrated_stacked_ensemble/
 
 # --- Terraform ---
 .terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
+terraform/.terraform.lock.hcl
 
 # --- Build Artifacts ---
 *.zip
 lambda_layer/
-# Keep the lock file
-!terraform/.terraform.lock.hcl
+deployment_package.zip
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Temporary Files ---
+*.tmp
+*.temp
