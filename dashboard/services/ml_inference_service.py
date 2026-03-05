@@ -17,6 +17,7 @@ from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
 import time
 import botocore
+from dashboard.services.tone_ensemble import ProbabilitiesEstimator
 
 
 TransferConfig = None
