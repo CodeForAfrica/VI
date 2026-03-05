@@ -26,6 +26,9 @@ groq
 cloudscraper
 spacy
 botocore>=1.34.0
+huggingface_hub==0.24.0
+transformers==4.41.0
+
 
 # Database & PDF
 sqlalchemy
