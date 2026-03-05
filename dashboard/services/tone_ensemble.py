@@ -235,3 +235,5 @@ class CalibratedStackedEnsemble:
         
         print(f"✅ Calibrated ensemble loaded from {load_dir}")
         return cls(ensemble, calibrator)
+ProbabilitiesEstimator = ToneProbabilitiesEstimator
+
