@@ -209,7 +209,7 @@ class CalibratedStackedEnsemble:
         tokenizers = []
         for model_dir in base_model_dirs:
             full_path = os.path.join(load_dir, model_dir)
-            tokenizer = AutoTokenizer.from_pretrained(full_path)
+            tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
             model = AutoModelForSequenceClassification.from_pretrained(full_path)
             model.eval()
             tokenizers.append(tokenizer)
