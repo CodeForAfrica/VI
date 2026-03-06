@@ -54,8 +54,6 @@ Indicators include:
 
 These signals capture **how actively external actors attempt to shape the information environment**.
 
----
-
 ## Contextual Signal
 
 The **Contextual Signal** measures structural vulnerabilities within the target country.
@@ -70,8 +68,6 @@ Examples include:
 - social tensions
 
 These factors determine **how receptive the environment may be to influence narratives**.
-
----
 
 ## Vulnerability Index
 
