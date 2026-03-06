@@ -178,7 +178,7 @@ class CalibratedStrategicClassifier:
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             
             # Load tokenizer from LOCAL directory
-            tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True)
+            tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
             
             # Get PEFT config
             from peft import PeftConfig
