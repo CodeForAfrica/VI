@@ -173,28 +173,43 @@ class CalibratedStackedEnsemble:
     def save(self, save_dir):
         """Save entire calibrated ensemble"""
         os.makedirs(save_dir, exist_ok=True)
-        
+
         # Save base models
         for i, (model, tokenizer) in enumerate(zip(self.ensemble.base_models, self.ensemble.tokenizers)):
             model_dir = os.path.join(save_dir, f'base_model_{i}')
             os.makedirs(model_dir, exist_ok=True)
             model.save_pretrained(model_dir)
             tokenizer.save_pretrained(model_dir)
-        
-        # Save meta-model
-        joblib.dump(self.ensemble.meta_model, os.path.join(save_dir, 'meta_model.pkl'))
-        
+
+        # Save meta-model using skops if possible, fallback to joblib
+        meta_model_path_joblib = os.path.join(save_dir, 'meta_model.pkl')
+        meta_model_path_skops = os.path.join(save_dir, 'meta_model.skops')
+        try:
+            # Attempt to save with skops first (works if meta_model is sklearn-compatible)
+            logger.info(f"Attempting to save meta_model using skops...")
+            sio.dump(self.ensemble.meta_model, meta_model_path_skops)
+            logger.info(f"✅ Meta-model saved using skops: {meta_model_path_skops}")
+        except Exception as e_skops:
+            logger.warning(f"Skops save failed for meta_model: {e_skops}. Falling back to joblib.")
+            try:
+                joblib.dump(self.ensemble.meta_model, meta_model_path_joblib)
+                logger.info(f"✅ Meta-model saved using joblib: {meta_model_path_joblib}")
+            except Exception as e_joblib:
+                logger.error(f"Joblib save also failed for meta_model: {e_joblib}")
+                raise # Propagate error if both fail
+
         # Save label encoder info
         label_info = {
             'classes': self.ensemble.label_encoder.classes_.tolist()
         }
         with open(os.path.join(save_dir, 'label_info.json'), 'w') as f:
             json.dump(label_info, f)
-        
+
         # Save calibrator
         if self.calibrator.calibrated:
-            self.calibrator.save(os.path.join(save_dir, 'venn_abers_calibrator.pkl'))
-        
+            calibrator_path = os.path.join(save_dir, 'venn_abers_calibrator.pkl')
+            self.calibrator.save(calibrator_path) # This uses pickle internally
+
         print(f"✅ Calibrated ensemble saved to {save_dir}")
 
     @classmethod
@@ -204,35 +219,82 @@ class CalibratedStackedEnsemble:
         import glob
         base_model_patterns = glob.glob(os.path.join(load_dir, 'base_model_*'))
         base_model_dirs = sorted([os.path.basename(d) for d in base_model_patterns])
-        
+
         base_models = []
         tokenizers = []
         for model_dir in base_model_dirs:
             full_path = os.path.join(load_dir, model_dir)
-            tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
+            # Use local path, not remote name
+            tokenizer =trained(full_path, use_fast=False)
             model = AutoModelForSequenceClassification.from_pretrained(full_path)
             model.eval()
             tokenizers.append(tokenizer)
             base_models.append(model)
-        
-        # Load meta-model
-        meta_model = joblib.load(os.path.join(load_dir, 'meta_model.pkl'))
-        
+
+        # Load meta-model: Try skops first, then joblib
+        meta_model_path_skops = os.path.join(load_dir, 'meta_model.skops')
+        meta_model_path_joblib = os.path.join(load_dir, 'meta_model.pkl')
+
+        meta_model = None
+        if os.path.exists(meta_model_path_skops):
+            logger.info(f"Loading meta_model from {meta_model_path_skops} using skops...")
+            try:
+                # Load with skops, specifying trusted types if needed
+                # Common types for sklearn models: 'builtins.type', 'numpy.dtype', 'numpy.ndarray',
+                # 'sklearn.linear_model.*', 'sklearn.ensemble.*', etc. Add based on your actual meta_model type.
+                # For now, let's assume a common case like LogisticRegression might need specific types.
+                # It's safest to use get_untrusted_types first on your saved model.
+                # trusted_types = sio.get_untrusted_types(file=meta_model_path_skops)
+                # print("Untrusted types found:", trusted_types)
+                # Then, after reviewing, pass them: trusted=trusted_types
+                # For this example, we'll use a broad default, but you should refine this.
+                trusted_types = [
+                    "builtins.type", "builtins.function", "numpy.dtype", "numpy.ndarray",
+                    # Add specific sklearn types based on your meta_model (e.g., if it's LogisticRegression):
+                    # "sklearn.linear_model._logistic.LogisticRegression",
+                    # Add other necessary types reported by get_untrusted_types
+                ]
+                meta_model = sio.load(meta_model_path_skops, trusted=trusted_types)
+                logger.info("✅ Meta-model loaded using skops.")
+            except Exception as e_skops:
+                logger.warning(f"Failed to load meta_model with skops ({e_skops}), falling back to joblib.")
+
+        if meta_model is None and os.path.exists(meta_model_path_joblib):
+            logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
+            try:
+                meta_model = joblib_joblib)
+                logger.info("✅ Meta-model loaded using joblib.")
+            except Exception as e_joblib:
+                logger.error(f"Failed to load meta_model with joblib: {e_joblib}")
+                raise # Or handle more gracefully
+
+        if meta_model is None:
+            raise FileNotFoundError("Neither meta_model.skops nor meta_model.pkl found in the model directory.")
+
         # Create label encoder
         with open(os.path.join(load_dir, 'label_info.json'), 'r') as f:
             label_info = json.load(f)
         label_encoder = LabelEncoder()
         label_encoder.classes_ = np.array(label_info['classes'])
-        
+
         # Create ensemble
         ensemble = StackedEnsemble(base_models, tokenizers, label_encoder, meta_model)
-        
+
         # Load calibrator
         calibrator = VennAbersCalibrator()
         calibrator_path = os.path.join(load_dir, 'venn_abers_calibrator.pkl')
         if os.path.exists(calibrator_path):
-            calibrator.load(calibrator_path)
-        
+            logger.info(f"Loading Venn-Abers calibrator from {calibrator_path}...")
+            try:
+                # Load calibrator using its own method (which uses pickle internally)
+                calibrator.load(calibrator_path)
+            except Exception as e_cal:
+                logger.error(f"Failed to load Venn-Abers calibrator: {e_cal}")
+                # Depending on your needs, you might want to continue without the calibrator
+                # or raise an error here. Let's continue without it for now.
+                # raise # Uncomment if calibrator is mandatory
+                logger.warning("Continuing without Venn-Abers calibrator.")
+
         print(f"✅ Calibrated ensemble loaded from {load_dir}")
         return cls(ensemble, calibrator)
 ProbabilitiesEstimator = ToneProbabilitiesEstimator
