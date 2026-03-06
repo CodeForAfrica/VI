@@ -30,12 +30,56 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"--- Starting Full Pipeline (Dry Run: {dry_run}) ---"))
         self.stdout.write(f"Limit: {limit} articles")
         
-        # Step 1: Get articles that need processing
+        # Step 1: Get articles that need processing (UNLABELED only)
         articles = MediaNarrative.objects.filter(
             Q(strategic_intent__isnull=True) |
             Q(tone__isnull=True) |
             Q(target_country__isnull=True) |
             Q(inferred_actor__isnull=True)
+        )
+        
+        # ✅ Add debug logging BEFORE filtering
+        total_articles = MediaNarrative.objects.count()
+        labeled_articles = MediaNarrative.objects.filter(
+            Q(strategic_intent__isnull=False) &
+            Q(tone__isnull=False) &
+            Q(target_country__isnull=False) &
+            Q(inferred_actor__isnull=False)
+        ).count()
+        unlabeled_articles = articles.count()
+        
+        self.stdout.write(f"📊 Total articles in RDS: {total_articles}")
+        self.stdout.write(f"✅ Already labeled: {labeled_articles}")
+        self.stdout.write(f"🔍 New unlabeled to process: {unlabeled_articles}")
+        
+        # ✅ Add relevance check BEFORE fetching (only for articles with values)
+        valid_countries = ['senegal', 'drc', 'ethiopia', 'cote d\'ivoire', 'ivory coast', 'south africa']
+        valid_actors = ['china', 'france', 'russia', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
+        
+        # Filter by valid target_country (only if NOT NULL)
+        articles = articles.filter(
+            Q(target_country__isnull=True) |
+            Q(target_country__iexact='senegal') |
+            Q(target_country__iexact='drc') |
+            Q(target_country__iexact='ethiopia') |
+            Q(target_country__iexact='cote d\'ivoire') |
+            Q(target_country__iexact='ivory coast') |
+            Q(target_country__iexact='south africa')
+        )
+        
+        # Filter by valid inferred_actor (only if NOT NULL)
+        articles = articles.filter(
+            Q(inferred_actor__isnull=True) |
+            Q(inferred_actor__iexact='china') |
+            Q(inferred_actor__iexact='france') |
+            Q(inferred_actor__iexact='russia') |
+            Q(inferred_actor__iexact='usa') |
+            Q(inferred_actor__iexact='saudi') |
+            Q(inferred_actor__iexact='turkey') |
+            Q(inferred_actor__iexact='uae') |
+            Q(inferred_actor__iexact='israel') |
+            Q(inferred_actor__iexact='iran') |
+            Q(inferred_actor__iexact='rwanda')
         )
         
         # Get unique articles and limit
@@ -60,11 +104,9 @@ class Command(BaseCommand):
                 # Step 2: Extract full article text from URL
                 if not skip_extraction:
                     try:
-                        # Use cloudscraper for better extraction (handles JS/anti-bot)                        
                         response = scraper.get(article.url, timeout=30)
                         
                         if response.status_code == 200:
-                            # Extract text from raw HTML
                             text = trafilatura.extract(response.text)
                             
                             if text and len(text.strip()) >= 50:
@@ -84,32 +126,26 @@ class Command(BaseCommand):
                         continue
                 else:
                     text = article.article_text
+                
                 # Step 3: Get target country from MediaCloud DB
                 target_country = article.target_country or 'Unknown'
                 
                 # Step 3.1: Get inferred actor (3-step priority)
-                # Priority 1: MediaCloud DB
                 inferred_actor = article.inferred_actor
                 
-                # Priority 2: Media Outlet Name
                 if not inferred_actor or inferred_actor == 'Unknown':
                     media_outlet = article.media_outlet or ''
                     inferred_actor = ml_service.get_actor_from_media_outlet(media_outlet)
                 
-                # Priority 3: Content (NER)
                 if not inferred_actor or inferred_actor == 'Unknown':
                     entities = ml_service.extract_entities_from_content(text)
                     extracted_orgs = entities.get('organizations', [])
                     inferred_actor = ml_service.extract_actor_from_content(text, organizations=extracted_orgs)
                 
-                # Final fallback
                 if not inferred_actor or inferred_actor == 'Unknown':
                     inferred_actor = article.inferred_actor or 'Unknown'
                 
                 # Step 3.2: VALIDATE (handle case-insensitive)
-                valid_countries = ['senegal', 'drc', 'ethiopia', 'coteivoire', 'ivory coast', 'south africa', 'southafrica']
-                valid_actors = ['china', 'france', 'russia', 'usa', 'saudi', 'turkey', 'uae', 'israel', 'iran', 'rwanda']
-                
                 if target_country.lower().replace(' ', '') not in [c.replace(' ', '') for c in valid_countries]:
                     self.stdout.write(self.style.WARNING(f"⚠️ Skipping {article.id}: Target={target_country} (not in valid list)"))
                     skipped += 1
