@@ -12,6 +12,7 @@ cleanlab==2.6.0
 joblib==1.3.2
 venn-abers
 django-redis
+skops
 
 # Web & Utilities
 Django==4.2.7
