@@ -262,7 +262,7 @@ class CalibratedStackedEnsemble:
         if meta_model is None and os.path.exists(meta_model_path_joblib):
             logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
             try:
-                meta_model = joblib_joblib)
+                meta_model = joblib.load(os.path.join(load_dir, 'meta_model.pkl'))
                 logger.info("✅ Meta-model loaded using joblib.")
             except Exception as e_joblib:
                 logger.error(f"Failed to load meta_model with joblib: {e_joblib}")
