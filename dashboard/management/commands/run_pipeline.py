@@ -242,7 +242,7 @@ class Command(BaseCommand):
                     vulnerability_index = article.vulnerability_index or 0.0
                     self.stdout.write(f"   📊 VI Skipped, using fallback: {vulnerability_index}")
 
-                # --- SAVE TO DATABASE (or dry run) ---
+                                # --- SAVE TO DATABASE (or dry run) ---
                 if dry_run:
                     self.stdout.write(self.style.WARNING(f"   [DRY RUN] Would save:"))
                     self.stdout.write(f"       - article_text: {len(article_text)} chars (if updated)")
@@ -253,6 +253,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"       - vulnerability_index: {vulnerability_index}")
                     # Simulate saving logic
                     processed += 1
+                    # CORRECTED LINE: Removed the extra ')'
                     self.stdout.write(self.style.WARNING(f"   [DRY RUN] Processed ID {article.id}"))
                 else:
                     # Update the article object with results
@@ -272,7 +273,7 @@ class Command(BaseCommand):
                     # Save the updated article to the database
                     article.save()
 
-                    self.stdout.write(f"   ✅ Saved: ID {article.id}") 
+                    self.stdout.write(f"   ✅ Saved: ID {article.id}")
                     processed += 1
 
             except Exception as e:
