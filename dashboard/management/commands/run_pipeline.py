@@ -272,7 +272,7 @@ class Command(BaseCommand):
                     # Save the updated article to the database
                     article.save()
 
-                    self.stdout.write(f"   ✅ Saved: ID {article.id}"))
+                    self.stdout.write(f"   ✅ Saved: ID {article.id}") 
                     processed += 1
 
             except Exception as e:
