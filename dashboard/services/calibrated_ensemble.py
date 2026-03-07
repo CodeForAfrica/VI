@@ -199,7 +199,7 @@ class CalibratedStrategicClassifier:
                     "sklearn.preprocessing._label.LabelEncoder",
                     # Add other types reported by get_untrusted_types if necessary
                 ]
-                label_encoder = sio.load(label_enc_path_skops, trusted=trusted_types("✅ LabelEncoder loaded using skops.")
+                label_encoder = sio.load(label_enc_path_skops, trusted=trusted_types("✅ LabelEncoder loaded using skops."))
             except Exception as e_skops:
                 logger.warning(f"Skops load failed for LabelEncoder ({e_skops}), falling back to pickle.")
 
