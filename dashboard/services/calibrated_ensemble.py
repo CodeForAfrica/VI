@@ -9,6 +9,9 @@ from peft import PeftModel
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
+import logging
+
+logger = logging.getLogger(__name__)
 
 class StrategicEnsemble:
     """
