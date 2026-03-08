@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class MLInferenceService:
     def __init__(self):
+        print("MLInferenceService.__init__ called")
         # Only initialize S3 client if AWS credentials are available
         # Check Django settings first, then fall back to environment variables
         aws_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None) or os.environ.get('AWS_ACCESS_KEY_ID')
@@ -235,16 +236,19 @@ class MLInferenceService:
     
     def _load_strategic_classifier(self):
         """Load calibrated strategic classifier from S3"""
+        print(f"_load_strategic_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         if 'strategic' in self._model_cache:
+            print("   Found strategic model in cache, returning.")
             return self._model_cache['strategic']
-            
+
          # ✅ Check persistent cache first
         if self._load_from_persistent_cache('strategic'):
+            print("   Found strategic model in persistent cache, returning.")
             return self._model_cache['strategic']
-            
+
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
-        
+
         print(f"\n🔍 === STRATEGIC MODEL DOWNLOAD ===")
         print(f"📁 Temp dir: {temp_dir}")
         
@@ -302,6 +306,7 @@ class MLInferenceService:
         
     def _load_tone_classifier(self):
         """Load calibrated tone classifier from S3"""
+        print(f"_load_tone_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         # ✅ Check cache first - return immediately if cached
         if 'tone' in self._model_cache:
             print("✅ Using cached tone classifier")
@@ -309,7 +314,8 @@ class MLInferenceService:
 
         # ✅ Check persistent cache first
         if self._load_from_persistent_cache('tone'):
-            return self._model_cache['tone']  
+            print("   Found tone model in persistent cache, returning.")
+            return self._model_cache['tone']
             
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
