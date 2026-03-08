@@ -266,10 +266,21 @@ class MLInferenceService:
                     
                     for obj in contents:
                         key = obj['Key']
-                        filename = key.replace(base_prefix, '')
+                        if key.endswith('/'): # Skip directories if any are listed
+                            continue
+                        filename = key.replace(base_prefix, '') # e.g., 'config.json'
                         local_path = os.path.join(base_model_dir, filename)
                         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                        self.s3_client.download_file(self.bucket_name, key, local_path)
+
+                        # CRITICAL CHANGE: Wrap download in try-except for individual files
+                        try:
+                            self.s3_client.download_file(self.bucket_name, key, local_path)
+                            print(f"   Downloaded {key} -> {local_path}")
+                        except Exception as e_download_file:
+                            print(f"   WARNING: Could not download {key} from S3: {e_download_file}. Skipping.")
+                            # Continue to the next file instead of failing the whole process
+                            continue
+                            
                     print(f"✅ Downloaded base model to {base_model_dir}")
                     print(f"   Files: {os.listdir(base_model_dir)}")
                 except Exception as e:
