@@ -2,7 +2,7 @@
 import boto3
 import requests
 from django.shortcuts import render
-from django.core.cache import cache # <-- ADD THIS IMPORT IF NOT ALREADY PRESENT
+from django.core.cache import cache 
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet
