@@ -9,6 +9,9 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import ProbabilitiesEstimator
 #from scipy.stats import probables
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ToneProbabilitiesEstimator:
     """Helper class for tone calibration"""
