@@ -5,7 +5,7 @@ mediacloud>=4.1.0
 pandas>=2.2.0
 numpy==2.2.4
 scikit-learn==1.6.1
-torch==2.10.0+cu128
+torch==2.10.0
 transformers==5.0.0
 tokenizers==0.22.2
 cleanlab==2.9.0
