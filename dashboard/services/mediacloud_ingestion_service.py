@@ -48,7 +48,7 @@ logging.basicConfig(
 
 db_columns = [
     "article_text", "posting_time", "media_outlet", "inferred_actor", 
-    "target_country", "URL", "lang_detect", "strategic_intent", 
+    "target_country", "url", "lang_detect", "strategic_intent",
     "sector", "tone", "confidence", "use_afrolm", "llm_strat", 
     "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight", 
     "llm_strat_id", "strategic_intent_id"
@@ -142,7 +142,7 @@ def verify_dns(host):
         socket.gethostbyname(host)
         return True
     except socket.gaierror:
-        print(f"❌ DNS Error: Cannot resolve {host}")
+        print(f"DNS Error: Cannot resolve {host}")
         print("Check if your RDS instance is 'Publicly Accessible' or if you are on the correct VPN/Network.")
         return False
 
@@ -154,17 +154,17 @@ def main():
             f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', 
             future=True
         )
-        print("✅ Database connection initialized.")
+        print("Database connection initialized.")
     except Exception as e:
-        print(f"❌ Database engine creation failed: {e}")
+        print(f"Database engine creation failed: {e}")
         return
     all_records = []
-    print("🛰 Querying MediaCloud API...")
+    print("Querying MediaCloud API...")
     
     # Use environment variable for API key
     api_key = os.getenv('MEDIA_CLOUD_API_KEY')
     if not api_key:
-        print("⚠️ MEDIA_CLOUD_API_KEY not set. Continuing with existing data only.")
+        print("MEDIA_CLOUD_API_KEY not set. Continuing with existing data only.")
         print("Your existing 15,166 records remain accessible.")
         return
     
@@ -222,33 +222,35 @@ def main():
         print("Your existing 15,166 records remain accessible in the dashboard.")
         return
 
-    print(f"Found {len(df)} articles. Starting Scraper...")
+    MAX_ARTICLES_PER_RUN = 200
+    df = df.head(MAX_ARTICLES_PER_RUN)
+    print(f"Found {len(df)} articles (capped at {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
 
-    with engine.begin() as conn: 
-        for idx, row in df.iterrows():
-            url = row['URL']
-            if not url or url_exists(url):
-                continue
+    for idx, row in df.iterrows():
+        url = row['url']
+        if not url or url_exists(url):
+            continue
 
-            content = scrape_full_text_robust(url)
-            
-            if "Failed" not in content and "Error" not in content:
-                row_data = row.to_dict()
-                row_data['article_text'] = content
-                
-                if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
-                    row_data['inferred_actor'] = 'USA'
-                
-                try:
-                    final_df = pd.DataFrame([row_data])[db_columns]
-                    final_df.to_sql('dashboard_medianarrative', conn, if_exists='append', index=False)  # Use your Django table name
-                    print(f"[{idx+1}/{len(df)}] 💾 Saved ({row['target_country']}): {url[:40]}...")
-                except Exception as e:
-                    logging.error(f"DB Insert Error: {e}")
-            else:
-                print(f"[{idx+1}/{len(df)}] ⚠️ {content} for {url[:30]}")
-            
-            time.sleep(1.5)
+        content = scrape_full_text_robust(url)
+
+        if "Failed" not in content and "Error" not in content:
+            row_data = row.to_dict()
+            row_data['article_text'] = content
+
+            if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
+                row_data['inferred_actor'] = 'USA'
+
+            try:
+                final_df = pd.DataFrame([row_data])[db_columns]
+                with engine.begin() as conn:
+                    final_df.to_sql('dashboard_medianarrative', conn, if_exists='append', index=False)
+                print(f"[{idx+1}/{len(df)}] Saved ({row['target_country']}): {url[:40]}...")
+            except Exception as e:
+                logging.error(f"DB Insert Error: {e}")
+        else:
+            print(f"[{idx+1}/{len(df)}] Failed: {content} for {url[:30]}")
+
+        time.sleep(0.5)
 
     print("\nFinished. Check your database now.")
 
