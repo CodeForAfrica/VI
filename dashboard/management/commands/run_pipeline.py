@@ -245,7 +245,7 @@ class Command(BaseCommand):
                                 # --- SAVE TO DATABASE (or dry run) ---
                 if dry_run:
                     self.stdout.write(self.style.WARNING(f"   [DRY RUN] Would save:"))
-                    self.stdout.write(f"       - article_text: {len(article_text)} chars (if updated)")
+                    self.stdout.write(f"       - article_text: {len(article_text)} chars")
                     self.stdout.write(f"       - target_country: {target_country}")
                     self.stdout.write(f"       - inferred_actor: {inferred_actor}")
                     self.stdout.write(f"       - strategic_intent: {strategic_intent}")
