@@ -3,17 +3,17 @@ mediacloud>=4.1.0
 
 # ML
 pandas>=2.2.0
-numpy>=1.26.0
-scikit-learn==1.6.1 # Downgraded for compatibility
-torch>=2.2.0 # Or the specific version used during training
-transformers
-tokenizers
-cleanlab==2.6.0
+numpy==2.2.4
+sklearn==1.6.1
+torch==2.10.0+cu128
+transformers==5.0.0
+tokenizers==0.22.2
+cleanlab==2.9.0
 joblib==1.3.2
-venn-abers
+venn-abers==1.4.6
 django-redis
 skops
-sentencepiece>=0.2.0
+sentencepiece==0.2.1
 peft==0.18.1
 
 # Web & Utilities
