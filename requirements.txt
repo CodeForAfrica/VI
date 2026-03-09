@@ -4,7 +4,7 @@ mediacloud>=4.1.0
 # ML
 pandas>=2.2.0
 numpy==2.2.4
-sklearn==1.6.1
+scikit-learn==1.6.1
 torch==2.10.0+cu128
 transformers==5.0.0
 tokenizers==0.22.2
