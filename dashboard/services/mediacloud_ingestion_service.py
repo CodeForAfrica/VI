@@ -182,7 +182,7 @@ def main():
                     for s in stories:
                         record = {col: None for col in db_columns}
                         record.update({
-                            "URL": s.get("url"),
+                            "url": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
                             "media_outlet": s.get("media_name"),
                             "inferred_actor": actor_name,
@@ -204,7 +204,7 @@ def main():
                     for s in stories:
                         record = {col: None for col in db_columns}
                         record.update({
-                            "URL": s.get("url"),
+                            "url": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
                             "media_outlet": s.get("media_name"),
                             "inferred_actor": actor_name,
@@ -228,7 +228,7 @@ def main():
 
     for idx, row in df.iterrows():
         url = row['url']
-        if not url or url_exists(url):
+        if not url or not isinstance(url, str) or url_exists(url):
             continue
 
         content = scrape_full_text_robust(url)
@@ -248,7 +248,7 @@ def main():
             except Exception as e:
                 logging.error(f"DB Insert Error: {e}")
         else:
-            print(f"[{idx+1}/{len(df)}] Failed: {content} for {url[:30]}")
+            print(f"[{idx+1}/{len(df)}] Failed: {content} for {str(url)[:30]}")
 
         time.sleep(0.5)
 
