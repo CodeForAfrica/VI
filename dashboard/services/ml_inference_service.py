@@ -258,7 +258,7 @@ class MLInferenceService:
             os.makedirs(base_model_dir, exist_ok=True)
             if self.s3_client:
                 try:
-                    base_prefix = 'microsoft_deberta-v3-large/'
+                    base_prefix = 'microsoft_mdeberta-v3-base/'
                     print(f"📂 Looking for base model in S3: {base_prefix}")
                     pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
                     contents = pages.get('Contents', [])
