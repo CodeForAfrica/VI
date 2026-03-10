@@ -711,37 +711,45 @@ class MLInferenceService:
             }
 
             intent_mapping = {
-                # Model outputs → CSV canonical intent
-                "information warfare": "InformationWarfare",
-                "info warfare": "InformationWarfare",
-                "information war": "InformationWarfare",
-                
-                "economic dependency": "Economic",
-                "economic influence": "Economic",
+                # Direct matches (if ML outputs match CSV exactly)
                 "economic": "Economic",
-            
-                "sovereignty erosion": "Sovereignty",
                 "sovereignty": "Sovereignty",
-            
-                "lgbtq influence": "LGBTQ",
                 "lgbtq": "LGBTQ",
-            
-                "election interference": "ElectionInfluence",
-                "election": "ElectionInfluence",
-                "electoral interference": "ElectionInfluence",
-            
-                "military presence": "MilitaryPresence",
-                "military base": "MilitaryPresence",
-            
-                "resource dependency": "ResourceDependency",
-                "resource control": "ResourceDependency",
-            
-                "social fragility": "SocialFragility",
-                "social fragmentation": "SocialFragility",
-            
-                "religious polarization": "Religious",
+                "religious": "Religious",
+                "electioninfluence": "ElectionInfluence", 
+                "militarypresence": "MilitaryPresence", 
+                "resourcedependency": "ResourceDependency", 
+                "socialfragility": "SocialFragility", 
+        
+                # Common variations/spelling from ML model output (case-insensitive)
+                "economic dependency": "Economic",
+                "sovereignty erosion": "Sovereignty",
+                "sovereignty threat": "Sovereignty",
+                "lgbtq rights": "LGBTQ",
+                "lgbt advocacy": "LGBTQ",
                 "religious influence": "Religious",
+                "religious polarisation": "Religious",
+                "election influence": "ElectionInfluence", 
+                "election interference": "ElectionInfluence",
+                "electoral interference": "ElectionInfluence",
+                "military presence": "MilitaryPresence", 
+                "military base": "MilitaryPresence",
+                "resource dependency": "ResourceDependency", 
+                "resource control": "ResourceDependency",
+                "social fragility": "SocialFragility", 
+                "social unrest": "SocialFragility",
+                "information warfare": "SocialFragility", 
+                "human rights advocacy": "LGBTQ", 
+                "debt trap diplomacy": "Economic", 
+                "cultural influence": "SocialFragility", 
+                "centralization of power": "Sovereignty",
+                "cultural exchange": "Economic",
+                "cultural hegemony": "Sovereignty",
+                "democratic interference": "ElectionInfluence",
+                "diplomatic cooperation": "Economic",
+                "diplomatic influence": "Sovereignty",
             }
+
 
             # Normalize inputs
             c_clean = target_country.lower().strip()
