@@ -739,7 +739,7 @@ class MLInferenceService:
                 "social fragility": "SocialFragility", 
                 "social unrest": "SocialFragility",
                 "information warfare": "SocialFragility", 
-                "human rights advocacy": "LGBTQ", 
+                "human rights advocacy": "SocialFragility", 
                 "debt trap diplomacy": "Economic", 
                 "cultural influence": "SocialFragility", 
                 "centralization of power": "Sovereignty",
