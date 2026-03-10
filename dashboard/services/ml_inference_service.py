@@ -390,6 +390,15 @@ class MLInferenceService:
         except (LangDetectException, Exception):
             return 'und'
             
+    def normalize_intent(intent_str):
+        if not isinstance(intent_str, str):
+            return None
+        # Lowercase, strip, collapse whitespace
+        intent_clean = re.sub(r'\s+', ' ', intent_str.strip().lower())
+        # Optional: remove common suffixes/prefixes
+        intent_clean = re.sub(r'(narrative|strategy|influence|erosion|interference|war)$', '', intent_clean).strip()
+        return intent_clean   
+        
     def extract_entities_from_content(self, text):
         """
         Extract target country and foreign actor from article content using spaCy NER
@@ -702,21 +711,36 @@ class MLInferenceService:
             }
 
             intent_mapping = {
-                'economic': 'Economic',
-                'economic dependency': 'Economic',
-                'sovereignty': 'Sovereignty',
-                'lgbtq': 'LGBTQ',
-                'lgbt': 'LGBTQ',
-                'religious': 'Religious',
-                'religion': 'Religious',
-                'election': 'ElectionInfluence',
-                'election influence': 'ElectionInfluence',
-                'political interference': 'ElectionInfluence',
-                'military': 'MilitaryPresence',
-                'military presence': 'MilitaryPresence',
-                'resource dependency': 'ResourceDependency',
-                'social fragility': 'SocialFragility',
-                'ethnic': 'SocialFragility'
+                # Model outputs → CSV canonical intent
+                "information warfare": "InformationWarfare",
+                "info warfare": "InformationWarfare",
+                "information war": "InformationWarfare",
+                
+                "economic dependency": "Economic",
+                "economic influence": "Economic",
+                "economic": "Economic",
+            
+                "sovereignty erosion": "Sovereignty",
+                "sovereignty": "Sovereignty",
+            
+                "lgbtq influence": "LGBTQ",
+                "lgbtq": "LGBTQ",
+            
+                "election interference": "ElectionInfluence",
+                "election": "ElectionInfluence",
+                "electoral interference": "ElectionInfluence",
+            
+                "military presence": "MilitaryPresence",
+                "military base": "MilitaryPresence",
+            
+                "resource dependency": "ResourceDependency",
+                "resource control": "ResourceDependency",
+            
+                "social fragility": "SocialFragility",
+                "social fragmentation": "SocialFragility",
+            
+                "religious polarization": "Religious",
+                "religious influence": "Religious",
             }
 
             # Normalize inputs
