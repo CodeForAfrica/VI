@@ -181,6 +181,8 @@ def main():
                     stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[coll_id])
                     for s in stories:
                         record = {col: None for col in db_columns}
+                        record['pseudo_kept'] = False
+                        record['pseudo_weight'] = 0.0
                         record.update({
                             "url": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
@@ -203,6 +205,8 @@ def main():
                     stories, _ = safe_mediacloud_search(base_query, START_DATE, END_DATE, [coll_id], api_key)
                     for s in stories:
                         record = {col: None for col in db_columns}
+                        record['pseudo_kept'] = False
+                        record['pseudo_weight'] = 0.0
                         record.update({
                             "url": s.get("url"),
                             "posting_time": str(s.get("publish_date")),
@@ -223,10 +227,16 @@ def main():
         return
 
     MAX_ARTICLES_PER_RUN = 200
+    MAX_RUNTIME_SECONDS = 800
     df = df.head(MAX_ARTICLES_PER_RUN)
     print(f"Found {len(df)} articles (capped at {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
 
+    loop_start = time.time()
     for idx, row in df.iterrows():
+        if time.time() - loop_start > MAX_RUNTIME_SECONDS:
+            print(f"Time budget reached at article {idx}. Stopping to avoid Lambda timeout.")
+            break
+
         url = row['url']
         if not url or not isinstance(url, str) or url_exists(url):
             continue
