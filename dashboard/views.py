@@ -354,66 +354,150 @@ def chatbot_response(request):
         
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
+    """
+    Calculates contextual vulnerability score based on intent, country, and actor.
+    Uses the logic defined in contextual_all_intents_v2.py via the final_risk CSV.
+    """
     file_path = os.path.join(os.getcwd(), 'final_risk_by_actor_intent_country.csv')
-
     if not os.path.exists(file_path):
+        print(f"❌ CVI Error: CSV file not found at {file_path}")
         return 0.5, "Unknown"
 
     try:
         df = pd.read_csv(file_path)
     except Exception as e:
+        print(f"❌ CVI Error loading CSV: {e}")
         return 0.5, "Unknown"
 
-    # 1. MAPPINGS (Ensures UI strings match CSV strings)
+    # 1. NORMALIZE AND MAP INPUTS (Ensures UI strings/ML outputs match CSV strings)
     country_mapping = {
-        "côte d'ivoire": "CoteIvoire", "cote d'ivoire": "CoteIvoire",
-        "south africa": "South Africa", "senegal": "Senegal",
-        "drc": "DRC", "ethiopia": "Ethiopia"
+        "côte d'ivoire": "CoteIvoire", "cote d'ivoire": "CoteIvoire", "ivory coast": "CoteIvoire",
+        "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia",
+        # Add other potential variations if needed
     }
-    
     actor_mapping = {
-        "uae": "UAE", "china": "China", "france": "France",
-        "us": "UnitedStates", "united states": "UnitedStates",
-        "russia": "Russia"
+        "uae": "UAE", "china": "China", "france": "France", "us": "UnitedStates",
+        "united states": "UnitedStates", "russia": "Russia", "saudi": "Saudi",
+        "saudi arabia": "Saudi", "turkey": "Turkey", "israel": "Israel", "iran": "Iran",
+        "rwanda": "Rwanda", "nonstate": "NonState"
+        # Add other potential variations if needed
     }
 
-    # NEW: Intent Mapping (Fixes the "Social Fragility" vs "SocialFragility" issue)
-    intent_mapping = {
-        "social fragility": "SocialFragility",
-        "military presence": "MilitaryPresence",
-        "resource dependency": "ResourceDependency",
-        "election influence": "ElectionInfluence",
+    # Define the mapping from raw ML output (or UI input) to canonical CSV intent names
+    # These keys should match the *exact* strings output by your strategic intent model
+    # Values should match the *exact* strings in the 'intent' column of your CSV.
+    # Use the INTENT_FACTORS from contextual_all_intents_v2.py as reference for canonical names.
+    
+        # Direct matches (if ML outputs match CSV exactly)
         "economic": "Economic",
-        "sovereignty": "Sovereignty"
+        "sovereignty": "Sovereignty",
+        "lgbtq": "LGBTQ",
+        "religious": "Religious",
+        "electioninfluence": "ElectionInfluence", 
+        "militarypresence": "MilitaryPresence", 
+        "resourcedependency": "ResourceDependency", 
+        "socialfragility": "SocialFragility", 
+
+        # Common variations/spelling from ML model output (case-insensitive)
+        "economic dependency": "Economic",
+        "sovereignty erosion": "Sovereignty",
+        "sovereignty threat": "Sovereignty",
+        "lgbtq rights": "LGBTQ",
+        "lgbt advocacy": "LGBTQ",
+        "religious influence": "Religious",
+        "religious polarisation": "Religious",
+        "election influence": "ElectionInfluence", 
+        "election interference": "ElectionInfluence",
+        "electoral interference": "ElectionInfluence",
+        "military presence": "MilitaryPresence", 
+        "military base": "MilitaryPresence",
+        "resource dependency": "ResourceDependency", 
+        "resource control": "ResourceDependency",
+        "social fragility": "SocialFragility", 
+        "social unrest": "SocialFragility",
+        "information warfare": "SocialFragility", 
+        "human rights advocacy": "LGBTQ", 
+        "debt trap diplomacy": "Economic", 
+        "cultural influence": "SocialFragility", 
+        "centralization of power": "Sovereignty",
+        "cultural exchange": "Economic",
+        "cultural hegemony": "Sovereignty",
+        "democratic interference": "ElectionInfluence",
+        "diplomatic cooperation": "Economic",
+        "diplomatic influence": "Sovereignty",
     }
 
+    # Helper function to normalize intent string (case-insensitive, handle common variations)
+    def normalize_intent(s):
+        if not isinstance(s, str):
+            return ""
+        # Convert to lowercase, strip whitespace, replace multiple spaces/underscores with single space
+        s = re.sub(r'[_\s]+', ' ', s.strip().lower())
+        # Optional: Remove common suffixes/prefixes if applicable, e.g., "narrative", "strategy"
+        # s = re.sub(r'\b(narrative|strategy|influence|erosion|interference)\b', '', s).strip()
+        return s
+
+
+    # Apply mappings and normalizations
     c_term = target_country.lower().strip()
     a_term = foreign_actor.lower().strip()
-    i_term = intent_filter.lower().strip() if intent_filter else None
+    i_term_raw = intent_filter.lower().strip() if intent_filter else ""
 
-    formatted_country = country_mapping.get(c_term, target_country)
-    formatted_actor = actor_mapping.get(a_term, foreign_actor)
-    formatted_intent = intent_mapping.get(i_term, intent_filter)
+    formatted_country = country_mapping.get(c_term, target_country.title()) # Use title() as default formatting
+    formatted_actor = actor_mapping.get(a_term, foreign_actor.title()) # Use title() as default formatting
 
-    # 2. FILTERING (Added .str.strip() to handle CSV whitespace)
-    mask = (df['country'].str.strip().str.lower() == formatted_country.lower()) & \
-           (df['actor'].str.strip().str.lower() == formatted_actor.lower())
-    
+    # Normalize and map the intent
+    normalized_i_term = normalize_intent(i_term_raw)
+    # Use the mapping, falling back to the normalized term if no specific mapping exists
+    # This fallback is crucial: if "information warfare" isn't mapped, it becomes "Information Warfare" (title case)
+    # and will likely fail the CSV lookup, causing the fallback to max risk below.
+    # For "unknown" from ML failure, this would become "Unknown".
+    mapped_intent = intent_mapping.get(normalized_i_term, i_term_raw.title()) # Use title() as default for unmapped terms
+
+
+    print(f"[CVI DEBUG] Input: {target_country} | {foreign_actor} | {intent_filter}")
+    print(f"[CVI DEBUG] Mapped: {formatted_country} | {formatted_actor} | {mapped_intent}") 
+
+    # 2. FILTER DATAFRAME (Using Stripped Strings for Robustness)
+    # Apply normalization mapping to the dataframe columns for comparison
+    df['country_normalized'] = df['country'].str.strip().str.lower().map({v.lower(): k.lower() for k, v in country_mapping.items()}).fillna(df['country'].str.strip().str.lower())
+    df['actor_normalized'] = df['actor'].str.strip().str.lower().map({v.lower(): k.lower() for k, v in actor_mapping.items()}).fillna(df['actor'].str.strip().str.lower())
+    df['intent_normalized'] = df['intent'].str.strip().str.lower().map({k.lower(): v.lower() for k, v in intent_mapping.items()}).fillna(df['intent'].str.strip().str.lower())
+
+
+    mask = (
+        (df['country_normalized'] == formatted_country.lower()) &
+        (df['actor_normalized'] == formatted_actor.lower())
+    )
     matches = df[mask]
 
-    if not matches.empty:
-        if formatted_intent:
-            # Try to match the specific intent
-            intent_match = matches[matches['intent'].str.strip().str.lower() == formatted_intent.lower()]
-            if not intent_match.empty:
-                return float(intent_match.iloc[0]['FinalRisk']), intent_match.iloc[0]['intent']
-        
-        # If intent not found, return the Maximum Risk for that country-actor pair
-        max_row = matches.loc[matches['FinalRisk'].idxmax()]
-        return float(max_row['FinalRisk']), max_row['intent']
+    if matches.empty:
+        print(f"❌ CVI Error: No country-actor match found for {formatted_country} - {formatted_actor}")
+        return 0.5, "Unknown"
 
-    # Final fallback if country/actor isn't even in the CSV
-    return 0.5, "Unknown"    
+    # 3. LOOKUP SPECIFIC INTENT 
+    if mapped_intent and mapped_intent.lower() != 'none' and mapped_intent.lower() != 'unknown':
+        intent_matches = matches[matches['intent_normalized'] == mapped_intent.lower()]
+
+        if not intent_matches.empty:
+            # Found a specific match for the intent
+            best_match_row = intent_matches.iloc[0] # Or maybe intent_matches.loc[intent_matches['FinalRisk'].idxmax()] if multiple rows possible per intent
+            final_score = float(best_match_row['FinalRisk'])
+            matched_intent_label = best_match_row['intent'] # Return the original CSV label
+            print(f"✅ CVI Success: Specific intent match found. Score: {final_score:.4f}, Intent: {matched_intent_label}")
+            return final_score, matched_intent_label
+        else:
+            print(f"⚠️  CVI Warning: Specific intent '{mapped_intent}' not found for {formatted_country} - {formatted_actor}. Using fallback.")
+
+    # 4. FALLBACK: IF NO SPECIFIC INTENT MATCH, RETURN THE HIGHEST RISK SCORE FOR THAT COUNTRY-ACTOR PAIR
+    # This handles cases where intent_filter is None/empty/unknown, or if the mapped intent wasn't found.
+    max_risk_idx = matches['FinalRisk'].idxmax()
+    max_risk_row = matches.loc[max_risk_idx]
+    fallback_score = float(max_risk_row['FinalRisk'])
+    fallback_intent = max_risk_row['intent']
+    print(f"⚠️  CVI Fallback: Returning max risk ({fallback_score:.4f}) for {formatted_country} - {formatted_actor} - Intent '{fallback_intent}' (based on {intent_filter or 'no intent filter'}).")
+    return fallback_score, fallback_intent
+   
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
