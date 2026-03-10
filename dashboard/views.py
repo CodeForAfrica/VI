@@ -387,7 +387,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     # These keys should match the *exact* strings output by your strategic intent model
     # Values should match the *exact* strings in the 'intent' column of your CSV.
     # Use the INTENT_FACTORS from contextual_all_intents_v2.py as reference for canonical names.
-    
+    intent_mapping = {
         # Direct matches (if ML outputs match CSV exactly)
         "economic": "Economic",
         "sovereignty": "Sovereignty",
