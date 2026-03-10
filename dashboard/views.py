@@ -58,10 +58,10 @@ INTENT_CHOICES = [
     ('Sovereignty', 'Sovereignty'),
     ('LGBTQ', 'LGBTQ'),
     ('Religious', 'Religious'),
-    ('Military presence', 'Military presence'),
-    ('Resource Dependency', 'Resource Dependency'),
-    ('Social Fragility', 'Social Fragility'),
-    ('ElectionInfluence', 'ElectionInfluence'),
+    ('MilitaryPresence', 'Military presence'),
+    ('ResourceDependency', 'Resource Dependency'),
+    ('SocialFragility', 'Social Fragility'),
+    ('ElectionInfluence', 'Election Influence'),
 ]
 
 # =========================
