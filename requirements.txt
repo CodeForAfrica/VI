@@ -16,6 +16,8 @@ skops
 sentencepiece==0.2.1
 peft==0.18.1
 accelerate==1.12.0
+protobuf
+
 # Web & Utilities
 Django==4.2.7
 gunicorn==21.2.0
