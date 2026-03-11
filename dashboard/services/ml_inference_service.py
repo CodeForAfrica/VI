@@ -1,5 +1,3 @@
-# dashboard/services/ml_inference_service.py
-
 import boto3
 import tempfile
 import os
@@ -314,9 +312,9 @@ class MLInferenceService:
         # ✅ Save to persistent cache
         self._save_to_persistent_cache('strategic', classifier)
         return classifier
-        
+
     def _load_tone_classifier(self):
-        """Load calibrated tone classifier from S3"""
+        """Load calibrated tone classifier from S3 or local path"""
         print(f"_load_tone_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         # ✅ Check cache first - return immediately if cached
         if 'tone' in self._model_cache:
@@ -327,7 +325,35 @@ class MLInferenceService:
         if self._load_from_persistent_cache('tone'):
             print("   Found tone model in persistent cache, returning.")
             return self._model_cache['tone']
+        
+        # ✅ NEW: Check if tone model exists in the known local directory before attempting S3 download
+        KNOWN_TONE_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_stacked_ensemble"
+        if os.path.exists(KNOWN_TONE_MODEL_PATH):
+            print(f"✅ Loading tone classifier from local path: {KNOWN_TONE_MODEL_PATH}")
             
+            # Load the classifier
+            from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
+            classifier = CalibratedStackedEnsemble.load(KNOWN_TONE_MODEL_PATH)
+            self._model_cache['tone'] = classifier
+            
+            # Load label encoder info
+            label_enc_path = os.path.join(KNOWN_TONE_MODEL_PATH, 'label_info.json')
+            if os.path.exists(label_enc_path):
+                with open(label_enc_path, 'r') as f:
+                    label_info = json.load(f)
+                from sklearn.preprocessing import LabelEncoder
+                self._tone_label_encoder = LabelEncoder()
+                self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                print(f"✅ Tone classifier loaded with labels: {label_info['classes']}")
+            
+            print(f"✅ SUCCESS: Tone classifier loaded from local path!")
+            # ✅ Save to persistent cache
+            self._save_to_persistent_cache('tone', classifier)
+            return classifier
+        else:
+            print(f"⚠️  Local tone model not found at {KNOWN_TONE_MODEL_PATH}, attempting S3 download...")
+        
+        # If local path doesn't exist, proceed with S3 download as fallback
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
@@ -365,7 +391,7 @@ class MLInferenceService:
                 # ✅ Save to persistent cache
                 self._save_to_persistent_cache('tone', classifier)
                 return classifier
-        
+
         except Exception as e:
             print(f"❌ Error loading tone classifier: {e}")
             import traceback
@@ -381,9 +407,7 @@ class MLInferenceService:
         text = str(text).strip()
         if len(text) > 4000:
             text = text[:4000]
-        return text
-
-    def detect_language(self, text):
+_language(self, text):
         """Detect language as in notebook"""
         try:
             return detect(text[:200])
@@ -498,8 +522,7 @@ class MLInferenceService:
             'emirates': 'UAE',
             'gulf news': 'UAE',
             
-            # Israel
-            'israeli': 'Israel',
+            #israeli': 'Israel',
             'israel': 'Israel',
             'times of israel': 'Israel',
             
@@ -527,8 +550,7 @@ class MLInferenceService:
             
             # Priority 1: Check organizations from NER
             if organizations:
-                for org in organizations:
-                    org_lower = org.lower()
+                for                    org_lower = org.lower()
                     if 'china' in org_lower or 'chinese' in org_lower:
                         return 'China'
                     if 'russia' in org_lower or 'russian' in org_lower:
@@ -597,8 +619,7 @@ class MLInferenceService:
             
     def perform_strategic_intent_inference(self, article_text):
         """Perform strategic intent inference"""
-        try:
-            classifier = self._load_strategic_classifier()
+ classifier = self._load_strategic_classifier()
             predictions, probabilities = classifier.predict(
                 texts=[article_text],
                 batch_size=1,
@@ -708,8 +729,6 @@ class MLInferenceService:
                 "israel": "Israel",
                 "iran": "Iran",
                 "rwanda": "Rwanda"
-            }
-
             intent_mapping = {
                 # Direct matches (if ML outputs match CSV exactly)
                 "economic": "Economic",
