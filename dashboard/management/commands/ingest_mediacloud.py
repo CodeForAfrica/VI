@@ -122,13 +122,19 @@ def scrape_full_text_robust(url):
 def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key):
     """Safely search MediaCloud API with fallback"""
     try:
-        # Try different endpoints
+        # ✅ Define endpoints FIRST (no trailing spaces, valid domains)
         endpoints = [
-            f"https://www.mediacloud.org/api/v2/stories_public/list",
-            f"https://mediacloud.org/api/v2/stories_public/list",
-            f"https://api.mediacloud.org/api/v2/stories_public/list"
+            "https://search.mediacloud.org/api/v2/stories_public/list",  # ← Primary
+            "https://www.mediacloud.org/api/v2/stories_public/list",     # ← Fallback
         ]
         
+        # ✅ Debug: Print endpoints AFTER defining them
+        print(f"DEBUG: Endpoints being tested:")
+        for i, ep in enumerate(endpoints):
+            print(f"  [{i}] repr: {repr(ep)}")
+            print(f"  [{i}] stripped: '{ep.strip()}'")
+        
+        # ✅ Now loop through endpoints
         for endpoint in endpoints:
             try:
                 params = {
@@ -136,7 +142,7 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
                     'start_date': start_date.strftime('%Y-%m-%d'),
                     'end_date': end_date.strftime('%Y-%m-%d'),
                     'collection_ids': ','.join(map(str, collection_ids)),
-                    'limit': 100, # Increased limit per request
+                    'limit': 100,
                     'format': 'json',
                     'key': api_key
                 }
@@ -156,10 +162,10 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
                     return stories, count
                 elif response.status_code in [404, 403, 401]:
                     print(f"   Endpoint {endpoint.split('/')[2]} returned {response.status_code}, trying next...")
-                    continue  # Try next endpoint
+                    continue
                 else:
                     print(f"   Endpoint {endpoint.split('/')[2]} returned {response.status_code}, trying next...")
-                    continue # Try next endpoint
+                    continue
             except requests.exceptions.RequestException as e:
                 print(f"   Request failed for {endpoint.split('/')[2]}: {e}, trying next...")
                 continue
@@ -167,7 +173,6 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
                 print(f"   Unexpected error for {endpoint.split('/')[2]}: {e}, trying next...")
                 continue
         
-        # If all endpoints fail, return empty results
         print("   All endpoints failed.")
         return [], 0
         
