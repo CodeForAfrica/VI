@@ -44,7 +44,7 @@ if not settings.configured:
                 'PORT': DB_PORT,
             }
         },
-        INSTALLED_APPS=['dashboard'], # Add your app name here
+        INSTALLED_APPS=['dashboard'], 
         USE_TZ=True,
     )
     django.setup()
@@ -88,7 +88,7 @@ def url_exists(url):
             return cursor.fetchone()[0] > 0
     except Exception as e:
         print(f"Error checking if URL exists: {e}")
-        return False # Assume it doesn't exist on error to avoid duplicates
+        return False 
 
 def scrape_full_text_robust(url):
     """Scrape full text with multiple fallback methods"""
@@ -233,20 +233,29 @@ def main():
                     )
                     print(f"    Found {len(stories)} stories.")
                     for s in stories:
-                       : None for col in db_columns}
-                        # Provide defaults for NOT NULL columns if needed by your schema
+                        # --- CREATE THE RECORD DICTIONARY ---
+                        # Start with all columns set to None
+                        record = {col: None for col in db_columns}
+                        # Set default values for specific columns that are NOT NULL in the database
+                        # but might not be provided by the MediaCloud API directly.
+                        # These defaults are placeholders until the full text is scraped and ML runs.
                         record['pseudo_kept'] = False
                         record['pseudo_weight'] = 0.0
+                        record['use_afrolm'] = False
+                        # Update the dictionary with data from the MediaCloud API response
                         record.update({
                             "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
+                            "posting_time": str(s.get("publish_date")), # Ensure it's a string or datetime object as expected by the DB
                             "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name, # The actor whose media was searched
-                            "target_country": country, # The country the query looked for
+                            "inferred_actor": actor_name, # Comes from the loop variable
+                            "target_country": country,   # Comes from the outer loop variable
                             "lang_detect": s.get("language"),
-                            "confidence": s.get("score"), # Assuming 'score' is confidence
-                            
+                            "confidence": s.get("score"), # Assuming 'score' from MC API maps to 'confidence' in DB
+                            # 'article_text' is NOT set here, it will be scraped later during insertion
+                            # Other fields like strategic_intent, tone, vulnerability_index, sector, ml_processed_at
+                            # are also not set here; they will be filled by the ML pipeline later.
                         })
+                        # Append the completed record dictionary to the list
                         all_records.append(record)
                 except Exception as e:
                     logging.error(f"MediaCloud Error {country}/{actor_name} (Actor Coll {actor_coll_id}): {e}")
@@ -269,19 +278,29 @@ def main():
                     stories, count = safe_mediacloud_search(base_query, START_DATE, END_DATE, [actor_coll_id], api_key)
                     print(f"    Found {len(stories)} stories via safe method.")
                     for s in stories:
+                        # --- CREATE THE RECORD DICTIONARY ---
+                        # Start with all columns set to None
                         record = {col: None for col in db_columns}
-                        # Provide defaults for NOT NULL columns if needed by your schema
+                        # Set default values for specific columns that are NOT NULL in the database
+                        # but might not be provided by the MediaCloud API directly.
+                        # These defaults are placeholders until the full text is scraped and ML runs.
                         record['pseudo_kept'] = False
                         record['pseudo_weight'] = 0.0
+                        record['use_afrolm'] = False
+                        # Update the dictionary with data from the MediaCloud API response
                         record.update({
                             "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
+                            "posting_time": str(s.get("publish_date")), # Ensure it's a string or datetime object as expected by the DB
                             "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name, # The actor whose media was searched
-                            "target_country": country, # The country the query looked for
+                            "inferred_actor": actor_name, # Comes from the loop variable
+                            "target_country": country,   # Comes from the outer loop variable
                             "lang_detect": s.get("language"),
-                            "confidence": s.get("score"), # Assuming 'score' is confidence
+                            "confidence": s.get("score"), # Assuming 'score' from MC API maps to 'confidence' in DB
+                            # 'article_text' is NOT set here, it will be scraped later during insertion
+                            # Other fields like strategic_intent, tone, vulnerability_index, sector, ml_processed_at
+                            # are also not set here; they will be filled by the ML pipeline later.
                         })
+                        # Append the completed record dictionary to the list
                         all_records.append(record)
                 except Exception as e:
                     logging.error(f"Safe API Error {country}/{actor_name} (Actor Coll {actor_coll_id}): {e}")
@@ -320,11 +339,12 @@ def main():
             skipped_count += 1
             continue
 
-        # SCRAPE THE ARTICLE TEXT FOR THE CURRENT URL 
+        # SCRAPE THE ARTICLE TEXT FOR THE CURRENT URL
         content = scrape_full_text_robust(url)
 
         if "Failed" not in content and "Error" not in content:
             row_data = row.to_dict()
+            # INSERT THE SCRAPED CONTENT INTO row_data BEFORE INSERTION
             row_data['article_text'] = content
 
             # Override inferred_actor based on media outlet if needed (example)
@@ -332,11 +352,11 @@ def main():
                 row_data['inferred_actor'] = 'USA'
 
             # Insert using Django ORM or SQLAlchemy engine
-            if SQLAlchemy engine if available
+            if engine: # Use SQLAlchemy engine if available
                 try:
                     final_df = pd.DataFrame([row_data])[db_columns]
                     with engine.begin() as conn:
-                        final_df.to_sql('', conn, if_exists='append', index=False)
+                        final_df.to_sql('dashboard_medianarrative', conn, if_exists='append', index=False)
                     scraped_count += 1
                     print(f"  [{scraped_count}] Saved ({row['target_country']} -> {row['inferred_actor']}): {url[:40]}...")
                 except Exception as e:
@@ -352,20 +372,21 @@ def main():
                         'media_outlet': row_data.get('media_outlet'),
                         'inferred_actor': row_data.get('inferred_actor'),
                         'target_country': row_data.get('target_country'),
-                        'article_text': row_data.get('article_text'), # contains the scraped content
+                        'article_text': row_data.get('article_text'), # NOW contains the scraped content
                         'lang_detect': row_data.get('lang_detect'),
-                        # ... map other fields if needed ...
+                    
                         # Set default values for fields not coming from MC API but required by DB and NOT NULL
                         'pseudo_kept': row_data.get('pseudo_kept', False), # Provide default if not in row_data
                         'pseudo_weight': row_data.get('pseudo_weight', 0.0), # Provide default if not in row_data
                         'use_afrolm': row_data.get('use_afrolm', False), # Provide default if not in row_data
-                        'confidence': None, # Expected to be filled by ML 
+                        'confidence': row_data.get('confidence') or 0.0, # Expected to be filled by ML, default if MC API doesn't provide it
+                        
                         # Fields likely to be filled by ML later (strategic_intent, tone, vulnerability_index) can remain NULL initially
                         'strategic_intent': None, # Expected to be filled by ML
                         'tone': None, # Expected to be filled by ML
                         'vulnerability_index': None, # Expected to be filled by ML process
                         'ml_processed_at': None, # Expected to be filled by ML process
-                        'sector': None, # Expected to be filled by ML process
+                        'sector': None, # Expected to be filled by ML process based on article_text
                         'llm_strat': None, # Expected to be filled by LLM later
                         'llm_strat_conf': None, # Expected to be filled by LLM later
                         'llm_strat_notes': None, # Expected to be filled by LLM later
@@ -387,7 +408,7 @@ def main():
             failed_scrape_count += 1
             print(f"  [{failed_scrape_count}] Failed scraping: {content[:50]} for {str(url)[:30]}...")
 
-        time.sleep(0.5) # Be respectful to the APIs and websites
+        time.sleep(0.5) 
 
     print(f"\n--- Ingestion Summary ---")
     print(f"Total Articles Fetched from API: {len(df)}")
@@ -397,7 +418,7 @@ def main():
     print(f"Database Errors: {db_error_count}")
     print("-------------------------")
 
-# Your corrected constants with correct collection IDs
+# correct collection IDs
 ACTOR_COLLECTION_IDS = {
     "USA":          34412234,
     "France":       34412146,
@@ -416,8 +437,7 @@ TARGET_COLLECTION_IDS = {
     "DRC":            34412042,
     "South Africa":   34412238,
     "Côte d'Ivoire":  34412173,
-    # Note: "CoteIvoire" might be stored differently in DB, ensure consistency
-    # You might need {"CoteIvoire": 34412173} as well if DB uses this spelling
+    
 }
 
 # Define START_DATE and END_DATE
@@ -428,11 +448,11 @@ END_DATE   = date.today() # Today
 QUERY_BY_COUNTRY = {
     "Ethiopia": '(("infrastructure project" OR "debt relief" OR "railway" OR "industrial park" OR "investment" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease cooperation" OR "mosque" OR "church" OR "religious diplomacy" OR "propaganda" OR "disinformation" OR "social media campaign" OR "broadcast in Amharic") OR ("ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ " OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ"))',
     "Senegal": '(("multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Senegal" OR "Senegalais" OR "Dakar" OR "Diamniadio" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue")) OR (("tàmbali" OR "jàngoro" OR "politique" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo"OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan") AND ("Senegaal"))',
-    "DRC": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("République démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi")) OR (("bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "5G" OR "Huawei" OR "IA" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya") AND ("RDC"))',
-    "Côte d'Ivoire": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Côte d\'Ivoire" OR "Cote d\'Ivoire" OR "Cote d'Ivoire" OR "Ivory Coast" OR "Abidjan" OR "Yamoussoukro" OR "Alassane Ouattara" OR "Laurent Gbagbo" OR "Henri Konan Bédié" OR "Robert Daudelin" OR "Emmanuel Etiennette" OR "Marcel Amon Tanoh" OR "Kandia Camara" OR "Amadou Gon Coulibaly" OR "Hamed Bakayoko" OR "Adama Bictogo" OR "Charles Blé Goudé")) OR (("baoulé" OR "baoule" OR "dioula" OR "dyula" OR "senufo" OR "lobi" OR "loby" OR "lobyi" OR "lobyie" OR "lobyien" OR "lobyienne" OR "lobyiens" OR "lobyienes" OR "lobyien(ne)" OR "lobyien(ne)s" OR "lobyien.ne" OR "lobyien.ne.s" OR "lobyien.ne.s." OR "lobyien.ne.s.." OR "lobyien.ne.s...") AND ("Côte d\'Ivoire"))', # Example for Cote d'Ivoire, expand as needed
-    "South Africa": '(("South Africa" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS") AND ("trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism" OR "propaganda" OR "disinformation" OR "5G" OR "Huawei" OR "AI" OR "vaccine")) OR (("iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa"ICS") AND ("uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo"))' # Example for SA, expand as needed
+    "DRC": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("République démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi")) OR (("bobongami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "5G" OR "Huawei" OR "IA" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya") AND ("RDC"))',
+    "Côte d'Ivoire": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide"sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Côte d\'Ivoire" OR "Cote d\'Ivoire" OR "Cote d'Ivoire" OR "Ivory Coast" OR "Abidjan" OR "Yamoussoukro" OR "Alassane Ouattara" OR "Laurent Gbagbo" OR "Henri Konan Bédié" OR "Robert Daudelin" OR "Emmanuel Etiennette" OR "Marcel Amon Tanoh" OR "Kandia Camara" OR "Amadou Gon Coulibaly" OR "Hamed Bakayoko" OR "Adama Bictogo" OR "Charles Blé Goudé")) OR (("baoulé" OR "baoule" OR "dioula" OR "dyula" OR "senufo" OR "lobi" OR "loby" OR "lobyi" OR "lobyie" OR "lobyien" OR "lobyienne" OR "lobyiens" OR "lobyienes" OR "lobyien(ne)" OR "lobyien(ne)s" OR "lobyien.ne" OR "lobyien.ne.s" OR "lobyien.ne.s." OR "lobyien.ne.s.." OR "lobyien.ne.s...") AND ("Côte d\'Ivoire"))', # Example for Cote d'Ivoire, expand as needed
+    "South Africa": '(("South Africa" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS") AND ("trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism" OR "propaganda" OR "disinformation" OR "5G" OR "Huawei" OR "AI" OR "vaccine")) OR (("iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS") AND ("uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo"))' # Example for SA, expand as needed
 }
 
-# FIXED THE MAIN CHECK
+# THE MAIN CHECK
 if __name__ == "__main__":
     main()
