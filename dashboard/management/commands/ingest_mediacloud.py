@@ -1,3 +1,4 @@
+from django.core.management.base import BaseCommand, CommandError
 import pandas as pd
 import numpy as np
 import time
