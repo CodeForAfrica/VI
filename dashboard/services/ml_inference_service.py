@@ -233,17 +233,41 @@ class MLInferenceService:
             print(f"✅ Saved tone model to persistent cache: {cache_path}")
     
     def _load_strategic_classifier(self):
-        """Load calibrated strategic classifier from S3"""
+        """Load calibrated strategic classifier from S3 or local path"""
         print(f"_load_strategic_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         if 'strategic' in self._model_cache:
             print("   Found strategic model in cache, returning.")
             return self._model_cache['strategic']
 
-         # ✅ Check persistent cache first
+        # ✅ Check persistent cache first
         if self._load_from_persistent_cache('strategic'):
             print("   Found strategic model in persistent cache, returning.")
             return self._model_cache['strategic']
 
+        # Check if strategic model exists in the known local directory before attempting S3 download
+        KNOWN_STRATEGIC_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_contrastive_peft"
+        if os.path.exists(KNOWN_STRATEGIC_MODEL_PATH):
+            print(f"✅ Loading strategic classifier from local path: {KNOWN_STRATEGIC_MODEL_PATH}")
+            
+            # Load the classifier
+            from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+            classifier = CalibratedStrategicClassifier.load(KNOWN_STRATEGIC_MODEL_PATH)
+            self._model_cache['strategic'] = classifier
+            
+            # Load label encoder
+            label_enc_path = os.path.join(KNOWN_STRATEGIC_MODEL_PATH, 'label_encoder.pkl')
+            if os.path.exists(label_enc_path):
+                with open(label_enc_path, 'rb') as f:
+                    self._strategic_label_encoder = pickle.load(f)
+            
+            print(f"✅ SUCCESS: Strategic classifier loaded from local path!")
+            # ✅ Save to persistent cache
+            self._save_to_persistent_cache('strategic', classifier)
+            return classifier
+        else:
+            print(f"⚠️  Local strategic model not found at {KNOWN_STRATEGIC_MODEL_PATH}, attempting S3 download...")
+        
+        # If local path doesn't exist, proceed with S3 download as fallback
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
 
