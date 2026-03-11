@@ -1,3 +1,5 @@
+import sys
+import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 
 # Add project root to Python path if not already there
@@ -16,10 +18,8 @@ import logging
 from datetime import date, timedelta
 from sqlalchemy import create_engine, text
 from urllib.parse import urlparse
-import os
 import django
-from django.conf import settings
-import sys 
+from django.conf import settings 
 
 # Configure Django settings for database access (similar to your original script)
 if not settings.configured:
