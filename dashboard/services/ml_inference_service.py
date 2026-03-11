@@ -407,7 +407,9 @@ class MLInferenceService:
         text = str(text).strip()
         if len(text) > 4000:
             text = text[:4000]
-_language(self, text):
+        return text
+
+    def detect_language(self, text):
         """Detect language as in notebook"""
         try:
             return detect(text[:200])
