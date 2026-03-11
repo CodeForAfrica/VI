@@ -124,8 +124,8 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
     try:
         # ✅ Define endpoints FIRST (no trailing spaces, valid domains)
         endpoints = [
-            "https://search.mediacloud.org/api/v2/stories_public/list",  # ← Primary
-            "https://www.mediacloud.org/api/v2/stories_public/list",     # ← Fallback
+            "https://search.mediacloud.org/api/v2/stories_public/list",
+            "https://www.mediacloud.org/api/v2/stories_public/list",
         ]
         
         # ✅ Debug: Print endpoints AFTER defining them
@@ -255,49 +255,7 @@ def main():
                 logging.error(f"Safe API Error {country}/{actor_name}: {e}")
                 print(f"    Error for {country}/{actor_name} (safe method): {e}")
             
-        # If original library not available, use safe method
-        # Loop structure adjusted for clarity - search actor collections for target country queries
-        for country, base_query in QUERY_BY_COUNTRY.items():
-            actor_collection_id = TARGET_COLLECTION_IDS.get(country) # Get the target country's collection ID (might not be used directly in safe method)
-            if not actor_collection_id:
-                print(f"Warning: No collection ID found for target country {country}. Skipping.")
-                continue
-
-            for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-                print(f"  Searching for articles in {actor_name} media ({actor_coll_id}) about {country} using query: {base_query[:50]}...")
-                try:
-                    # Use the target country query, search within the actor's collection
-                    stories, count = safe_mediacloud_search(base_query, START_DATE, END_DATE, [actor_coll_id], api_key)
-                    print(f"    Found {len(stories)} stories via safe method.")
-                    for s in stories:
-                        # --- CREATE THE RECORD DICTIONARY ---
-                        # Start with all columns set to None
-                        record = {col: None for col in db_columns}
-                        # Set default values for specific columns that are NOT NULL in the database
-                        # but might not be provided by the MediaCloud API directly.
-                        # These defaults are placeholders until the full text is scraped and ML runs.
-                        record['pseudo_kept'] = False
-                        record['pseudo_weight'] = 0.0
-                        record['use_afrolm'] = False
-                        # Update the dictionary with data from the MediaCloud API response
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")), # Ensure it's a string or datetime object as expected by the DB
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name, # Comes from the loop variable
-                            "target_country": country,   # Comes from the outer loop variable
-                            "lang_detect": s.get("language"),
-                            "confidence": s.get("score"), # Assuming 'score' from MC API maps to 'confidence' in DB
-                            # 'article_text' is NOT set here, it will be scraped later during insertion
-                            # Other fields like strategic_intent, tone, vulnerability_index, sector, ml_processed_at
-                            # are also not set here; they will be filled by the ML pipeline later.
-                        })
-                        # Append the completed record dictionary to the list
-                        all_records.append(record)
-                except Exception as e:
-                    logging.error(f"Safe API Error {country}/{actor_name} (Actor Coll {actor_coll_id}): {e}")
-                    print(f"    Error for {country}/{actor_name} (safe method): {e}")
-    
+        
     df = pd.DataFrame(all_records)
     if df.empty:
         print("No articles found or API unavailable. Using existing data.")
