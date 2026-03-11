@@ -237,21 +237,15 @@ class CalibratedStrategicClassifier:
             from peft import PeftConfig
             peft_config = PeftConfig.from_pretrained(model_dir)
 
-            # Determine base model path (NEW LOGIC: Check common models directory)
-            # Assume base models are stored in a common directory like ~/Vulnerability_index_tool/app/models/
-            # Construct potential local paths based on the base_model_name_or_path from the PEFT config
-            # e.g., peft_config.base_model_name_or_path = "microsoft/mdeberta-v3-base"
-            # Expected local path after S3 sync: /home/ubuntu/Vulnerability_index_tool/app/models/microsoft_mdeberta-v3-base
-
-            # Get the parent directory of the ensemble (e.g., /home/ubuntu/Vulnerability_index_tool/app/models/)
-            parent_models_dir = os.path.dirname(save_dir) # save_dir is calibrated_contrastive_peft path
-            # Sanitize the expected hub name (or use the hardcoded name if known from S3 listing)
+            # Determine base model path (NEW LOGIC: Check common models directory HARDCODED)
+            # The ensemble might be loaded from a temp directory. Look in the known final location.
+            KNOWN_MODELS_DIR = "/home/ubuntu/Vulnerability_index_tool/app/models" # Adjust if your path is different
             expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' # Use the known name from S3
-            base_model_local_path_new = os.path.join(parent_models_dir, expected_base_model_dir_name)
+            base_model_local_path_new = os.path.join(KNOWN_MODELS_DIR, expected_base_model_dir_name)
 
             if os.path.exists(base_model_local_path_new):
                 base_model_name = base_model_local_path_new
-                print(f"  Using local base model (in common dir): {base_model_name}")
+                print(f"  Using local base model (in known dir): {base_model_name}")
             else:
                 # Fallback to HF Hub (this will cause the download issue you saw)
                 # This assumes peft_config.base_model_name_or_path exists, otherwise handle AttributeError
@@ -268,7 +262,7 @@ class CalibratedStrategicClassifier:
                 except AttributeError:
                      print(f"  ❌ ERROR: PEFT config missing 'base_model_name_or_path' and local path {base_model_local_path_new} not found.")
                      raise
-
+                    
             # Load base model config with correct num_labels
             from transformers import AutoConfig
             config = AutoConfig.from_pretrained(
