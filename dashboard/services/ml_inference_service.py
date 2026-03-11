@@ -545,6 +545,7 @@ class MLInferenceService:
                 return actor
         
         return 'Unknown'
+        
     def extract_actor_from_content(self, text, organizations=None, persons=None):
         """Extract foreign actor from article content using NER and keywords"""
         try:
@@ -552,7 +553,8 @@ class MLInferenceService:
             
             # Priority 1: Check organizations from NER
             if organizations:
-                for                    org_lower = org.lower()
+                for org in organizations:
+                    org_lower = org.lower()
                     if 'china' in org_lower or 'chinese' in org_lower:
                         return 'China'
                     if 'russia' in org_lower or 'russian' in org_lower:
@@ -621,7 +623,8 @@ class MLInferenceService:
             
     def perform_strategic_intent_inference(self, article_text):
         """Perform strategic intent inference"""
- classifier = self._load_strategic_classifier()
+        try:
+            classifier = self._load_strategic_classifier()
             predictions, probabilities = classifier.predict(
                 texts=[article_text],
                 batch_size=1,
@@ -731,6 +734,9 @@ class MLInferenceService:
                 "israel": "Israel",
                 "iran": "Iran",
                 "rwanda": "Rwanda"
+
+            }
+            
             intent_mapping = {
                 # Direct matches (if ML outputs match CSV exactly)
                 "economic": "Economic",
