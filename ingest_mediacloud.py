@@ -185,9 +185,9 @@ def main():
     print(f"Target Actors: {list(ACTOR_COLLECTION_IDS.keys())}")
 
     # Validate environment variables before proceeding
-    api_key = os.getenv('MEDIA_CLOUD_API_KEY')
+    api_key = os.getenv('MEDIACLOUD_API_KEY')
     if not api_key:
-        print("ERROR: MEDIA_CLOUD_API_KEY environment variable not set.")
+        print("ERROR: MEDIACLOUD_API_KEY environment variable not set.")
         return
     print("MediaCloud API Key found.")
 
