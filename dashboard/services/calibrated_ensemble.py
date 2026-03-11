@@ -239,29 +239,35 @@ class CalibratedStrategicClassifier:
 
             # Determine base model path (NEW LOGIC: Check common models directory HARDCODED)
             # The ensemble might be loaded from a temp directory. Look in the known final location.
-            KNOWN_MODELS_DIR = "/home/ubuntu/Vulnerability_index_tool/app/models" # Adjust if your path is different
+            KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models" # EC2 path
             expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' # Use the known name from S3
-            base_model_local_path_new = os.path.join(KNOWN_MODELS_DIR, expected_base_model_dir_name)
+            base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
 
-            if os.path.exists(base_model_local_path_new):
-                base_model_name = base_model_local_path_new
-                print(f"  Using local base model (in known dir): {base_model_name}")
+            # Check if running on EC2 (using an environment variable)
+            on_ec2 = os.environ.get('ON_EC2', '').lower() == 'true'
+
+            if on_ec2:
+                # Running on EC2, enforce local path check
+                if os.path.exists(base_model_local_path_ec2):
+                    base_model_name = base_model_local_path_ec2
+                    print(f"  Using local base model (in known dir): {base_model_name}")
+                else:
+                    print(f"  ❌ ERROR: ON_EC2=True, but local base model not found at {base_model_local_path_ec2}")
+                    raise FileNotFoundError(f"Local base model expected at '{base_model_local_path_ec2}' on EC2 but not found.")
             else:
-                # Fallback to HF Hub (this will cause the download issue you saw)
-                # This assumes peft_config.base_model_name_or_path exists, otherwise handle AttributeError
-                try:
+                # Not running on EC2 (e.g., local), allow fallback to Hub
+                if os.path.exists(base_model_local_path_ec2):
+                    base_model_name = base_model_local_path_ec2
+                    print(f"  Using local base model (in known dir): {base_model_name}")
+                else:
+                    # Fallback to HF Hub
                     hub_name_from_config = getattr(peft_config, 'base_model_name_or_path', None)
                     if hub_name_from_config:
-                        print(f"  ⚠️  Local base model not found at {base_model_local_path_new}, falling back to Hub: {hub_name_from_config}")
-                        # For now, raise an error if the local path is not found, forcing you to fix the structure or logic
-                        raise FileNotFoundError(f"Local base model expected at '{base_model_local_path_new}' but not found.")
+                        print(f"  ⚠️  Local base model not found at {base_model_local_path_ec2}, falling back to Hub: {hub_name_from_config}")
+                        base_model_name = hub_name_from_config
                     else:
-                        print(f"  ❌ ERROR: Could not determine base model config and local path {base_model_local_path_new} not found.")
-                        raise FileNotFoundError(f"Local base model expected at '{base_model_local_path_new}' but not found.")
-
-                except AttributeError:
-                     print(f"  ❌ ERROR: PEFT config missing 'base_model_name_or_path' and local path {base_model_local_path_new} not found.")
-                     raise
+                        print(f"  ❌ ERROR: Could not determine base model config and local path {base_model_local_path_ec2} not found.")
+                        raise FileNotFoundError(f"Base model config missing and local path '{base_model_local_path_ec2}' not found.")
                     
             # Load base model config with correct num_labels
             from transformers import AutoConfig
