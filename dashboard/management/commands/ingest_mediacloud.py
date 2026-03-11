@@ -220,61 +220,41 @@ def main():
     print("Querying MediaCloud API...")
 
     # Try to use the original mediacloud library if available, otherwise use safe method
-    try:
-        # If the original mediacloud library is available and working
-        import mediacloud.api
-        print("Using original MediaCloud API library...")
-        mc_search = mediacloud.api.SearchApi(api_key)
-        
-        # Search each target country's query across each actor country's media collection
-        for country, base_query in QUERY_BY_COUNTRY.items():
-            actor_collection_id = TARGET_COLLECTION_IDS.get(country) # Get the target country's collection ID
-            if not actor_collection_id:
-                print(f"Warning: No collection ID found for target country {country}. Skipping.")
-                continue
-
-            for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-                print(f"  Searching for articles in {actor_name} media ({actor_coll_id}) about {country} using query: {base_query[:50]}...")
-                try:
-                    # Use the target country query, search within the actor's collection
-                    stories, count = mc_search.story_list(
-                        query=base_query, # The query contains the target country name and keywords
-                        start_date=START_DATE,
-                        end_date=END_DATE,
-                        collection_ids=[actor_coll_id] # Search in the actor's media collection
-                    )
-                    print(f"    Found {len(stories)} stories.")
-                    for s in stories:
-                        # --- CREATE THE RECORD DICTIONARY ---
-                        # Start with all columns set to None
-                        record = {col: None for col in db_columns}
-                        # Set default values for specific columns that are NOT NULL in the database
-                        # but might not be provided by the MediaCloud API directly.
-                        # These defaults are placeholders until the full text is scraped and ML runs.
-                        record['pseudo_kept'] = False
-                        record['pseudo_weight'] = 0.0
-                        record['use_afrolm'] = False
-                        # Update the dictionary with data from the MediaCloud API response
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")), # Ensure it's a string or datetime object as expected by the DB
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name, # Comes from the loop variable
-                            "target_country": country,   # Comes from the outer loop variable
-                            "lang_detect": s.get("language"),
-                            "confidence": s.get("score"), # Assuming 'score' from MC API maps to 'confidence' in DB
-                            # 'article_text' is NOT set here, it will be scraped later during insertion
-                            # Other fields like strategic_intent, tone, vulnerability_index, sector, ml_processed_at
-                            # are also not set here; they will be filled by the ML pipeline later.
-                        })
-                        # Append the completed record dictionary to the list
-                        all_records.append(record)
-                except Exception as e:
-                    logging.error(f"MediaCloud Error {country}/{actor_name} (Actor Coll {actor_coll_id}): {e}")
-                    print(f"    Error for {country}/{actor_name}: {e}")
-
-    except ImportError:
-        print("Original MediaCloud library not found. Using safe API method...")
+    # Force use of safe_mediacloud_search (bypass outdated mediacloud.api library)
+    print("Using safe MediaCloud API method (library bypassed)...")
+    
+    for country, base_query in QUERY_BY_COUNTRY.items():
+        actor_collection_id = TARGET_COLLECTION_IDS.get(country)
+        if not actor_collection_id:
+            print(f"Warning: No collection ID found for target country {country}. Skipping.")
+            continue
+    
+        for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
+            print(f"  Searching for articles in {actor_name} media ({actor_coll_id}) about {country} using query: {base_query[:50]}...")
+            try:
+                # Use YOUR safe method with correct endpoints
+                stories, count = safe_mediacloud_search(base_query, START_DATE, END_DATE, [actor_coll_id], api_key)
+                print(f"    Found {len(stories)} stories via safe method.")
+                for s in stories:
+                    # --- CREATE THE RECORD DICTIONARY ---
+                    record = {col: None for col in db_columns}
+                    record['pseudo_kept'] = False
+                    record['pseudo_weight'] = 0.0
+                    record['use_afrolm'] = False
+                    record.update({
+                        "url": s.get("url"),
+                        "posting_time": str(s.get("publish_date")),
+                        "media_outlet": s.get("media_name"),
+                        "inferred_actor": actor_name,
+                        "target_country": country,
+                        "lang_detect": s.get("language"),
+                        "confidence": s.get("score"),
+                    })
+                    all_records.append(record)
+            except Exception as e:
+                logging.error(f"Safe API Error {country}/{actor_name}: {e}")
+                print(f"    Error for {country}/{actor_name} (safe method): {e}")
+            
         # If original library not available, use safe method
         # Loop structure adjusted for clarity - search actor collections for target country queries
         for country, base_query in QUERY_BY_COUNTRY.items():
