@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, text
 from urllib.parse import urlparse
 import django
 from django.conf import settings 
+import mediacloud.api
 
 # Configure Django settings for database access (similar to your original script)
 if not settings.configured:
@@ -119,66 +120,7 @@ def scrape_full_text_robust(url):
     except Exception as e:
         return f"Error scraping {url}: {str(e)}"
 
-def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key):
-    """Safely search MediaCloud API with fallback"""
-    try:
-        # ✅ Define endpoints FIRST (no trailing spaces, valid domains)
-        endpoints = [
-            "https://search.mediacloud.org/api/v2/search/stories",  # ✅ Primary API v2 endpoint
-            "https://search.mediacloud.org/api/v2/stories",         # ✅ Fallback endpoint
-        ]
-        
-        # ✅ Debug: Print endpoints AFTER defining them
-        print(f"DEBUG: Endpoints being tested:")
-        for i, ep in enumerate(endpoints):
-            print(f"  [{i}] repr: {repr(ep)}")
-            print(f"  [{i}] stripped: '{ep.strip()}'")
-        
-        # ✅ Now loop through endpoints
-        for endpoint in endpoints:
-            try:
-                params = {
-                    'q': query,
-                    'start_date': start_date.strftime('%Y-%m-%d'),
-                    'end_date': end_date.strftime('%Y-%m-%d'),
-                    'collection_ids': ','.join(map(str, collection_ids)),
-                    'limit': 100,
-                    'format': 'json',
-                    'key': api_key
-                }
-                
-                response = requests.get(
-                    endpoint,
-                    params=params,
-                    headers={'Authorization': f'ApiKey {api_key}'},
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    stories = data.get('stories', [])
-                    count = data.get('count', 0)
-                    print(f"   Retrieved {len(stories)} stories from {endpoint.split('/')[2]}")
-                    return stories, count
-                elif response.status_code in [404, 403, 401]:
-                    print(f"   Endpoint {endpoint.split('/')[2]} returned {response.status_code}, trying next...")
-                    continue
-                else:
-                    print(f"   Endpoint {endpoint.split('/')[2]} returned {response.status_code}, trying next...")
-                    continue
-            except requests.exceptions.RequestException as e:
-                print(f"   Request failed for {endpoint.split('/')[2]}: {e}, trying next...")
-                continue
-            except Exception as e:
-                print(f"   Unexpected error for {endpoint.split('/')[2]}: {e}, trying next...")
-                continue
-        
-        print("   All endpoints failed.")
-        return [], 0
-        
-    except Exception as e:
-        logging.error(f"MediaCloud API Error: {e}")
-        return [], 0
+
 
 def verify_dns(host):
     """Checks if the RDS endpoint is reachable before trying to connect."""
@@ -215,28 +157,32 @@ def main():
     except Exception as e:
         print(f"Database engine creation failed: {e}")
         return
-
+        
     all_records = []
-    print("Querying MediaCloud API...")
-
-    # Try to use the original mediacloud library if available, otherwise use safe method
-    # Force use of safe_mediacloud_search (bypass outdated mediacloud.api library)
-    print("Using safe MediaCloud API method (library bypassed)...")
+    print("Querying MediaCloud API using library...")
+    
+    # Initialize the MediaCloud API client (library handles endpoints/auth)
+    mc_search = mediacloud.api.SearchApi(api_key)
     
     for country, base_query in QUERY_BY_COUNTRY.items():
-        actor_collection_id = TARGET_COLLECTION_IDS.get(country)
-        if not actor_collection_id:
-            print(f"Warning: No collection ID found for target country {country}. Skipping.")
+        target_coll_id = TARGET_COLLECTION_IDS.get(country)
+        if not target_coll_id:
+            print(f"Warning: No collection ID for {country}, skipping")
             continue
-    
+        
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-            print(f"  Searching for articles in {actor_name} media ({actor_coll_id}) about {country} using query: {base_query[:50]}...")
+            print(f"  Searching {actor_name} media ({actor_coll_id}) about {country}...")
             try:
-                # Use YOUR safe method with correct endpoints
-                stories, count = safe_mediacloud_search(base_query, START_DATE, END_DATE, [actor_coll_id], api_key)
-                print(f"    Found {len(stories)} stories via safe method.")
+                # Library call - no manual endpoints!
+                stories, count = mc_search.story_list(
+                    query=base_query,
+                    start_date=START_DATE,
+                    end_date=END_DATE,
+                    collection_ids=[actor_coll_id]
+                )
+                print(f"    Found {len(stories)} stories.")
+                
                 for s in stories:
-                    # --- CREATE THE RECORD DICTIONARY ---
                     record = {col: None for col in db_columns}
                     record['pseudo_kept'] = False
                     record['pseudo_weight'] = 0.0
@@ -252,9 +198,8 @@ def main():
                     })
                     all_records.append(record)
             except Exception as e:
-                logging.error(f"Safe API Error {country}/{actor_name}: {e}")
-                print(f"    Error for {country}/{actor_name} (safe method): {e}")
-            
+                logging.error(f"MediaCloud Error {country}/{actor_name}: {e}")
+                print(f"    Error: {e}")
         
     df = pd.DataFrame(all_records)
     if df.empty:
