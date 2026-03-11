@@ -453,8 +453,8 @@ TARGET_COLLECTION_IDS = {
 }
 
 # Define START_DATE and END_DATE
-START_DATE = date.today() - timedelta(days=1) # Yesterday
-END_DATE   = date.today() # Today
+START_DATE = date(2026, 3, 10)  # ← March 10, 2026
+END_DATE   = date(2026, 3, 11)  # ← March 11, 2026
 
 # Use your exact, complex queries for all target countries
 QUERY_BY_COUNTRY = {
