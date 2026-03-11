@@ -124,8 +124,8 @@ def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key)
     try:
         # ✅ Define endpoints FIRST (no trailing spaces, valid domains)
         endpoints = [
-            "https://search.mediacloud.org/api/v2/stories_public/list",
-            "https://www.mediacloud.org/api/v2/stories_public/list",
+            "https://search.mediacloud.org/api/v2/search/stories",  # ✅ Primary API v2 endpoint
+            "https://search.mediacloud.org/api/v2/stories",         # ✅ Fallback endpoint
         ]
         
         # ✅ Debug: Print endpoints AFTER defining them
