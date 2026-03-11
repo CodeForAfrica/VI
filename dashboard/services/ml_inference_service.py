@@ -238,39 +238,63 @@ class MLInferenceService:
         if 'strategic' in self._model_cache:
             print("   Found strategic model in cache, returning.")
             return self._model_cache['strategic']
-
+    
         # ✅ Check persistent cache first
         if self._load_from_persistent_cache('strategic'):
             print("   Found strategic model in persistent cache, returning.")
             return self._model_cache['strategic']
-
-        # Check if strategic model exists in the known local directory before attempting S3 download
-        KNOWN_STRATEGIC_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_contrastive_peft"
-        if os.path.exists(KNOWN_STRATEGIC_MODEL_PATH):
-            print(f"✅ Loading strategic classifier from local path: {KNOWN_STRATEGIC_MODEL_PATH}")
+    
+        # NEW PRIORITY: Check for the CALIBRATED CONTRASTIVE PEFT strategic model first (best performing, matches local run)
+        KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_contrastive_peft"
+        if os.path.exists(KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH):
+            print(f"✅ Loading CONTRASTIVE PEFT strategic classifier from local path: {KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH}")
             
             # Load the classifier
             from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
-            classifier = CalibratedStrategicClassifier.load(KNOWN_STRATEGIC_MODEL_PATH)
+            classifier = CalibratedStrategicClassifier.load(KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH)
             self._model_cache['strategic'] = classifier
             
             # Load label encoder
-            label_enc_path = os.path.join(KNOWN_STRATEGIC_MODEL_PATH, 'label_encoder.pkl')
+            label_enc_path = os.path.join(KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH, 'label_encoder.pkl')
             if os.path.exists(label_enc_path):
                 with open(label_enc_path, 'rb') as f:
                     self._strategic_label_encoder = pickle.load(f)
             
-            print(f"✅ SUCCESS: Strategic classifier loaded from local path!")
+            print(f"✅ SUCCESS: CONTRASTIVE PEFT Strategic classifier loaded from local path!")
             # ✅ Save to persistent cache
             self._save_to_persistent_cache('strategic', classifier)
             return classifier
         else:
-            print(f"⚠️  Local strategic model not found at {KNOWN_STRATEGIC_MODEL_PATH}, attempting S3 download...")
-        
-        # If local path doesn't exist, proceed with S3 download as fallback
+            print(f"⚠️  Contrastive PEFT strategic model not found at {KNOWN_CONTRASTIVE_STRATEGIC_MODEL_PATH}")
+    
+        # OLD/ALTERNATIVE: Check for the IMPROVED strategic model (if contrastive fails)
+        KNOWN_IMPROVED_STRATEGIC_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_strategic_ensemble_improved"
+        if os.path.exists(KNOWN_IMPROVED_STRATEGIC_MODEL_PATH):
+            print(f"✅ Loading IMPROVED strategic classifier from local path: {KNOWN_IMPROVED_STRATEGIC_MODEL_PATH}")
+            
+            # Load the classifier (assuming it uses the same CalibratedStrategicClassifier class)
+            from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+            classifier = CalibratedStrategicClassifier.load(KNOWN_IMPROVED_STRATEGIC_MODEL_PATH)
+            self._model_cache['strategic'] = classifier
+            
+            # Load label encoder
+            label_enc_path = os.path.join(KNOWN_IMPROVED_STRATEGIC_MODEL_PATH, 'label_encoder.pkl')
+            if os.path.exists(label_enc_path):
+                with open(label_enc_path, 'rb') as f:
+                    self._strategic_label_encoder = pickle.load(f)
+            
+            print(f"✅ SUCCESS: IMPROVED Strategic classifier loaded from local path!")
+            # ✅ Save to persistent cache
+            self._save_to_persistent_cache('strategic', classifier)
+            return classifier
+        else:
+            print(f"⚠️  Improved strategic model not found at {KNOWN_IMPROVED_STRATEGIC_MODEL_PATH}")
+    
+        # If neither local path exists, proceed with S3 download as fallback
+        print(f"⚠️  Neither local strategic model found, attempting S3 download...")
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
-
+    
         print(f"\n🔍 === STRATEGIC MODEL DOWNLOAD ===")
         print(f"📁 Temp dir: {temp_dir}")
         
@@ -293,7 +317,7 @@ class MLInferenceService:
                         filename = key.replace(base_prefix, '') # e.g., 'config.json'
                         local_path = os.path.join(base_model_dir, filename)
                         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
+    
                         # CRITICAL CHANGE: Wrap download in try-except for individual files
                         try:
                             self.s3_client.download_file(self.bucket_name, key, local_path)
@@ -312,7 +336,7 @@ class MLInferenceService:
         print(f"📂 Files in temp_dir: {os.listdir(temp_dir)}")
         
         # Now download the classifier
-        classifier_prefix = 'calibrated_contrastive_peft/'
+        classifier_prefix = 'calibrated_contrastive_peft/' # Download the contrastive model from S3 as fallback
         print(f"📂 Downloading classifier from: {classifier_prefix}")
         
         if not self._download_directory_from_s3(classifier_prefix, temp_dir):
