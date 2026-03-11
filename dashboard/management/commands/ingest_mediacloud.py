@@ -336,7 +336,7 @@ TARGET_COLLECTION_IDS = {
 }
 
 # Define START_DATE and END_DATE
-START_DATE = date(2026, 3, 10)  # ← March 10, 2026
+START_DATE = date(2026, 1, 01)  # ← March 10, 2026
 END_DATE   = date(2026, 3, 11)  # ← March 11, 2026
 
 # Use your exact, complex queries for all target countries
