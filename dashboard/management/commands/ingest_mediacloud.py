@@ -1,3 +1,9 @@
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+
+# Add project root to Python path if not already there
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from django.core.management.base import BaseCommand, CommandError
 import pandas as pd
 import numpy as np
