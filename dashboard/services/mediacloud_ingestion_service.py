@@ -175,32 +175,15 @@ def verify_dns(host):
         return False
 
 def main():
-    #  DNS CHECK 
-    if not verify_dns(DB_HOST):
-        return
-    
-
     all_records = []
     print("🛰️ Querying MediaCloud API...")       
     # iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
-    # Loops through target countries to get the query, and actor collections to search within
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
-        if not base_query:
-            print(f"Warning: No query defined for target country: {country}")
-            continue # Skip if no query found for this country key
-
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                time.sleep(0.5) # Be respectful to the API
-                # Use the correct method signature for the library: story_list(query, start_date, end_date, collection_ids=[])
-                # Pass date objects directly, as confirmed by the test script
-                stories, _ = mc_search.story_list(
-                    base_query, # The constructed query string
-                    START_DATE, # Pass date object (now yesterday)
-                    END_DATE,   # Pass date object (today)
-                    collection_ids=[actor_coll_id] # Search within the actor's collection
-                )
+                time.sleep(0.5) 
+                stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[actor_coll_id])
                 for s in stories:
                     record = {col: None for col in db_columns}
                     record.update({
@@ -217,7 +200,7 @@ def main():
                     all_records.append(record)
             except Exception as e:
                 logging.error(f"MediaCloud Error {country}-{actor}: {e}")
-
+                
     df = pd.DataFrame(all_records)
     if df.empty:
         print("❌ No articles found.")
