@@ -5,7 +5,7 @@ import logging
 # --- CONFIG (Mirror your script's config for DB connection) ---
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com').strip()
+DB_HOST = os.getenv('DB_HOST', 'vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com').strip()
 DB_PORT = os.getenv('DB_PORT', '5432')
 DB_NAME = os.getenv('DB_NAME', 'postgres')
 DB_TABLE = "dashboard_medianarrative"
@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # --- DATABASE ENGINE ---
 try:
     engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
-    print("--- Database Engine Created Successfully ---\n") # Corrected Indentation: Same level as 'engine = ...'
+    print("--- Database Engine Created Successfully ---\n")
 except Exception as e:
     print(f"Error creating database engine: {e}")
     exit(1)
@@ -38,13 +38,13 @@ TARGET_TERMS = [
     ]),
     ("DRC", [
         "DRC", "Democratic Republic of the Congo", "République Démocratique du Congo", "RDC", "Kinshasa",
-        "Tshisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
+       shisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
         "Kolwezi", "Kokolo", "Corneille Nnanga", "Bertrand Bisimwa", "Sultani Makenga", "Willy Ngoma",
         "Lawrence Kanyuka", "Jean-Jacques Mamba", "Éric Nkuba", "Congolais", "bobongisi maponami", "maponami",
         "politiki", "kampanyi", "boyangeli", "mbongo na mosala", "libaku ya mbongo", "nzela", "ya nzela",
         "mibundu", "liboke ya bitumba", "bokengi", "kimia", "banyama ya liboma", "lisungi", "ya bokolongono",
         "elenga", "nsango ya lokuta", "influenceur", "media", "vaksin", "lopitalo", "bilanga", "kura",
-        "misiri", "ndako ya Nzambe", "kristoya"
+        "misiri", Nzambe", "kristoya"
     ]),
     ("SA", [
         "South Africa", "Suid-Afrika", "Mzansi", "Pretoria", "Cape Town", "Johannesburg", "Durban", "ANC",
@@ -70,7 +70,7 @@ TARGET_TERMS = [
 # We need to check if article_text contains ANY term from ANY target country list.
 # If it contains NO terms from ANY list, it matches the condition for deletion.
 # The logic will be: NOT (term_from_country1 OR term_from_country2 OR ...)
-# This is equivalent to: NOT term_from_country1 AND NOT term_from_country2 AND ...
+# This is equivalent to: NOT term_from_country1 AND2 AND ...
 
 # Start building the WHERE clause for terms NOT present
 where_conditions = []
@@ -91,7 +91,7 @@ combined_where = " AND ".join(where_conditions) # This line was missing!
 # --- END ADD MISSING LINE ---
 
 # Define the start date for 'old' data (adjust as needed, e.g., yesterday or the day before ingestion)
-OLD_DATA_CUTOFF_DATE = '2023-10-16' # Adjust this date
+OLD_DATA_CUTOFF_DATE = '2023-10-16' # Adjust this date - Using the earliest date found
 
 # Final SQL query
 # Include checks for NULL/empty/failed text as well
@@ -112,10 +112,18 @@ WHERE
    );
 """
 
+print(f"--- Preparing to Execute Deletion ---")
+print(f"Query:\n{delete_query_str}")
+print(f"Parameters: {{'cutoff_date': '{OLD_DATA_CUTOFF_DATE}'}}")
+print(f"This will delete articles older than {OLD_DATA_CUTOFF_DATE} that do not mention a target country,")
+print(f"and also any articles with NULL/empty/failed text regardless of date.")
+print(f"------------------------\n")
+
 # --- EXECUTE THE DELETE ---
 try:
     with engine.begin() as conn: # Use begin() for transaction
         # Execute the query, passing the cutoff date as a parameter
+        # IMPORTANT: Pass the parameters dictionary as the second argument to execute
         result = conn.execute(text(delete_query_str), {"cutoff_date": OLD_DATA_CUTOFF_DATE})
         logging.info(f"Deletion of old, irrelevant articles completed. Rows affected: {result.rowcount}")
 except Exception as e:
