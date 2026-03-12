@@ -7,6 +7,7 @@ import mediacloud.api
 import trafilatura
 import cloudscraper
 import sys
+import os
 # ────────────────────────────────────────────────
 # CONFIG
 # ────────────────────────────────────────────────
