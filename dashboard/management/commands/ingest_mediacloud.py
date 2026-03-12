@@ -95,7 +95,7 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    # Ensure these are strings once at the start
+    # 1. Convert to strings ONCE here
     s_date_str = START_DATE.isoformat() if hasattr(START_DATE, 'isoformat') else START_DATE
     e_date_str = END_DATE.isoformat() if hasattr(END_DATE, 'isoformat') else END_DATE
 
@@ -108,17 +108,16 @@ def main():
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Use the 'tags_id_media' syntax that worked for you on the web
+                # Use the 'tags_id_media' syntax with the strings we created
                 web_style_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
                 
-                # Fetch stories - PASS THE STRINGS DIRECTLY
+                # 2. PASS STRINGS DIRECTLY - Removed .isoformat() from inside the call
                 results = mc_search.story_list(
                     query=web_style_query, 
                     start_date=s_date_str, 
                     end_date=e_date_str
                 )
 
-                # Handle different return types (tuple vs list)
                 stories = results[0] if isinstance(results, tuple) else results
                 
                 if stories:
@@ -145,7 +144,7 @@ def main():
             except Exception as e:
                 logging.error(f"MediaCloud Error {country}-{actor}: {e}")
                 print(f"  ❌ Error querying {actor}: {e}")
-                
+                                
     df = pd.DataFrame(all_records)
     if df.empty:
         print("\n❌ No articles found.")
