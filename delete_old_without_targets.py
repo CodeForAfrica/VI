@@ -13,8 +13,10 @@ DB_TABLE = "dashboard_medianarrative"
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
-    print("--- Database Engine Created Successfully ---\n")
+# --- DATABASE ENGINE ---
+try:
+    engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
+    print("--- Database Engine Created Successfully ---\n") # Corrected Indentation: Same level as 'engine = ...'
 except Exception as e:
     print(f"Error creating database engine: {e}")
     exit(1)
