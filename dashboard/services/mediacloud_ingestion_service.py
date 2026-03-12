@@ -77,42 +77,54 @@ def url_exists(url):
         return False
 
 def scrape_full_text_robust(url):
-    """Scrape full text with stealth headers to bypass blocks like Reuters"""
-    # Stealth headers to mimic a real browser
+    """Scrape full text with enhanced stealth and response handling."""
+    # Define realistic headers (Updated for 2026 browser versions)
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': 'https://www.google.com/'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.google.com/',
+        'DNT': '1', # Do Not Track
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
     }
-    
+
     try:
-        # Method 1: Trafilatura (using internal fetch)
-        downloaded = trafilatura.fetch_url(url)
-        if downloaded:
-            text_content = trafilatura.extract(downloaded)
-            if text_content and len(text_content.strip()) > 100:
-                return text_content.strip()
+        # Method 1: Trafilatura (using a session to pass headers)
+        # Trafilatura's fetch_url is often blocked because it uses its own simple downloader.
+        # We'll use Method 2 (CloudScraper) as the primary for high-security sites.
         
-        # Method 2: CloudScraper (FIXED: Added headers and browser config)
-        # Setting browser config helps CloudScraper solve JavaScript challenges better
         scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
         )
         
-        # We pass the headers here so Reuters sees a real browser
-        response = scraper.get(url, headers=headers, timeout=15)
+        response = scraper.get(url, headers=headers, timeout=20)
         
         if response.status_code == 200:
             text_content = trafilatura.extract(response.text)
-            if text_content and len(text_content.strip()) > 100:
+            if text_content and len(text_content.strip()) > 200:
                 return text_content.strip()
-        
-        return f"Failed to scrape content from {url} (Status: {response.status_code})"
-        
-    except Exception as e:
-        return f"Error scraping {url}: {str(e)}"
+            return f"Failed to extract content (page might be dynamic or empty)"
+            
+        elif response.status_code == 403:
+            return f"Failed: 403 Forbidden (Blocked by Reuters/Cloudflare)"
+        else:
+            return f"Failed: Status {response.status_code}"
 
+    except Exception as e:
+        # If cloudscraper fails completely, try one last simple trafilatura fetch
+        try:
+            downloaded = trafilatura.fetch_url(url)
+            if downloaded:
+                return trafilatura.extract(downloaded) or f"Error: No text found"
+        except:
+            pass
+        return f"Error scraping {url}: {str(e)}"
+        
 def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key):
     """Safely search MediaCloud API with fallback"""
     try:
