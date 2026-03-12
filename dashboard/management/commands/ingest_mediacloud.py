@@ -23,10 +23,11 @@ if project_root not in sys.path:
 # 2. DATA DICTIONARIES (Moved to Top for Scope)
 ACTOR_COLLECTION_IDS = {
     "USA": 34412234, "France": 34412146, "China": 34412193,
-    "Russia": 34412232, "Turkey": 34412131, "Saudi Arabia": 34412050412391, "Iran": 34412284, "UAE": 34412114,
+    "Russia": 34412232, "Turkey": 34412131, "Saudi Arabia": 34412050, "Israel": 34412391, "Iran": 34412284, "UAE": 34412114,
 }
 
-TARGET_COLLECTION_IDS =iopia": 34412034, "Senegal": 38380807, "DRC": 34412042,
+TARGET_COLLECTION_IDS = {
+    "Ethiopia": 34412034, "Senegal": 38380807, "DRC": 34412042,
     "South Africa": 34412238, "Côte d'Ivoire": 34412173,
 }
 
