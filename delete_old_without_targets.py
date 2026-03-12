@@ -57,7 +57,7 @@ TARGET_TERMS = [
         "South African"
     ]),
     ("Côte d''Ivoire", [
-        "Côte d''Ivoire", "Côte d''Ivoire",, "Ivory Coast", "Abidjan", "Yamoussoukro", "Alassane Ouattara",
+        "Côte d''Ivoire", "Côte d''Ivoire", "Ivory Coast", "Abidjan", "Yamoussoukro", "Alassane Ouattara",
         "Laurent Gbagbo", "Henri Konan Bédié", "Robert Daudelin", "Emmanuel Etiennette", "Marcel Amon Tanoh",
         "Kandia Camara", "Amadou Gon Coulibaly", "Hamed Bakayoko", "Adama Bictogo", "Charles Blé Goudé",
         "baoulé", "baoule", "dioula", "dyula", "senufo", "lobi", "loby", "lobyi", "lobyie", "lobyien", "lobyienne",
