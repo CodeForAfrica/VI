@@ -29,7 +29,7 @@ queries_to_run = [
         "sql": "SELECT COUNT(*) AS total_articles FROM dashboard_medianarrative;"
     },
     {
-        "name": "Recent Articles Sample",
+        "name": "Recent Articles Sample (Last 5)",
         "sql": """
             SELECT posting_time, target_country, inferred_actor, media_outlet, url, LENGTH(article_text) AS text_length
             FROM dashboard_medianarrative
@@ -38,7 +38,7 @@ queries_to_run = [
         """
     },
     {
-        "name": "Article Counts by Actor/Target (Recent)",
+        "name": "Article Counts by Actor/Target (Since Yesterday)",
         "sql": """
             SELECT target_country, inferred_actor, COUNT(*) AS article_count
             FROM dashboard_medianarrative
@@ -49,7 +49,7 @@ queries_to_run = [
     },
     # Add more queries here as needed
      {
-         "name": "Sample Article Text",
+         "name": "Sample Article Text (Recent & Substantial)",
          "sql": """
              SELECT article_text
              FROM dashboard_medianarrative
@@ -59,7 +59,7 @@ queries_to_run = [
          """
      },
      {
-         "name": "Check for Specific Irrelevant Terms (Example)",
+         "name": "Check for Specific Irrelevant Terms (Example: Israel, non-SA)",
          "sql": """
              SELECT target_country, inferred_actor, url, posting_time
              FROM dashboard_medianarrative
@@ -67,8 +67,8 @@ queries_to_run = [
              AND article_text ILIKE '%Israel%' -- Use ILIKE for case-insensitive search
              AND target_country NOT IN ('SA'); -- Example exclusion
          """
-     }
-  # NEW QUERY: Check for old data with corrupted/incomplete article text
+     },
+    # NEW QUERY: Check for old data with corrupted/incomplete article text
     {
         "name": "Count of Corrupted/Incomplete Article Text (ALL Data)",
         "sql": """
@@ -84,7 +84,7 @@ queries_to_run = [
     },
     # Optional: List some examples of corrupted articles (LIMIT to avoid huge output)
     {
-        "name": "Examples of Corrupted/Incomplete Article Text (First 10)",
+        "name": "Examples of Corrupted/Incomplete Article Text (First 3)",
         "sql": """
             SELECT posting_time, target_country, inferred_actor, media_outlet, url, article_text
             FROM dashboard_medianarrative
@@ -98,7 +98,6 @@ queries_to_run = [
         """
     }
 ]
-
 # --- EXECUTE QUERIES ---
 for query_info in queries_to_run:
     print(f"--- {query_info['name']} ---")
