@@ -76,29 +76,19 @@ else:
         }
 
         def build_query(actor, target):
-            """
-            Builds a query string for a specific actor-target pair
-            using predefined terms.
-            """
             actor_terms = ACTOR_TERMS.get(actor, [])
             target_terms = TARGET_TERMS.get(target, [])
-
+        
             if not actor_terms or not target_terms:
-                print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
                 return None
-
+        
             target_phrase = "(" + " OR ".join(target_terms) + ")"
             actor_phrase = "(" + " OR ".join(actor_terms) + ")"
-            # CORRECTED LINE:
-            core_phrase = f"({target_phrase} AND {actor_phrase})"
-
-            # Combine influence keywords from relevant categories with OR
-            all_influence_keywords = []
-            for category_keywords in INFLUENCE_KEYWORDS.values():
-                all_influence_keywords.extend(category_keywords)
-
-            influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
-            final_query = f"({core_phrase} AND {influence_phrase})"
+            
+            # We simplify the influence keywords to broader categories for the first pass
+            # Or, we make the influence keywords OPTIONAL to see the total volume first
+            final_query = f"{target_phrase} AND {actor_phrase}"
+            
             return final_query
 
         # --- Test Loop ---
