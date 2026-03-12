@@ -38,7 +38,7 @@ else:
                 "investment", "debt relief", "loan", "trade agreement", "mining contract", "mining rights", "economic partnership",
                 "financial aid", "development finance", "Belt AND Road", "BRI", "Silk Road", "digital Silk Road",
                 "resource dependency", "land lease", "agricultural cooperation", "cocoa", "uranium", "cobalt", "copper", "oil",
-                "infrastructure project", "railway", "road", "port", "airport", "power plant", "hydroelectric", "hydropower",
+                "infrastructure project", "railway", "road", "port", "airport", "power station", "hydroelectric", "hydropower",
                 "industrial park", "special economic zone", "manufacturing", "energy project", "renewable energy", "solar", "wind"
             ],
             "MilitarySecurity": [
@@ -67,35 +67,38 @@ else:
                 "narrative shaping", "public opinion", "social media campaign", "influencer", "blog", "podcast", "radio station",
                 "television channel", "broadcast", "Amharic", "local language", "press freedom", "media ownership"
             ],
-": [
+            "Religious": [ # Removed the erroneous ': # <-- ...' part
                 "religious diplomacy", "interfaith dialogue", "religious institution", "mosque", "church", "temple",
                 "religious leader", "faith-based organization", "religious minority", "religious freedom", "atheism",
                 "secularism", "religious law", "Sharia", "Halakha", "orthodoxy", "sectarianism", "religious extremism",
                 "religious moderation", "religious tolerance"
             ]
         }
+def build_query(actor, target):
+    """
+    Builds a query string for a specific actor-target pair
+    using predefined terms.
+    """
+    actor_terms = ACTOR_TERMS.get(actor, [])
+    target_terms = TARGET_TERMS.get(target, [])
 
-        def build_query(actor, target):
-            """
-            Builds a query string for a specific actor-target pair
-            using predefined terms.
-            """
-            actor_terms = ACTOR_TERMS.get(actor, [])
-            target_terms = TARGET_TERMS.get(target, [])
+    if not actor_terms or not target_terms:
+        print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
+        return None
 
-            if not actor_terms or not target_terms:
-                print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
-                return None
+    target_phrase = "(" + " OR ".join(target_terms) + ")"
+    actor_phrase = "(" + " OR ".join(actor_terms) + ")"
+    # CORRECTED LINE:
+    core_phrase = f"({target_phrase} AND {actor_phrase})"
 
-            target_phrase = "(" + " OR ".join(target_terms) + ")"
-            actor_phrase = "(" + " OR ".join(actor_terms) + ")"
-            core_phrase = f"({target_phrase} AND {actor all_influence_keywords = []
-            for category_keywords in INFLUENCE_KEYWORDS.values():
-                all_influence_keywords.extend(category_keywords)
+    # Combine influence keywords from relevant categories with OR
+    all_influence_keywords = []
+    for category_keywords in INFLUENCE_KEYWORDS.values():
+        all_influence_keywords.extend(category_keywords)
 
-            influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
-            final_query = f"({core_phrase} AND {influence_phrase})"
-            return final_query
+    influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
+    final_query = f"({core_phrase} AND {influence_phrase})"
+    return final_query
 
         # --- Test Loop ---
         START_DATE = date(2026, 1, 1)
