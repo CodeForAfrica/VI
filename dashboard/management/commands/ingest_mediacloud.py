@@ -95,11 +95,20 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    # 1. Convert to strings ONCE here
-    s_date_str = START_DATE.isoformat() if hasattr(START_DATE, 'isoformat') else START_DATE
-    e_date_str = END_DATE.isoformat() if hasattr(END_DATE, 'isoformat') else END_DATE
+    
+    # 1. Convert to string ONCE at the very top
+    # This handles both date objects and strings safely
+    if hasattr(START_DATE, 'isoformat'):
+        s_date_final = START_DATE.isoformat()
+    else:
+        s_date_final = str(START_DATE)
 
-    print(f"🛰️  Querying MediaCloud API from {s_date_str} to {e_date_str}...")       
+    if hasattr(END_DATE, 'isoformat'):
+        e_date_final = END_DATE.isoformat()
+    else:
+        e_date_final = str(END_DATE)
+
+    print(f"🛰️  Querying MediaCloud API from {s_date_final} to {e_date_final}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
@@ -108,16 +117,18 @@ def main():
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Use the 'tags_id_media' syntax with the strings we created
+                # Use the 'tags_id_media' syntax you saw on the web
                 web_style_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
                 
-                # 2. PASS STRINGS DIRECTLY - Removed .isoformat() from inside the call
+                # 2. PASS THE FINAL STRINGS DIRECTLY
+                # No .isoformat() here!
                 results = mc_search.story_list(
                     query=web_style_query, 
-                    start_date=s_date_str, 
-                    end_date=e_date_str
+                    start_date=s_date_final, 
+                    end_date=e_date_final
                 )
 
+                # Handle the return type
                 stories = results[0] if isinstance(results, tuple) else results
                 
                 if stories:
@@ -142,9 +153,10 @@ def main():
                 
                 time.sleep(0.5) 
             except Exception as e:
+                # This will now catch actual API issues, not formatting errors
                 logging.error(f"MediaCloud Error {country}-{actor}: {e}")
                 print(f"  ❌ Error querying {actor}: {e}")
-                                
+                         
     df = pd.DataFrame(all_records)
     if df.empty:
         print("\n❌ No articles found.")
