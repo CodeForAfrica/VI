@@ -34,18 +34,108 @@ TARGET_COLLECTION_IDS = {
 START_DATE = date(2026, 1, 1)
 END_DATE   = date(2026, 3, 11)
 
-QUERY_BY_COUNTRY = {
-
-"Ethiopia": "(investment OR infrastructure OR railway OR industrial park OR mining OR energy OR trade OR debt OR military cooperation OR arms OR security partnership OR diplomacy OR election OR governance OR Confucius Institute OR scholarship OR Huawei OR 5G OR AI OR cybersecurity OR surveillance OR vaccine OR hospital OR agriculture OR hydropower OR propaganda OR disinformation OR social media influence) AND (Ethiopia OR Addis Ababa OR Abiy Ahmed)",
-
-"Senegal": "(election OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin OR agriculture OR énergie) AND (Senegal OR Sénégal OR Dakar OR Macky Sall OR Ousmane Sonko OR Bassirou Diomaye Faye)",
-
-"DRC": "(élection OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR mining OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin OR énergie) AND (RDC OR République démocratique du Congo OR Kinshasa OR Tshisekedi OR Joseph Kabila)",
-
-"Côte d'Ivoire": "(élection OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR énergie OR cacao OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin) AND (Côte d'Ivoire OR Ivory Coast OR Abidjan OR Alassane Ouattara OR Laurent Gbagbo)",
-
-"South Africa": "(South Africa OR Pretoria OR Johannesburg OR Cape Town OR ANC OR Ramaphosa OR BRICS) AND (investment OR trade OR mining OR energy OR infrastructure OR military OR defense OR diplomacy OR Huawei OR 5G OR AI OR cybersecurity OR propaganda OR disinformation)"
+# --- NEW STRUCTURE FOR SPECIFIC QUERIES ---
+ACTOR_TERMS = {
+    "USA": ["United States", "USA", "US", "America", "Biden", "Washington", "American", "US Embassy"],
+    "France": ["France", "French", "Paris", "Macron", "French Embassy", "Français"],
+    "China": ["China", "Chinese", "Beijing", "Xi Jinping", "PRC", "Chinese Embassy", "中", "中国"],
+    "Russia": ["Russia", "Russian", "Moscow", "Putin", "Russian Embassy", "Россия"],
+    "Turkey": ["Turkey", "Turkish", "Ankara", "Erdogan", "Turkish Embassy", "Türkiye"],
+    "Saudi Arabia": ["Saudi Arabia", "Saudi", "Riyadh", "Mohammed bin Salman", "Saudi Embassy", "السعودية"],
+    "Israel": ["Israel", "Israeli", "Tel Aviv", "Netanyahu", "Israeli Embassy", "ישראל"],
+    "Iran": ["Iran", "Iranian", "Tehran", "Supreme Leader", "Ayatollah", "Khamenei", "Iranian Embassy", "ایران"],
+    "UAE": ["UAE", "Emirati", "Abu Dhabi", "Dubai", "Mohammed bin Zayed", "UAE Embassy", "الإمارات"]
 }
+
+TARGET_TERMS = {
+    "Ethiopia": ["Ethiopia", "Ethiopian", "Addis Ababa", "Abiy Ahmed", "Tigray", "Oromo", "Amhara", "EPRDF", "TPLF"],
+    "Senegal": ["Senegal", "Senegalese", "Dakar", "Macky Sall", "Ousmane Sonko", "Bassirou Diomaye Faye", "Sénégal", "Sénégalais", "Sénégalaise"],
+    "DRC": ["DRC", "Democratic Republic of Congo", "Congo-Kinshasa", "Kinshasa", "edi", "Joseph Kabila", "Kabila", "Lubumbashi", "Kisangani", "Kolwezi", "Kivu", "République démocratique du Congo", "Congo"],
+    "Côte d'Ivoire": ["Côte d'Ivoire", "Ivory Coast", "Abidjan", "Yamoussoukro", "Alassane Ouattara", "Laurent Gbagbo", "Henri Konan Bédié", "Cote d'Ivoire", "Cote d'Ivoire", "Ivoirian"],
+    "South Africa": ["South Africa", "South African", "Pretoria", "Cape Town", "Johannesburg", "ANC", "Ramaphosa", "Jacob Zuma", "Mandela", "Nelson Mandela", "iNingizimu Afrika", "uRamaphosa"]
+}
+
+INFLUENCE_KEYWORDS = {
+    "Economic": [
+        "investment", "debt relief", "loan", "trade agreement", "mining contract", "mining rights", "economic partnership",
+        "financial aid", "development finance", "Belt AND Road", "BRI", "Silk Road", "digital Silk Road",
+        "resource dependency", "land lease", "agricultural cooperation", "cocoa", "uranium", "cobalt", "copper", "oil",
+        "infrastructure project", "railway", "road", "port", "airport", "power plant", "hydroelectric", "hydropower",
+        "industrial park", "special economic zone", "manufacturing", "energy project", "renewable energy", "solar", "wind"
+    ],
+    "MilitarySecurity": [
+        "military cooperation", "arms sale", "weapons deal", "defense pact", "peacekeeping", "security partnership",
+        "military base", "troop deployment", "training mission", "intelligence sharing", "naval cooperation",
+        "joint exercises", "anti-terrorism", "counter-terrorism", "militia support", "proxy warfare", "mercenary"
+    ],
+    "PoliticalDiplomatic": [
+        "diplomatic relations", "embassy", "consulate", "state visit", "high-level meeting", "diplomatic recognition",
+        "election interference", "electoral support", "governance model", "anti-corruption", "rule of law", "democracy",
+        "human rights", "civil society", "political party", "lobbying", "influence campaign", "soft power"
+    ],
+    "CulturalEducational": [
+        "Confucius Institute", "cultural exchange", "language school", "scholarship program", "student exchange",
+        "academic cooperation", "research partnership", "cultural diplomacy", "art exhibition", "film festival",
+        "book donation", "library", "educational cooperation", "university partnership", "alumni network"
+    ],
+    "TechnologySurveillance": [
+        "technology transfer", "telecom cooperation", "5G", "Huawei", "ZTE", "AI", "artificial intelligence",
+        "surveillance technology", "spyware", "cybersecurity", "data security", "digital infrastructure",
+        "internet governance", "social media platform", "vaccination campaign", "health initiative",
+        "hospital construction", "medical aid", "pandemic response", "public health"
+    ],
+    "InformationNarrative": [
+        "media cooperation", "journalist training", "news agency", "propaganda", "disinformation", "fake news",
+        "narrative shaping", "public opinion", "social media campaign", "influencer", "blog", "podcast", "radio station",
+        "television channel", "broadcast", "Amharic", "local language", "press freedom", "media ownership"
+    ],
+    "Religious": [
+        "religious diplomacy", "interfaith dialogue", "religious institution", "mosque", "church", "temple",
+        "religious leader", "faith-based organization", "religious minority", "religious freedom", "atheism",
+        "secularism", "religious law", "Sharia", "Halakha", "orthodoxy", "sectarianism", "religious extremism",
+        "religious moderation", "religious tolerance"
+    ]
+}
+
+def build_query(actor, target):
+    """
+    Builds a query string for a specific actor-target pair
+    using predefined terms.
+    """
+    # Get terms for the actor and target
+    actor_terms = ACTOR_TERMS.get(actor, [])
+    target_terms = TARGET_TERMS.get(target, [])
+
+    if not actor_terms or not target_terms:
+        print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
+        return None
+
+    # Build the core query parts
+    target_phrase = "(" + " OR ".join(target_terms) + ")"
+    actor_phrase = "(" + " OR ".join(actor_terms) + ")"
+
+    # Combine target and actor with AND
+    core_phrase = f"({target_phrase} AND {actor_phrase})"
+
+    # Combine influence keywords from relevant categories with OR
+    # You can customize which categories are included based on the actor-target pair
+    all_influence_keywords = []
+    for category_keywords in INFLUENCE_KEYWORDS.values():
+        all_influence_keywords.extend(category_keywords)
+    
+    influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
+
+    # Final query: (Target AND Actor) AND (Influence Keywords)
+    # This ensures the article mentions both the target country and the actor,
+    # and discusses one of the influence-related topics.
+    final_query = f"({core_phrase} AND {influence_phrase})"
+    
+    # Optional: Add parentheses around the core phrase for clarity if needed by the API
+    # final_query = f"(({target_phrase} AND {actor_phrasefluence_phrase}))"
+
+    return final_query
+
+# --- END NEW STRUCTURE ---
 
 db_columns = [
     "article_text", "posting_time", "media_outlet", "inferred_actor", 
@@ -114,14 +204,24 @@ def main():
 
     all_records = []
 
-    for country, base_query in QUERY_BY_COUNTRY.items():
-        # Correctly nested loop
+    # Iterate through target countries
+    for country in TARGET_TERMS.keys(): # Use keys from TARGET_TERMS to ensure consistency
+        # Iterate through actors
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             print(f"Searching {actor_name} media for {country}...")
+            
+            # Build the specific query for this actor-target pair
+            base_query = build_query(actor_name, country)
+            
+            if not base_query: # Skip if query could not be built
+                print(f"  Skipping query for {actor_name} -> {country} due to missing terms.")
+                continue
+                
             try:
-                # Construct the full query string
-                # Searching within the actor's collection for target country terms
-                full_query = f"({base_query})"
+                # Construct the full query string for the API call
+                full_query = f"({base_query})" # Wrap in parentheses as needed by the API
+
+                print(f"  Query: {full_query[:100]}...") # Log the query being used (first 100 chars)
 
                 # CORRECTED: mc_search.story_list returns (stories_list, total_count)
                 # Pass date objects directly
