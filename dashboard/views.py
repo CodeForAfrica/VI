@@ -75,6 +75,50 @@ class DisinfoAnalysisChatbot:
 
     def process_query(self, query):
         query_l = query.lower().strip()
+
+        import re
+        country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
+        match = re.search(country_pattern, query_l, re.IGNORECASE)
+        if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
+            country_mentioned = match.group(1).lower()
+            # EXACT database format matching
+            db_country = None
+            if 'south' in country_mentioned and 'africa' in country_mentioned:
+                db_country = 'South Africa'
+            elif country_mentioned in ['senegal', 'senegal']:
+                db_country = 'Senegal'
+            elif country_mentioned in ['drc', 'democratic republic of congo', 'congo']:
+                db_country = 'DRC'
+            elif any(x in country_mentioned for x in ['cote', 'ivoire', 'ivory']):
+                db_country = 'Côte d\'Ivoire'
+            elif country_mentioned in ['ethiopia', 'ethopia']:
+                db_country = 'Ethiopia'
+    
+            if db_country:
+                # COUNT articles for this country that mention foreign actors
+                country_articles = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country
+                ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+                ).count()
+                # GET key narratives for this country WITH FOREIGN ACTORS
+                country_narratives = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country
+                ).exclude(
+                    inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
+                ).exclude(
+                    strategic_intent__in=['', None, 'unknown', 'Unknown']
+                ).values('strategic_intent', 'inferred_actor').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:5]
+    
+                narratives_list = [f"• {item['strategic_intent']} by {item['inferred_actor']}: {item['count']} articles" for item in country_narratives]
+                narratives_str = "\n".join(narratives_list) if narratives_list else "• No foreign influence narratives identified"
+    
+                return (f"{db_country} Foreign Influence Analysis:\n"
+                        f"• Total articles with foreign actor involvement: {country_articles:,}\n"
+                        f"• Key foreign influence narratives:\n{narratives_str}")
+
         # 1. Actor Stats Query
         if 'statistics' in query_l or 'stats' in query_l or 'most active' in query_l:
             # Extract country if mentioned
@@ -436,7 +480,24 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         # Optional: Remove common suffixes/prefixes if applicable, e.g., "narrative", "strategy"
         # s = re.sub(r'\b(narrative|strategy|influence|erosion|interference)\b', '', s).strip()
         return s
-
+    def map_to_canonical_intent(stored_intent_str):
+        if not stored_intent_str:
+            return "Unknown" # Or handle empty/null as needed
+    
+        # Normalize the input string for comparison (lowercase, strip, handle common separators)
+        normalized_input = re.sub(r'\s+', ' ', stored_intent_str.strip().lower())
+    
+        # Look for a match in the intent_mapping
+        canonical_intent = intent_mapping.get(normalized_input)
+    
+        # If a match is found, return the canonical value
+        if canonical_intent:
+            return canonical_intent
+    
+        # If no match found, return the original string or a default
+        # Returning the original allows for debugging if unexpected values appear
+        # Returning "Unknown" might hide new/missed intents
+        return stored_intent_str # Or return "Unknown"
 
     # Apply mappings and normalizations
     c_term = target_country.lower().strip()
@@ -535,7 +596,15 @@ def overview(request):
     else:
         logger.info(f"Cache HIT for base_qs exclusion logic: {base_qs_cache_key}")
 
-
+    canonical_top_subjects = []
+    for sub in top_subjects:
+        canonical_intent = map_to_canonical_intent(sub['strategic_intent'])
+        canonical_top_subjects.append({
+            'canonical_intent': canonical_intent,
+            'inferred_actor': sub['inferred_actor'],
+            'target_country': sub['target_country'],
+            'total': sub['total']
+        })
     # Apply filters based on user input to the base queryset
     # Create a cache key specific to the current filters
     filtered_qs_cache_key = f"overview_filtered_qs_{calc_target_country}_{calc_foreign_actor}"
@@ -753,7 +822,9 @@ def overview(request):
         #     article.vulnerability_index = float(vi_score) if vi_score else 0.0
         # else:
         #     article.vulnerability_index = float(article.vulnerability_index)
-
+    
+        # This ensures the displayed value matches the canonical form from INTENT_CHOICES
+        article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
 
     # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
