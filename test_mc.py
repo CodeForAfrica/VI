@@ -16,7 +16,7 @@ else:
         # Perform a simple test query
         # Use a very basic query and a known public collection ID (like 1 for English Web)
         query = "test"  # Simple query
-        start026-03-01" # Use string format for this test
+        start_date = "2026-03-01" # Use string format for this test
         end_date = "2026-03-10"   # Use string format for this test
         collection_ids = [1]      # Public collection ID for testing
 
