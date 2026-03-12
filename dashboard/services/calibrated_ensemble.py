@@ -284,7 +284,6 @@ class CalibratedStrategicClassifier:
                 ignore_mismatched_sizes=True,
                 torch_dtype=torch.float32,
                 low_cpu_mem_usage=True,
-                state_dict={},  # Don't load weights yet
             )
 
             # Load PEFT adapter on top with strict=False to skip missing keys
