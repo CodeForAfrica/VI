@@ -38,7 +38,7 @@ TARGET_TERMS = [
     ]),
     ("DRC", [
         "DRC", "Democratic Republic of the Congo", "République Démocratique du Congo", "RDC", "Kinshasa",
-       shisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
+       "shisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
         "Kolwezi", "Kokolo", "Corneille Nnanga", "Bertrand Bisimwa", "Sultani Makenga", "Willy Ngoma",
         "Lawrence Kanyuka", "Jean-Jacques Mamba", "Éric Nkuba", "Congolais", "bobongisi maponami", "maponami",
         "politiki", "kampanyi", "boyangeli", "mbongo na mosala", "libaku ya mbongo", "nzela", "ya nzela",
