@@ -10,12 +10,12 @@ import cloudscraper
 # ────────────────────────────────────────────────
 # CONFIG
 # ────────────────────────────────────────────────
-DB_USER = "postgres"
-DB_PASSWORD = "B1234"
-DB_HOST = "localhost"
-DB_PORT = "1621"
-DB_NAME = "media_db"
-DB_TABLE = "dashboard_medianarrative"
+# Database configuration using Django settings
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_HOST = os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com').strip()
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'postgres')
 
 # Ensure all columns required by your DB are listed here
 db_columns = [
@@ -33,9 +33,9 @@ logging.basicConfig(
 )
 
 engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
-API_KEY = "e832630b1a15cb9c07c1cce77068d332faeea6d2"
+API_KEY = "42caaa0601bd290fc5adada8bb804cdfc0604a7a"
 mc_search = mediacloud.api.SearchApi(API_KEY)
-START_DATE = date(2025, 1, 1)
+START_DATE = date(2026, 1, 1)
 END_DATE = date.today()
 
 ACTOR_COLLECTION_IDS = {
