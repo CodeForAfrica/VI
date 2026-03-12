@@ -269,13 +269,16 @@ def main():
         time.sleep(0.5)
 
     print("\nFinished. Check your database now.")
+
+    # These lines must be indented to match the 'for' loop above
     print("🧹 Cleaning dashboard cache...")
-        try:
-            cache.clear()
-            print("✅ Cache cleared successfully! Refresh your dashboard to see new data.")
-        except Exception as e:
-            print(f"⚠️  Note: Could not clear cache automatically: {e}")
-# Your original constants preserved exactly
+    try:
+        cache.clear()
+        print("✅ Cache cleared successfully! Refresh your dashboard to see new data.")
+    except Exception as e:
+        print(f"⚠️  Note: Could not clear cache automatically: {e}")
+        
+# api key
 API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 
 # MediaCloud collection IDs — actor countries whose media is searched for narratives about target countries
