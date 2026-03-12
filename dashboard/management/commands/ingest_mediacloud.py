@@ -59,8 +59,7 @@ TARGET_COLLECTION_IDS = {
 }
 
 QUERY_BY_COUNTRY = {
-    "Ethiopia": "(Ethiopia OR \"Addis Ababa\" OR \"Abiy Ahmed\") AND (investment OR infrastructure OR security OR military OR trade OR diplomacy OR culture OR drone)",
-    "Senegal": "(Senegal OR Sénégal OR Dakar) AND (élection OR politique OR investissement OR trade OR military OR diplomacy OR infrastructure OR culture)",
+    "Ethiopia": "(Ethiopia OR 'Addis Ababa' OR 'Abiy Ahmed') AND (investment OR infrastructure OR security OR military OR drone OR deplomacy OR economy)",
 }
 
 scraper = cloudscraper.create_scraper()
@@ -99,26 +98,25 @@ def main():
     print(f"🛰️  Querying MediaCloud API from {START_DATE} to {END_DATE}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
-        # 1. Cleaned Query: No single quotes, explicit double quotes for phrases
-        base_query = QUERY_BY_COUNTRY.get(country)
-        if not base_query: continue
-            
-        for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-            try:
-                # 2. Pagination Logic (Crucial for 2026 API version)
-                pagination_token = None
-                batch_count = 0
+            # 1. Cleaned Query: No single quotes, explicit double quotes for phrases
+            base_query = QUERY_BY_COUNTRY.get(country)
+            if not base_query: continue
                 
-                while True:
-                    stories, pagination_token = mc_search.story_list(
-                        query=base_query, 
-                        start_date=START_DATE.isoformat(), 
-                        end_date=END_DATE.isoformat(), 
-                        collection_ids=[actor_coll_id],
-                        pagination_token=pagination_token
-                    )
-                    
-                    if not stories:
+            for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
+        try:
+            # Construct the query EXACTLY like the web interface:
+            # We append the collection ID as a metadata tag to the query string
+            web_style_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
+            
+            # We search WITHOUT the collection_ids parameter to avoid 'Double Filtering'
+            stories, _ = mc_search.story_list(
+                query=web_style_query, 
+                start_date=START_DATE.isoformat(), 
+                end_date=END_DATE.isoformat()
+            )
+            
+            if stories:
+                print(f"  ✅ Found {len(stories)} stories for {country} in {actor} media")
                         # FALLBACK: If 0 found, try just the country name to test connection
                         if batch_count == 0:
                             test_stories, _ = mc_search.story_list(
