@@ -48,10 +48,10 @@ if not API_KEY:
 
 mc_search = mediacloud.api.SearchApi(API_KEY)
 
-# --- CHANGE START DATE CALCULATION ---
-# START_DATE = date(2026, 1, 1) # Old fixed date
+
+# START_DATE = date(2026, 1, 1) # use for specific dates
 START_DATE = date.today() - timedelta(days=1) # Yesterday
-# --- END CHANGE START DATE CALCULATION ---
+
 
 END_DATE = date.today() # Use date object consistently
 
@@ -175,14 +175,14 @@ def verify_dns(host):
         return False
 
 def main():
-    # --- ADD DNS CHECK ---
+    #  DNS CHECK 
     if not verify_dns(DB_HOST):
         return
-    # --- END ADD DNS CHECK ---
+    
 
     all_records = []
     print("🛰️ Querying MediaCloud API...")       
-    # FIX: Corrected iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
+    # iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
     # Loops through target countries to get the query, and actor collections to search within
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
