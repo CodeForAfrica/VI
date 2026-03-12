@@ -162,9 +162,9 @@ def main():
     print("Querying MediaCloud API...")
     
     # Use environment variable for API key
-    api_key = os.getenv('MEDIA_CLOUD_API_KEY')
+    api_key = os.getenv('MEDIACLOUD_API_KEY')
     if not api_key:
-        print("MEDIA_CLOUD_API_KEY not set. Continuing with existing data only.")
+        print("MEDIACLOUD_API_KEY not set. Continuing with existing data only.")
         print("Your existing 15,166 records remain accessible.")
         return
     
@@ -265,7 +265,7 @@ def main():
     print("\nFinished. Check your database now.")
 
 # Your original constants preserved exactly
-API_KEY = os.getenv('MEDIA_CLOUD_API_KEY')
+API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 
 # MediaCloud collection IDs — actor countries whose media is searched for narratives about target countries
 ACTOR_COLLECTION_IDS = {
