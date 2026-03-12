@@ -10,7 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
 import logging
-import skops.io as sio  # ✅ FIX 1: Add this import
+import skops.io as sio  
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +260,7 @@ class CalibratedStrategicClassifier:
                 low_cpu_mem_usage=True,
             )
 
-            # ✅ FIX 2: Proper PEFT loading with state dict filtering
+            #  Proper PEFT loading with state dict filtering
             from peft import PeftModel
             
             try:
@@ -275,7 +275,12 @@ class CalibratedStrategicClassifier:
                 print("  Using state dict filtering fallback...")
                 
                 # Load adapter state dict
-                adapter_state_dict = torch.load(os.path.join(model_dir, 'adapter_model.safetensors'))
+                # Load adapter state dict (weights_only=False for PyTorch 2.6 compatibility)
+                adapter_state_dict = torch.load(
+                    os.path.join(model_dir, 'adapter_model.safetensors'),
+                    weights_only=False,
+                    map_location='cpu'
+                )
                 
                 # Get model state dict
                 model_state_dict = base_model.state_dict()
