@@ -250,7 +250,10 @@ def main():
 
         content = scrape_full_text_robust(url)
 
-        if "Failed" not in content and "Error" not in content:
+        is_not_error = not content.startswith("Failed to scrape") and not content.startswith("Error scraping")
+        has_content = len(content) > 200 
+
+        if is_not_error and has_content:
             row_data = row.to_dict()
             row_data['article_text'] = content
 
@@ -265,7 +268,7 @@ def main():
             except Exception as e:
                 logging.error(f"DB Insert Error: {e}")
         else:
-            print(f"[{idx+1}/{len(df)}] Failed: {content} for {str(url)[:30]}")
+            print(f"[{idx+1}/{len(df)}] ❌ Real Failure: {content[:50]}... for {str(url)[:30]}")
 
         time.sleep(0.5)
 
