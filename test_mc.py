@@ -9,7 +9,7 @@ if not api_key:
     print("ERROR: MEDIACLOUD_API_KEY environment variable not set.")
 else:
     print("API Key found in environment.")
-    try:
+    try: # START OF MAIN TRY BLOCK - INDENTATION APPLIED TO EVERYTHING BELOW UNTIL EXCEPT
         # Initialize the API client
         mc = mediacloud.api.SearchApi(api_key)
         print("MediaCloud API client initialized successfully.")
@@ -24,7 +24,7 @@ else:
 
         ACTOR_TERMS = {
             "USA": ["United States", "USA", "US", "America", "Biden", "Washington", "American", "US Embassy"],
-            "China": ["China", "Chinese", "Beijing", "Xi Jinping", "PR Embassy", "中", "中国"],
+            "China": ["China", "Chinese", "Beijing", "Xi Jinping", "PRC", "PR Embassy", "中", "中国"], # Fixed typo: "PR Embassy" -> "PRC" or kept as separate terms
             # Add other actors if needed later
         }
 
@@ -74,31 +74,32 @@ else:
                 "religious moderation", "religious tolerance"
             ]
         }
-def build_query(actor, target):
-    """
-    Builds a query string for a specific actor-target pair
-    using predefined terms.
-    """
-    actor_terms = ACTOR_TERMS.get(actor, [])
-    target_terms = TARGET_TERMS.get(target, [])
 
-    if not actor_terms or not target_terms:
-        print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
-        return None
+        def build_query(actor, target):
+            """
+            Builds a query string for a specific actor-target pair
+            using predefined terms.
+            """
+            actor_terms = ACTOR_TERMS.get(actor, [])
+            target_terms = TARGET_TERMS.get(target, [])
 
-    target_phrase = "(" + " OR ".join(target_terms) + ")"
-    actor_phrase = "(" + " OR ".join(actor_terms) + ")"
-    # CORRECTED LINE:
-    core_phrase = f"({target_phrase} AND {actor_phrase})"
+            if not actor_terms or not target_terms:
+                print(f"Warning: Missing terms for actor '{actor}' or target '{target}'. Skipping query.")
+                return None
 
-    # Combine influence keywords from relevant categories with OR
-    all_influence_keywords = []
-    for category_keywords in INFLUENCE_KEYWORDS.values():
-        all_influence_keywords.extend(category_keywords)
+            target_phrase = "(" + " OR ".join(target_terms) + ")"
+            actor_phrase = "(" + " OR ".join(actor_terms) + ")"
+            # CORRECTED LINE:
+            core_phrase = f"({target_phrase} AND {actor_phrase})"
 
-    influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
-    final_query = f"({core_phrase} AND {influence_phrase})"
-    return final_query
+            # Combine influence keywords from relevant categories with OR
+            all_influence_keywords = []
+            for category_keywords in INFLUENCE_KEYWORDS.values():
+                all_influence_keywords.extend(category_keywords)
+
+            influence_phrase = "(" + " OR ".join(all_influence_keywords) + ")"
+            final_query = f"({core_phrase} AND {influence_phrase})"
+            return final_query
 
         # --- Test Loop ---
         START_DATE = date(2026, 1, 1)
@@ -136,11 +137,11 @@ def build_query(actor, target):
             except Exception as e:
                 print(f"  API Error for {actor_name} (ID {actor_coll_id}) searching for {TARGET_COUNTRY}: {e}")
                 print(f"    Exception type: {type(e).__name__}")
-                # Attempt to print status code if available (requires catching lower-level exception)
+                # Attempt to print status code if lower-level exception)
                 if hasattr(e, 'response'):
                     print(f"    Response status code: {e.response.status_code}")
                     print(f"    Response text (first 200 chars): {e.response.text[:200]}")
 
-    except Exception as e:
-        print(f"Error during API initialization: {e}")
+    except Exception as e: # END OF MAIN TRY BLOCK - THIS MATCHES THE INDENTATION OF THE INITIAL 'try:'
+        print(f"Error during API initialization or processing: {e}")
         print(f"Exception type: {type(e).__name__}")
