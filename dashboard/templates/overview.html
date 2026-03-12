@@ -1,3 +1,5 @@
+<!-- overview.html -->
+
 {% extends "base.html" %}
 {% block content %}
 
@@ -168,7 +170,8 @@
                 <ul class="list-group list-group-flush">
                     {% for sub in top_subjects %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ sub.strategic_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
+                        <!-- Use the canonical intent value from the view -->
+                        {{ sub.canonical_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
                         <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
                     </li>
                     {% empty %}
@@ -193,7 +196,8 @@
                 </h6>
                 <div class="mb-3 mt-2">
                     <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
-                    <span class="badge badge-intent">Intent: {{ article.strategic_intent|default:"Information"|title }}</span>
+                    <!-- Use the canonical intent value from the view -->
+                    <span class="badge badge-intent">Intent: {{ article.canonical_strategic_intent|default:"Information"|title }}</span>
                 </div>
                 <p class="small text-muted mb-3">{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
                 <div class="d-flex justify-content-between align-items-center">
@@ -205,6 +209,42 @@
     </div>
     {% endfor %}
 </div>
+
+<!-- ADD PAGINATION CONTROLS HERE -->
+<div class="row g-4 mb-3">
+    <div class="col-12">
+        {% if page_obj.has_other_pages %}
+            <nav aria-label="Article pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    </div>
+</div>
+<!-- END PAGINATION CONTROLS -->
 
 <div id="chatbot-bubble">
     <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
