@@ -41,7 +41,7 @@ engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT
 mc_search = mediacloud.api.SearchApi(API_KEY)
 
 # Date Range
-START_DATE = date(2025, 10, 1)
+START_DATE = date(2025, 1, 1)
 END_DATE = date.today()
 
 # ────────────────────────────────────────────────
