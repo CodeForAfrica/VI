@@ -1,51 +1,38 @@
 import pandas as pd
-import numpy as np
 import time
-import socket
-import trafilatura
-import cloudscraper 
-import requests
 import logging
-from datetime import date, timedelta
+import socket # Need this for verify_dns
+from datetime import date, timedelta # Import timedelta
 from sqlalchemy import create_engine, text
-from urllib.parse import urlparse
-import os
-import django
-from django.conf import settings
-from pathlib import Path
+import mediacloud.api
+import trafilatura
+import cloudscraper
 import sys
+import os
+import django # Need this for cache clearing
+from django.conf import settings # Need this for cache clearing
+from django.core.cache import cache # Need this for cache clearing
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE_DIR)) 
 
-# 2. Configure Django
-if not settings.configured:
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'vulnerability_index.settings') # Use your actual project name
-    settings.configure(
-        DATABASES={
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': os.getenv('DB_NAME', 'postgres'),
-                'USER': os.getenv('DB_USER', 'postgres'),
-                'PASSWORD': os.getenv('DB_PASSWORD'),
-                'HOST': os.getenv('DB_HOST'),
-                'PORT': os.getenv('DB_PORT', '5432'),
-            }
-        },
-        INSTALLED_APPS=['dashboard'],
-        USE_TZ=True,
-    )
-    django.setup()
-
-from django.db import connection
-from django.core.cache import cache
-
+# ────────────────────────────────────────────────
+# CONFIG
+# ────────────────────────────────────────────────
 # Database configuration using Django settings
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_HOST = os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com').strip()
 DB_PORT = os.getenv('DB_PORT', '5432')
 DB_NAME = os.getenv('DB_NAME', 'postgres')
+DB_TABLE = "dashboard_medianarrative"
+
+# Ensure all columns required by your DB are listed here
+db_columns = [
+    "article_text", "posting_time", "media_outlet", "inferred_actor",
+    "target_country", "url", "lang_detect", "strategic_intent",
+    "sector", "tone", "confidence", "use_afrolm", "llm_strat",
+    "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight",
+    "llm_strat_id", "strategic_intent_id"
+]
 
 logging.basicConfig(
     filename='scraping_log.txt',
@@ -53,123 +40,130 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-db_columns = [
-    "article_text", "posting_time", "media_outlet", "inferred_actor", 
-    "target_country", "url", "lang_detect", "strategic_intent",
-    "sector", "tone", "confidence", "use_afrolm", "llm_strat", 
-    "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight", 
-    "llm_strat_id", "strategic_intent_id"
-]
+engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
+API_KEY = os.getenv('MEDIACLOUD_API_KEY') # Use environment variable
+if not API_KEY:
+    print("ERROR: MEDIACLOUD_API_KEY environment variable not set.")
+    sys.exit(1) # Exit if no key
 
-# Database engine using Django-compatible settings
-try:
-    engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
-except:
-    print("Database engine creation failed - using Django ORM instead")
+mc_search = mediacloud.api.SearchApi(API_KEY)
+
+# --- CHANGE START DATE CALCULATION ---
+# START_DATE = date(2026, 1, 1) # Old fixed date
+START_DATE = date.today() - timedelta(days=1) # Yesterday
+# --- END CHANGE START DATE CALCULATION ---
+
+END_DATE = date.today() # Use date object consistently
+
+ACTOR_COLLECTION_IDS = {
+    "USA":           34412234,
+    "France":        34412146,
+    "China":         34412193,
+    "Russia":        34412232,
+    "Turkey":        34412131,
+    "Saudi Arabia":  34412050,
+    "Israel":        34412391,
+    "Iran":          34412284,
+    "UAE":           34412114,
+}
+
+# Note: TARGET_COLLECTION_IDS is defined here but not used in the fetching loop below.
+# The loop iterates TARGET_COLLECTION_IDS.keys() to get country names for queries,
+# and uses ACTOR_COLLECTION_IDS.values() to search *within* actor collections.
+TARGET_COLLECTION_IDS = {
+    "Ethiopia":       34412034,
+    "Senegal":        38380807,
+    "DRC":            34412042,
+    "SA":             34412238, 
+    "Côte d'Ivoire":  34412173,
+}
+
+# --- QUERY_BY_COUNTRY: Combining Structure with Comprehensive Terms ---
+QUERY_BY_COUNTRY = {
+    "Ethiopia": '''(
+        ("Ethiopia" OR "ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ" OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ" OR "Addis Ababa" OR "Abiy Ahmed" OR "GERD" OR "Grand Ethiopian Renaissance Dam" OR "Tigray" OR "Amhara" OR "Oromia")
+        AND (
+            ("narrative*" OR "public opinion" OR " "policy shift" OR "state media" OR "foreign influence")
+            OR ("weaponized" OR "information warfare" OR "disinformation" OR "fake news" OR "propaganda" OR "media campaign" OR "social media amplification" OR "broadcast in Amharic")
+            OR ("investment" OR "infrastructure project" OR "debt relief" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease" OR "energy cooperation" OR "mosque" OR "church" OR "religious coopration")
+            OR ("instability" OR "ethnic tension" OR "protest" OR "insurgency" OR "border dispute" OR "geopolitical competition")
+        )
+        AND NOT ("sports" OR "football results" OR "travel guide" OR "cooking" OR "entertainment news")
+    )''',
+
+    "Senegal": '''(
+        ("Senegal" OR "Sénégal" OR "Dakar" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue" OR "tàmbali" OR "jàngoro" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo" OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan")
+        AND (
+            ("narrative*" OR "souveraineté" OR "souveraineté économique" OR "sentiment anti-français" OR "anti-French sentiment" OR "perceptions publiques" OR "opinion publique" OR "public opinion")
+            OR ("weaponized" OR "manipulation" OR "disinformation" OR "coordonné" OR "fake news" OR "propaganda" OR "désinformation" OR "influence étrangère" OR "coordonnée" OR "ingérence" OR "multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "conficius" OR "université" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
+            OR ("investment" OR "infrastructure project" OR "projets pétroliers" OR "ressources naturelles" OR "investissements directs" OR "dette" OR "prêt" OR "debt" OR "foreign aid" OR "aide étrangère" OR "commerce" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "aide" OR "cacao" OR "énergie" OR "agriculture")
+            OR ("instability" OR "tensions politiques" OR "manifestations" OR "protests" OR "terrorisme" OR "sécurité régionale" OR "Sahel" OR "AES")
+        )
+    )''',
+
+    "SA": '''( # Using 'SA' key to match your query definition
+        ("South Africa" OR "Suid-Afrika" OR "Mzansi" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS" OR "iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS" OR "uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo")
+        AND (
+            ("narrative*" OR "GNU" OR "Government of National Unity" OR "coalition" OR "non-aligned" OR "alignment" OR "strategic autonomy" OR "koalisie" OR "nasionale eenheid")
+            OR ("weaponized" OR "disinformation" OR "deepfake" OR "troll farm" OR "bot network" OR "fopnuus" OR "propaganda" OR "information manipulation" OR "interference" OR "propaganda" OR "disinformation" OR "social media campaign" OR "5G" OR "Huawei" OR "AI" OR "vaccine")
+            OR ("energy crisis" OR "load shedding" OR "Eskom" OR "just energy transition" OR "nuclear deal" OR "Chinese investment" OR "Russian influence" OR "kragkrisis" OR "trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism")
+            OR ("service delivery protest" OR "xenophobia" OR "social unrest" OR "polarization" OR "stoking" OR "incitement" OR "betoging" OR "mislukking")
+        )
+    )''',
+
+    "DRC": '''(
+        ("Democratic Republic of the Congo" OR "République Démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Tshisekedi" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi" OR "bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya")
+        AND (
+            ("critical minerals" OR "cobalt" OR "lithium" OR "minerais stratégiques" OR "souveraineté minière" OR "Gecamines" OR "contrats chinois" OR "US-DRC partnership" OR "maadini" OR "mumbanda" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
+            OR ("weaponized" OR "disinformation" OR "fake news" OR "propaganda" OR "désinformation" OR "ingérence" OR "manipulation de l'information" OR "lokuta" OR "habari za uongo")
+            OR ("M23" OR "Wazalendo" OR "East" OR "Est" OR "Kivu" OR "Ituri" OR "Goma" OR "security-for-minerals" OR "balkanisation" OR "bitumba" OR "vita")
+            OR ("élections" OR "human rights" OR "droits de l'homme" OR "corruption" OR "liberté de la presse" OR "bokonzi" OR "demokrasi")
+        )
+    )''',
+
+    "Côte d'Ivoire": '''( # Using the key as defined
+        ("Côte d\'Ivoire" OR "Cote d'Ivoire" OR "Ivory Coast" OR "Abidjan" OR "Yamoussoukro" OR "Alassane Ouattara" OR "Laurent Gbagbo" OR "Henri Konan Bédié" OR "Robert Daudelin" OR "Emmanuel Etiennette" OR "Marcel Amon Tanoh" OR "Kandia Camara" OR "Amadou Gon Coulibaly" OR "Hamed Bakayoko" OR "Adama Bictogo" OR "Charles Blé Goudé" OR "baoulé" OR "baoule" OR "dioula" OR "dyula" OR "senufo" OR "lobi" OR "loby" OR "lobyi" OR "lobyie" OR "lobyien" OR "lobyienne" OR "lobyiens" OR "lobyienes" OR "lobyien(ne)" OR "lobyien(ne)s" OR "lobyien.ne" OR "lobyien.ne.s" OR "lobyien.ne.s." OR "lobyien.ne.s.." OR "lobyien.ne.s...")
+        AND (
+            ("leadership régional" OR "regional leadership" OR "cacao" OR "cocoa diplomacy" OR "PND 2026" OR "National Development Plan" OR "CFA Franc" OR "Eco" OR "souveraineté monétaire" OR "monetary sovereignty" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite" OR "aide sanitaire")
+            OR ("weaponized" OR "désinformation" OR "disinformation" OR "rumors" OR "rumeurs" OR "destabilisation" OR "fake news" OR "propaganda" OR "cybercriminalité" OR "ingérence étrangère" OR "manipulation")
+            OR ("Sahel spillover" OR "Alliance des États du Sahel" OR "AES" OR "Mali border" OR "Burkina Faso border" OR "terrorisme" OR "sécurité frontalière" OR "jihadisme")
+            OR ("succession" OR "youth unemployment" OR "chômage des jeunes" OR "cohésion nationale" OR "protestation" OR "manifestation" OR "Gen Z" OR "élections 2025" OR "élections 2026")
+        )
+    )'''
+}
+# --- End of QUERY_BY_COUNTRY ---
+
+scraper = cloudscraper.create_scraper()
 
 def url_exists(url):
-    """Check if URL already exists in database using Django ORM"""
+    query = text(f"SELECT 1 FROM {DB_TABLE} WHERE url = :url LIMIT 1")
     try:
-        with connection.cursor() as cursor:
-            cursor.execute(f"SELECT COUNT(*) FROM dashboard_medianarrative WHERE url = %s", [url])
-            return cursor.fetchone()[0] > 0
-    except:
+        with engine.connect() as conn:
+            return conn.execute(query, {"url": url}).fetchone() is not None
+    except Exception as e:
         return False
 
 def scrape_full_text_robust(url):
-    """Scrape full text with enhanced stealth and response handling."""
-    # Define realistic headers (Updated for 2026 browser versions)
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.google.com/',
-        'DNT': '1', # Do Not Track
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-    }
-
-    try:
-        # Method 1: Trafilatura (using a session to pass headers)
-        # Trafilatura's fetch_url is often blocked because it uses its own simple downloader.
-        # We'll use Method 2 (CloudScraper) as the primary for high-security sites.
-        
-        scraper = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'desktop': True
-            }
-        )
-        
-        response = scraper.get(url, headers=headers, timeout=20)
-        
-        if response.status_code == 200:
-            text_content = trafilatura.extract(response.text)
-            if text_content and len(text_content.strip()) > 200:
-                return text_content.strip()
-            return f"Failed to extract content (page might be dynamic or empty)"
-            
-        elif response.status_code == 403:
-            return f"Failed: 403 Forbidden (Blocked by Reuters/Cloudflare)"
-        else:
-            return f"Failed: Status {response.status_code}"
-
-    except Exception as e:
-        # If cloudscraper fails completely, try one last simple trafilatura fetch
+    for attempt in range(2):
         try:
-            downloaded = trafilatura.fetch_url(url)
-            if downloaded:
-                return trafilatura.extract(downloaded) or f"Error: No text found"
-        except:
-            pass
-        return f"Error scraping {url}: {str(e)}"
-        
-def safe_mediacloud_search(query, start_date, end_date, collection_ids, api_key):
-    """Safely search MediaCloud API with fallback"""
-    try:
-        # Try different endpoints
-        endpoints = [
-            f"https://www.mediacloud.org/api/v2/stories_public/list",
-            f"https://mediacloud.org/api/v2/stories_public/list",
-            f"https://api.mediacloud.org/api/v2/stories_public/list"
-        ]
-        
-        for endpoint in endpoints:
-            try:
-                params = {
-                    'q': query,
-                    'start_date': start_date.strftime('%Y-%m-%d'),
-                    'end_date': end_date.strftime('%Y-%m-%d'),
-                    'collection_ids': ','.join(map(str, collection_ids)),
-                    'limit': 100,
-                    'format': 'json',
-                    'key': api_key
-                }
-                
-                response = requests.get(
-                    endpoint,
-                    params=params,
-                    headers={'Authorization': f'ApiKey {api_key}'},
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    stories = data.get('stories', [])
-                    count = data.get('count', 0)
-                    return stories, count
-                elif response.status_code in [404, 403, 401]:
-                    continue  # Try next endpoint
-            except:
+            response = scraper.get(url, timeout=20)
+            if response.status_code == 200:
+                text_extracted = trafilatura.extract(response.text)
+                return text_extracted if text_extracted else "Failed: Empty Content"
+            return f"Failed: HTTP {response.status_code}"
+        except Exception as e:
+            if attempt < 1:
+                time.sleep(3)
                 continue
-        
-        # If all endpoints fail, return empty results
-        return [], 0
-        
-    except Exception as e:
-        logging.error(f"MediaCloud API Error: {e}")
-        return [], 0
+            return f"Error: {str(e)}"
+
+def print_progress(current, total, saved, failed):
+    percent = int((current / total) * 100)
+    bar_length = 25
+    filled = int(bar_length * current // total)
+    bar = '█' * filled + ' ' * (bar_length - filled)
+    print(f"\rProcessing: {percent:3d}% |{bar}| {current}/{total} (Saved: {saved}, Failed: {failed})", end='', flush=True)
+
 def verify_dns(host):
     """Checks if the RDS endpoint is reachable before trying to connect."""
     try:
@@ -181,170 +175,120 @@ def verify_dns(host):
         return False
 
 def main():
+    # --- ADD DNS CHECK ---
     if not verify_dns(DB_HOST):
         return
-    try:
-        engine = create_engine(
-            f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', 
-            future=True
-        )
-        print("Database connection initialized.")
-    except Exception as e:
-        print(f"Database engine creation failed: {e}")
-        return
-    all_records = []
-    print("Querying MediaCloud API...")
-    
-    # Use environment variable for API key
-    api_key = os.getenv('MEDIACLOUD_API_KEY')
-    if not api_key:
-        print("MEDIACLOUD_API_KEY not set. Continuing with existing data only.")
-        print("Your existing 15,166 records remain accessible.")
-        return
-    
-    # Try to use the original MediaCloud library if available, otherwise use safe method
-    try:
-        # If the original mediacloud library is available and working
-        import mediacloud.api
-        mc_search = mediacloud.api.SearchApi(api_key)
-        
-        # Search each target country's query across each actor country's media collection
-        for country, base_query in QUERY_BY_COUNTRY.items():
-            for actor_name, coll_id in ACTOR_COLLECTION_IDS.items():
-                try:
-                    stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[coll_id])
-                    for s in stories:
-                        record = {col: None for col in db_columns}
-                        record['pseudo_kept'] = False
-                        record['pseudo_weight'] = 0.0
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name,
-                            "target_country": country,
-                            "lang_detect": s.get("language"),
-                            "confidence": s.get("score")
-                        })
-                        all_records.append(record)
-                except Exception as e:
-                    logging.error(f"MediaCloud Error {country}/{actor_name}: {e}")
+    # --- END ADD DNS CHECK ---
 
-    except ImportError:
-        # If original library not available, use safe method
-        print("Using safe API method...")
-        for country, base_query in QUERY_BY_COUNTRY.items():
-            for actor_name, coll_id in ACTOR_COLLECTION_IDS.items():
-                try:
-                    stories, _ = safe_mediacloud_search(base_query, START_DATE, END_DATE, [coll_id], api_key)
-                    for s in stories:
-                        record = {col: None for col in db_columns}
-                        record['pseudo_kept'] = False
-                        record['pseudo_weight'] = 0.0
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name,
-                            "target_country": country,
-                            "lang_detect": s.get("language"),
-                            "confidence": s.get("score")
-                        })
-                        all_records.append(record)
-                except Exception as e:
-                    logging.error(f"Safe API Error {country}/{actor_name}: {e}")
-    
+    all_records = []
+    print("🛰️ Querying MediaCloud API...")       
+    # FIX: Corrected iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
+    # Loops through target countries to get the query, and actor collections to search within
+    for country, country_coll_id in TARGET_COLLECTION_IDS.items():
+        base_query = QUERY_BY_COUNTRY.get(country)
+        if not base_query:
+            print(f"Warning: No query defined for target country: {country}")
+            continue # Skip if no query found for this country key
+
+        for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
+            try:
+                time.sleep(0.5) # Be respectful to the API
+                # Use the correct method signature for the library: story_list(query, start_date, end_date, collection_ids=[])
+                # Pass date objects directly, as confirmed by the test script
+                stories, _ = mc_search.story_list(
+                    base_query, # The constructed query string
+                    START_DATE, # Pass date object (now yesterday)
+                    END_DATE,   # Pass date object (today)
+                    collection_ids=[actor_coll_id] # Search within the actor's collection
+                )
+                for s in stories:
+                    record = {col: None for col in db_columns}
+                    record.update({
+                        "url": s.get("url"),
+                        "posting_time": str(s.get("publish_date")),
+                        "media_outlet": s.get("media_name"),
+                        "inferred_actor": actor,
+                        "target_country": country,
+                        "lang_detect": s.get("language"),
+                        "pseudo_kept": True,
+                        "pseudo_weight": 1.0,
+                        "use_afrolm": False
+                    })
+                    all_records.append(record)
+            except Exception as e:
+                logging.error(f"MediaCloud Error {country}-{actor}: {e}")
+
     df = pd.DataFrame(all_records)
     if df.empty:
-        print("No articles found or API unavailable. Using existing data.")
-        print("Your existing 15,166 records remain accessible in the dashboard.")
+        print("❌ No articles found.")
+        print("Your existing records remain accessible in the dashboard.")
         return
 
+    # --- ADD AUTOMATION SAFEGUARDS ---
     MAX_ARTICLES_PER_RUN = 200
-    MAX_RUNTIME_SECONDS = 800
-    df = df.head(MAX_ARTICLES_PER_RUN)
-    print(f"Found {len(df)} articles (capped at {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
+    MAX_RUNTIME_SECONDS = 800 # Example limit, adjust as needed for Lambda
+    df = df.head(MAX_ARTICLES_PER_RUN) # Cap the number of articles processed
+    print(f"✅ Found {len(df)} articles (capped at {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
+    # --- END ADD AUTOMATION SAFEGUARDS ---
 
+    # --- ADD TIME BUDGET CHECK ---
     loop_start = time.time()
+    saved_count = 0
+    failed_count = 0 # Initialize counter
+    # --- END ADD TIME BUDGET CHECK ---
+
     for idx, row in df.iterrows():
+        # --- CHECK TIME BUDGET INSIDE LOOP ---
         if time.time() - loop_start > MAX_RUNTIME_SECONDS:
-            print(f"Time budget reached at article {idx}. Stopping to avoid Lambda timeout.")
-            break
+            print(f"\n⏰ Time budget ({MAX_RUNTIME_SECONDS}s) reached at article {idx}. Stopping to avoid Lambda timeout.")
+            break # Exit the loop gracefully
+        # --- END CHECK TIME BUDGET INSIDE LOOP ---
 
         url = row['url']
         if not url or not isinstance(url, str) or url_exists(url):
+            failed_count += 1 # Increment failed counter for skipped URLs
             continue
-
+        
         content = scrape_full_text_robust(url)
 
-        is_not_error = not content.startswith("Failed to scrape") and not content.startswith("Error scraping")
+        # --- CHECK CONTENT QUALITY LIKE PREVIOUS SCRIPT ---
+        is_not_error = not content.startswith("Failed:") and not content.startswith("Error:")
         has_content = len(content) > 200 
+        # --- END CHECK CONTENT QUALITY LIKE PREVIOUS SCRIPT ---
 
         if is_not_error and has_content:
             row_data = row.to_dict()
             row_data['article_text'] = content
-
+            
             if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
                 row_data['inferred_actor'] = 'USA'
 
             try:
                 final_df = pd.DataFrame([row_data])[db_columns]
                 with engine.begin() as conn:
-                    final_df.to_sql('dashboard_medianarrative', conn, if_exists='append', index=False)
+                    final_df.to_sql(DB_TABLE, conn, if_exists='append', index=False) # Use DB_TABLE constant
+                saved_count += 1
                 print(f"[{idx+1}/{len(df)}] Saved ({row['target_country']}): {url[:40]}...")
             except Exception as e:
-                logging.error(f"DB Insert Error: {e}")
+                logging.error(f"DB Insert Error for {url}: {e}")
+                failed_count += 1 # Increment failed counter for DB errors
         else:
+            failed_count += 1 # Increment failed counter for scraping errors/low content
             print(f"[{idx+1}/{len(df)}] ❌ Real Failure: {content[:50]}... for {str(url)[:30]}")
 
-        time.sleep(0.5)
+        time.sleep(0.5) # Respectful delay
 
-    print("\nFinished. Check your database now.")
+    print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed/Timed-out: {failed_count}. Check your database now.")
 
-    # These lines must be indented to match the 'for' loop above
+    # --- ADD CACHE CLEARING ---
     print("🧹 Cleaning dashboard cache...")
     try:
         cache.clear()
         print("✅ Cache cleared successfully!")
     except Exception as e:
         print(f"⚠️ Cache clear failed: {e}")
-        
-# api key
-API_KEY = os.getenv('MEDIACLOUD_API_KEY')
+    # --- END ADD CACHE CLEARING ---
 
-# MediaCloud collection IDs — actor countries whose media is searched for narratives about target countries
-ACTOR_COLLECTION_IDS = {
-    "USA":          34412234,
-    "France":       34412146,
-    "China":        34412193,
-    "Russia":       34412232,
-    "Turkey":       34412131,
-    "Saudi Arabia": 34412050,
-    "Israel":       34412391,
-    "Iran":         34412284,
-    "UAE":          34412114,
-}
 
-# MediaCloud collection IDs — target African countries being monitored
-TARGET_COLLECTION_IDS = {
-    "Ethiopia":       34412034,
-    "Senegal":        38380807,
-    "DRC":            34412042,
-    "SA":             34412238,
-    "Côte d'Ivoire":  34412173,
-}
-
-START_DATE = date.today() - timedelta(days=1)
-END_DATE   = date.today()
-
-# Use your exact queries for all 4 countries
-QUERY_BY_COUNTRY = {
-    "Ethiopia": '(("infrastructure project" OR "debt relief" OR "railway" OR "industrial park" OR "investment" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease" OR "energy cooperation" OR "mosque" OR "church" OR "religious diplomacy" OR "propaganda" OR "disinformation" OR "social media campaign" OR "broadcast in Amharic") OR ("ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ " OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ"))',
-    "Senegal": '(("multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Senegal" OR "Senegalais" OR "Dakar" OR "Diamniadio" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue")) OR (("tàmbali" OR "jàngoro" OR "politique" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo"OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan") AND ("Senegaal"))',
-    "DRC": '(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("République démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi")) OR (("bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "5G" OR "Huawei" OR "IA" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya") AND ("RDC"))',
-    "SA": '(("South Africa" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS") AND ("trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism" OR "propaganda" OR "disinformation" OR "5G" OR "Huawei" OR "AI" OR "vaccine")) OR (("iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS") AND ("uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo"))'
-}
-
-# FIXED THE MAIN CHECK
 if __name__ == "__main__":
     main()
