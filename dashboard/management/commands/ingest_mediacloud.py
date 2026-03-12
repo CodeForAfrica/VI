@@ -59,12 +59,9 @@ TARGET_COLLECTION_IDS = {
 }
 
 QUERY_BY_COUNTRY = {
-
-"Ethiopia": "(investment OR infrastructure OR railway OR industrial park OR mining OR energy OR trade OR debt OR military cooperation OR arms OR security partnership OR diplomacy OR election OR governance OR Confucius Institute OR scholarship OR Huawei OR 5G OR AI OR cybersecurity OR surveillance OR vaccine OR hospital OR agriculture OR hydropower OR propaganda OR disinformation OR social media influence) AND (Ethiopia OR Addis Ababa OR Abiy Ahmed)",
-"Senegal": "(election OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin OR agriculture OR énergie) AND (Senegal OR Sénégal OR Dakar OR Macky Sall OR Ousmane Sonko OR Bassirou Diomaye Faye)",
-"DRC": "(élection OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR mining OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin OR énergie) AND (RDC OR République démocratique du Congo OR Kinshasa OR Tshisekedi OR Joseph Kabila)",
-"Côte d'Ivoire": "(élection OR politique OR gouvernance OR investissement OR commerce OR dette OR infrastructure OR port OR rail OR énergie OR cacao OR militaire OR défense OR sécurité OR université OR Confucius OR propagande OR désinformation OR réseaux sociaux OR Huawei OR 5G OR IA OR cybersécurité OR surveillance OR vaccin) AND (Côte d'Ivoire OR Ivory Coast OR Abidjan OR Alassane Ouattara OR Laurent Gbagbo)",
-"South Africa": "(South Africa OR Pretoria OR Johannesburg OR Cape Town OR ANC OR Ramaphosa OR BRICS) AND (investment OR trade OR mining OR energy OR infrastructure OR military OR defense OR diplomacy OR Huawei OR 5G OR AI OR cybersecurity)"
+    "Ethiopia": "(Ethiopia OR 'Addis Ababa' OR 'Abiy Ahmed') AND (investment OR infrastructure OR security OR military OR trade OR deplomacy OR culture OR drone)",
+    "Senegal": "(Senegal OR Sénégal OR Dakar) AND (élection OR politique OR investissement OR trade OR military OR deplomacy OR infrastructure OR culture)",
+    # ... keep others simple for the first test
 }
 
 scraper = cloudscraper.create_scraper()
