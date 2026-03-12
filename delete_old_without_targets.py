@@ -84,8 +84,11 @@ for country_name, terms in TARGET_TERMS:
     # e.g., NOT (article_text ILIKE '%Ethiopia%' OR article_text ILIKE '%Addis Ababa%' ...)
     where_conditions.append(f"NOT ({or_clause})")
 
+# --- ADD MISSING LINE HERE ---
 # Combine all the NOT clauses with AND
-# e.g., NOT (terms_for_Ethiopia) AND NOT (terms_for_Senegal) AND = " AND ".join(where_conditions)
+# e.g., NOT (terms_for_Ethiopia) AND NOT (terms_for_Senegal) AND ...
+combined_where = " AND ".join(where_conditions) # This line was missing!
+# --- END ADD MISSING LINE ---
 
 # Define the start date for 'old' data (adjust as needed, e.g., yesterday or the day before ingestion)
 OLD_DATA_CUTOFF_DATE = '2023-10-16' # Adjust this date
