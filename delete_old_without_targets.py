@@ -44,7 +44,7 @@ TARGET_TERMS = [
         "politiki", "kampanyi", "boyangeli", "mbongo na mosala", "libaku ya mbongo", "nzela", "ya nzela",
         "mibundu", "liboke ya bitumba", "bokengi", "kimia", "banyama ya liboma", "lisungi", "ya bokolongono",
         "elenga", "nsango ya lokuta", "influenceur", "media", "vaksin", "lopitalo", "bilanga", "kura",
-        "misiri", Nzambe", "kristoya"
+        "misiri", "Nzambe", "kristoya"
     ]),
     ("SA", [
         "South Africa", "Suid-Afrika", "Mzansi", "Pretoria", "Cape Town", "Johannesburg", "Durban", "ANC",
