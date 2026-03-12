@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from sqlalchemy import create_engine, text
 import logging
 
@@ -22,8 +23,7 @@ except Exception as e:
     exit(1)
 
 # --- DEFINE TARGET COUNTRY TERMS (Case-insensitive search patterns) ---
-# Using a list of tuples for easier management and potential future expansion
-# Format: (Country_Name, [list_of_search_terms_for_that_country])
+# Same list as used in the deletion script
 TARGET_TERMS = [
     ("Ethiopia", [
         "Ethiopia", "ኢትዮጵያ", "አዲስ አበባ", "Addis Ababa", "Abiy Ahmed", "GERD", "Grand Ethiopian Renaissance Dam",
@@ -38,13 +38,13 @@ TARGET_TERMS = [
     ]),
     ("DRC", [
         "DRC", "Democratic Republic of the Congo", "République Démocratique du Congo", "RDC", "Kinshasa",
-       "shisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
+        "Tshisekedi", "Joseph Kabila", "Félix Tshisekedi", "Goma", "Kivu", "Kisangani", "Lubumbashi",
         "Kolwezi", "Kokolo", "Corneille Nnanga", "Bertrand Bisimwa", "Sultani Makenga", "Willy Ngoma",
         "Lawrence Kanyuka", "Jean-Jacques Mamba", "Éric Nkuba", "Congolais", "bobongisi maponami", "maponami",
         "politiki", "kampanyi", "boyangeli", "mbongo na mosala", "libaku ya mbongo", "nzela", "ya nzela",
         "mibundu", "liboke ya bitumba", "bokengi", "kimia", "banyama ya liboma", "lisungi", "ya bokolongono",
         "elenga", "nsango ya lokuta", "influenceur", "media", "vaksin", "lopitalo", "bilanga", "kura",
-        "misiri", "Nzambe", "kristoya"
+        "misiri", "ndako ya Nzambe", "kristoya"
     ]),
     ("SA", [
         "South Africa", "Suid-Afrika", "Mzansi", "Pretoria", "Cape Town", "Johannesburg", "Durban", "ANC",
@@ -56,8 +56,8 @@ TARGET_TERMS = [
         "xenophobia", "social unrest", "polarization", "stoking", "incitement", "betoging", "mislukking",
         "South African"
     ]),
-    ("Côte d''Ivoire", [
-        "Côte d''Ivoire", "Côte d''Ivoire", "Ivory Coast", "Abidjan", "Yamoussoukro", "Alassane Ouattara",
+    ("Côte d'Ivoire", [
+        "Côte d'Ivoire", "Cote d'Ivoire", "Ivory Coast", "Abidjan", "Yamoussoukro", "Alassane Ouattara",
         "Laurent Gbagbo", "Henri Konan Bédié", "Robert Daudelin", "Emmanuel Etiennette", "Marcel Amon Tanoh",
         "Kandia Camara", "Amadou Gon Coulibaly", "Hamed Bakayoko", "Adama Bictogo", "Charles Blé Goudé",
         "baoulé", "baoule", "dioula", "dyula", "senufo", "lobi", "loby", "lobyi", "lobyie", "lobyien", "lobyienne",
@@ -66,12 +66,7 @@ TARGET_TERMS = [
     ])
 ]
 
-# --- BUILD THE SQL DELETE QUERY ---
-# We need to check if article_text contains ANY term from ANY target country list.
-# If it contains NO terms from ANY list, it matches the condition for deletion.
-# The logic will be: NOT (term_from_country1 OR term_from_country2 OR ...)
-# This is equivalent to: NOT term_from_country1 AND2 AND ...
-
+# --- BUILD THE SQL COUNT QUERY (Similar logic to deletion) ---
 # Start building the WHERE clause for terms NOT present
 where_conditions = []
 
@@ -84,55 +79,65 @@ for country_name, terms in TARGET_TERMS:
     # e.g., NOT (article_text ILIKE '%Ethiopia%' OR article_text ILIKE '%Addis Ababa%' ...)
     where_conditions.append(f"NOT ({or_clause})")
 
-# --- ADD MISSING LINE HERE ---
 # Combine all the NOT clauses with AND
 # e.g., NOT (terms_for_Ethiopia) AND NOT (terms_for_Senegal) AND ...
-combined_where = " AND ".join(where_conditions) # This line was missing!
-# --- END ADD MISSING LINE ---
+combined_where = " AND ".join(where_conditions)
 
-# Define the start date for 'old' data (adjust as needed, e.g., yesterday or the day before ingestion)
-OLD_DATA_CUTOFF_DATE = '2023-10-16' # Adjust this date - Using the earliest date found
+# Define the start date for 'old' data
+OLD_DATA_CUTOFF_DATE = '2023-10-16' # Use the date you found
 
-# Final SQL query
-# Include checks for NULL/empty/failed text as well
-delete_query_str = f"""
-DELETE FROM {DB_TABLE}
-WHERE
-   -- Criteria for NULL, Empty, Failed, or Error text
-   (article_text IS NULL
-    OR TRIM(article_text) = ''
-    OR article_text LIKE 'Failed:%'
-    OR article_text LIKE 'Error:%'
-    OR article_text = 'Failed to extract content (page might be dynamic or empty)'
-    OR article_text = 'Failed: Empty Content')
-   -- OR Criteria for articles that do NOT mention ANY target country AND are old
-   OR (
-       posting_time < :cutoff_date -- Parameterized for safety
-       AND ( {combined_where} )
-   );
+# Final SQL query to COUNT rows matching the deletion criteria (excluding NULL/empty/failed text part for now)
+# This focuses on the "old AND not mentioning country" part
+count_query_str = f"""
+SELECT COUNT(*) AS count_of_old_non_target_articles
+FROM {DB_TABLE}
+WHERE posting_time < :cutoff_date
+  AND ( {combined_where} );
 """
 
-print(f"--- Preparing to Execute Deletion ---")
-print(f"Query:\n{delete_query_str}")
+print(f"--- Executing Check Query ---")
+print(f"Query:\n{count_query_str}")
 print(f"Parameters: {{'cutoff_date': '{OLD_DATA_CUTOFF_DATE}'}}")
-print(f"This will delete articles older than {OLD_DATA_CUTOFF_DATE} that do not mention a target country,")
-print(f"and also any articles with NULL/empty/failed text regardless of date.")
-print(f"------------------------\n")
+print(f"This checks for articles older than {OLD_DATA_CUTOFF_DATE} that do not mention a target country.")
+print(f"-----------------------------------\n")
 
-# --- EXECUTE THE DELETE ---
+# --- EXECUTE THE COUNT QUERY ---
 try:
-    with engine.begin() as conn: # Use begin() for transaction
-        # Execute the query, passing the cutoff date as a parameter
-        # IMPORTANT: Pass the parameters dictionary as the second argument to execute
-        result = conn.execute(text(delete_query_str), {"cutoff_date": OLD_DATA_CUTOFF_DATE})
-        logging.info(f"Deletion of old, irrelevant articles completed. Rows affected: {result.rowcount}")
-except Exception as e:
-    logging.error(f"Error executing delete query: {e}")
-    print(f"An error occurred during deletion: {e}")
-    exit(1)
+    with engine.connect() as conn: # Use connect() for read-only query
+        # Execute the query and fetch the result into a pandas DataFrame
+        df_result = pd.read_sql_query(text(count_query_str), conn, params={"cutoff_date": OLD_DATA_CUTOFF_DATE})
+        count = df_result.iloc[0]['count_of_old_non_target_articles'] # Extract the count from the result
+        print(f"--- Query Result ---")
+        print(f"Number of old articles (before {OLD_DATA_CUTOFF_DATE}) NOT mentioning any target country: {count}")
+        print(f"---------------------")
 
-print(f"\n--- Deletion Summary ---")
-print(f"Articles older than {OLD_DATA_CUTOFF_DATE} without any target country terms were deleted.")
-print(f"Additionally, any articles with NULL/empty/failed text were also deleted.")
-print(f"Total rows removed: {result.rowcount}")
-print("------------------------")
+        if count > 0:
+            print("\n--- Finding Sample Row ---")
+            # If count > 0, let's find ONE sample row to confirm
+            sample_query_str = f"""
+            SELECT posting_time, target_country, inferred_actor, media_outlet, url, article_text
+            FROM {DB_TABLE}
+            WHERE posting_time < :cutoff_date
+              AND ( {combined_where} )
+            LIMIT 1;
+            """
+            df_sample = pd.read_sql_query(text(sample_query_str), conn, params={"cutoff_date": OLD_DATA_CUTOFF_DATE})
+            if not df_sample.empty:
+                sample_row = df_sample.iloc[0]
+                print(f"Sample row found matching criteria:")
+                print(f"  Posting Time: {sample_row['posting_time']}")
+                print(f"  Target Country: {sample_row['target_country']}")
+                print(f"  Inferred Actor: {sample_row['inferred_actor']}")
+                print(f"  Media Outlet: {sample_row['media_outlet']}")
+                print(f"  URL: {sample_row['url']}")
+                print(f"  Article Text (first 200 chars): {sample_row['article_text'][:200]}...")
+            else:
+                print("WARNING: Count was > 0, but could not fetch a sample row. This is unexpected.")
+        else:
+            print("\nNo old articles found that do not mention a target country, according to the defined keywords.")
+
+except Exception as e:
+    logging.error(f"Error executing count query: {e}")
+    print(f"An error occurred during the check: {e}")
+
+print("\n--- Check Complete ---")
