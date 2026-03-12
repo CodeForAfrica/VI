@@ -274,9 +274,9 @@ def main():
     print("🧹 Cleaning dashboard cache...")
     try:
         cache.clear()
-        print("✅ Cache cleared successfully! Refresh your dashboard to see new data.")
+        print("✅ Cache cleared successfully!")
     except Exception as e:
-        print(f"⚠️  Note: Could not clear cache automatically: {e}")
+        print(f"⚠️ Cache clear failed: {e}")
         
 # api key
 API_KEY = os.getenv('MEDIACLOUD_API_KEY')
