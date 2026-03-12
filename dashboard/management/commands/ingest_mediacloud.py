@@ -95,7 +95,11 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    print(f"🛰️  Querying MediaCloud API from {START_DATE} to {END_DATE}...")       
+    # Ensure these are strings once at the start
+    s_date_str = START_DATE.isoformat() if hasattr(START_DATE, 'isoformat') else START_DATE
+    e_date_str = END_DATE.isoformat() if hasattr(END_DATE, 'isoformat') else END_DATE
+
+    print(f"🛰️  Querying MediaCloud API from {s_date_str} to {e_date_str}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
@@ -104,14 +108,14 @@ def main():
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Construct the query EXACTLY like the web interface
+                # Use the 'tags_id_media' syntax that worked for you on the web
                 web_style_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
                 
-                # Fetch stories
+                # Fetch stories - PASS THE STRINGS DIRECTLY
                 results = mc_search.story_list(
                     query=web_style_query, 
-                    start_date=START_DATE.isoformat(), 
-                    end_date=END_DATE.isoformat()
+                    start_date=s_date_str, 
+                    end_date=e_date_str
                 )
 
                 # Handle different return types (tuple vs list)
@@ -135,7 +139,6 @@ def main():
                         })
                         all_records.append(record)
                 else:
-                    # Optional: Print if a specific actor returned nothing to help debug
                     print(f"  🔎 0 results for {actor}")
                 
                 time.sleep(0.5) 
