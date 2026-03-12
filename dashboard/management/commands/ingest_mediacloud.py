@@ -59,9 +59,8 @@ TARGET_COLLECTION_IDS = {
 }
 
 QUERY_BY_COUNTRY = {
-    "Ethiopia": "(Ethiopia OR 'Addis Ababa' OR 'Abiy Ahmed') AND (investment OR infrastructure OR security OR military OR trade OR deplomacy OR culture OR drone)",
-    "Senegal": "(Senegal OR Sénégal OR Dakar) AND (élection OR politique OR investissement OR trade OR military OR deplomacy OR infrastructure OR culture)",
-    # ... keep others simple for the first test
+    "Ethiopia": "(Ethiopia OR \"Addis Ababa\" OR \"Abiy Ahmed\") AND (investment OR infrastructure OR security OR military OR trade OR diplomacy OR culture OR drone)",
+    "Senegal": "(Senegal OR Sénégal OR Dakar) AND (élection OR politique OR investissement OR trade OR military OR diplomacy OR infrastructure OR culture)",
 }
 
 scraper = cloudscraper.create_scraper()
@@ -105,12 +104,20 @@ def main():
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Bulletproof Date handling
-                s_date = START_DATE.isoformat() if hasattr(START_DATE, 'isoformat') else START_DATE
-                e_date = END_DATE.isoformat() if hasattr(END_DATE, 'isoformat') else END_DATE
+                # Fetch stories with explicit keywords
+                results = mc_search.story_list(
+                    query=base_query, 
+                    start_date=START_DATE.isoformat(), 
+                    end_date=END_DATE.isoformat(), 
+                    collection_ids=[actor_coll_id]
+                )
                 
-                # Fetch stories
-                stories, _ = mc_search.story_list(base_query, s_date, e_date, collection_ids=[actor_coll_id])
+                # MediaCloud API returns a list of stories directly or a tuple depending on version
+                # Let's handle both
+                stories = results[0] if isinstance(results, tuple) else results
+                
+                if stories:
+                    print(f"  ✅ Found {len(stories)} stories for {country} in {actor} media")
                 
                 for s in stories:
                     record = {col: None for col in db_columns}
