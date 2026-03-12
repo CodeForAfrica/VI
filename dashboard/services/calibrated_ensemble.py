@@ -10,6 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
 import logging
+import skops.io as sio  # ✅ FIX 1: Add this import
 
 logger = logging.getLogger(__name__)
 
@@ -189,20 +190,12 @@ class CalibratedStrategicClassifier:
         if os.path.exists(label_enc_path_skops):
             logger.info(f"Loading LabelEncoder from {label_enc_path_skops} using skops...")
             try:
-                # Attempt to load with skops, specifying trusted types if needed
-                # Common types for sklearn components: 'builtins.type', 'numpy.dtype', 'numpy.ndarray',
-                # 'sklearn.preprocessing._label.LabelEncoder', etc.
-                # It's safest to use sio.get_untrusted_types on your saved file to see what's needed.
-                # trusted_types = sio.get_untrusted_types(file=label_enc_path_skops)
-                # print("Trusted types needed:", trusted_types)
-                # Then use them: trusted=trusted_types
-                # For now, using a broad default for LabelEncoder, refine as needed.
                 trusted_types = [
                     "builtins.type", "numpy.dtype", "numpy.ndarray",
                     "sklearn.preprocessing._label.LabelEncoder",
-                    # Add other types reported by get_untrusted_types if necessary
                 ]
-                label_encoder = sio.load(label_enc_path_skops, trusted=trusted_types("✅ LabelEncoder loaded using skops."))
+                label_encoder = sio.load(label_enc_path_skops, trusted=trusted_types)
+                logger.info("✅ LabelEncoder loaded using skops.")
             except Exception as e_skops:
                 logger.warning(f"Skops load failed for LabelEncoder ({e_skops}), falling back to pickle.")
 
@@ -214,7 +207,7 @@ class CalibratedStrategicClassifier:
                 logger.info("✅ LabelEncoder loaded using pickle.")
             except Exception as e_pickle:
                 logger.error(f"Failed to load LabelEncoder with pickle: {e_pickle}")
-                raise # Or handle more gracefully if possible
+                raise
 
         if label_encoder is None:
             raise FileNotFoundError("Neither label_encoder.skops nor label_encoder.pkl found in the model directory.")
@@ -231,48 +224,29 @@ class CalibratedStrategicClassifier:
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
 
             # Load tokenizer from LOCAL directory
-            tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False) # Use local path
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
 
             # Get PEFT config
             from peft import PeftConfig
             peft_config = PeftConfig.from_pretrained(model_dir)
 
-            # Determine base model path (NEW LOGIC: Check common models directory HARDCODED)
-            # The ensemble might be loaded from a temp directory. Look in the known final location.
-            KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models" # EC2 path
-            expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' # Use the known name from S3
+            # Download base model from Hugging Face Hub if local path doesn't exist
+            KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
+            expected_base_model_dir_name = 'microsoft_mdeberta-v3-base'
             base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
-
-            # Check if running on EC2 (using an environment variable)
-            on_ec2 = os.environ.get('ON_EC2', '').lower() == 'true'
-
-            if on_ec2:
-                # Running on EC2, enforce local path check
-                if os.path.exists(base_model_local_path_ec2):
-                    base_model_name = base_model_local_path_ec2
-                    print(f"  Using local base model (in known dir): {base_model_name}")
-                else:
-                    print(f"  ❌ ERROR: ON_EC2=True, but local base model not found at {base_model_local_path_ec2}")
-                    raise FileNotFoundError(f"Local base model expected at '{base_model_local_path_ec2}' on EC2 but not found.")
+            
+            if os.path.exists(base_model_local_path_ec2):
+                base_model_name = base_model_local_path_ec2
+                print(f"  ✅ Using local base model: {base_model_name}")
             else:
-                # Not running on EC2 (e.g., local), allow fallback to Hub
-                if os.path.exists(base_model_local_path_ec2):
-                    base_model_name = base_model_local_path_ec2
-                    print(f"  Using local base model (in known dir): {base_model_name}")
-                else:
-                    # Fallback to HF Hub
-                    hub_name_from_config = getattr(peft_config, 'base_model_name_or_path', None)
-                    if hub_name_from_config:
-                        print(f"  ⚠️  Local base model not found at {base_model_local_path_ec2}, falling back to Hub: {hub_name_from_config}")
-                        base_model_name = hub_name_from_config
-                    else:
-                        print(f"  ❌ ERROR: Could not determine base model config and local path {base_model_local_path_ec2} not found.")
-                        raise FileNotFoundError(f"Base model config missing and local path '{base_model_local_path_ec2}' not found.")
-                    
+                print(f"  ⚠️  Local base model not found, downloading from Hugging Face Hub...")
+                base_model_name = "microsoft/Deberta-v3-base"
+                print(f"  📥 Downloading base model from Hugging Face Hub: {base_model_name}")
+                
             # Load base model config with correct num_labels
             from transformers import AutoConfig
             config = AutoConfig.from_pretrained(
-                base_model_name, # This should now be the correct local path
+                base_model_name,
                 num_labels=num_labels
             )
 
@@ -286,21 +260,37 @@ class CalibratedStrategicClassifier:
                 low_cpu_mem_usage=True,
             )
 
-            # Load PEFT adapter on top with strict=False to skip missing keys
+            # ✅ FIX 2: Proper PEFT loading with state dict filtering
             from peft import PeftModel
+            
             try:
+                # Try standard loading first
                 model = PeftModel.from_pretrained(
                     base_model, 
                     model_dir,
-                    strict=False  # Skip missing keys like classifier.weight
+                    is_trainable=False
                 )
-            except Exception as e:
-                print(f"⚠️  PEFT loading failed with strict=True, trying with strict=False...")
-                model = PeftModel.from_pretrained(
-                    base_model, 
-                    model_dir,
-                    strict=False
-                )
+            except KeyError as e:
+                print(f"⚠️  PEFT loading failed with KeyError: {e}")
+                print("  Using state dict filtering fallback...")
+                
+                # Load adapter state dict
+                adapter_state_dict = torch.load(os.path.join(model_dir, 'adapter_model.safetensors'))
+                
+                # Get model state dict
+                model_state_dict = base_model.state_dict()
+                
+                # Filter adapter state dict to only include keys that exist in model
+                filtered_state_dict = {
+                    k: v for k, v in adapter_state_dict.items() 
+                    if k in model_state_dict
+                }
+                
+                # Load filtered state dict
+                base_model.load_state_dict(filtered_state_dict, strict=False)
+                
+                # Wrap in PeftModel
+                model = PeftModel(base_model, model_dir)
 
             # Keep model on CPU
             model.to('cpu')
@@ -324,19 +314,11 @@ class CalibratedStrategicClassifier:
         if os.path.exists(calibrator_path):
             logger.info(f"Loading calibrator from {calibrator_path}...")
             try:
-                # Attempt to load calibrator using its own method (which likely uses pickle internally)
-                # This might still face version issues if the calibrator object itself contains incompatible scikit-learn parts
-                # For now, we just wrap it in a try-catch.
-                # If VennAbersStrategicCalibrator.load uses skops internally or has a skops-compatible save/load, update that class too.
                 calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
                 logger.info(f"✅ Calibrator loaded.")
             except Exception as e_cal:
                  logger.error(f"Failed to load calibrator: {e_cal}")
-                 # Depending on your tolerance for running without calibration:
-                 # Option 1: Raise the error
-                 # raise
-                 # Option 2: Continue without calibrator (set calibrator to a default instance or None)
-                 calibrator = VennAbersStrategicCalibrator() # Or handle differently
+                 calibrator = VennAbersStrategicCalibrator()
                  logger.warning("Continuing without calibrator due to load error.")
         else:
             logger.warning(f"Calibrator file {calibrator_path} not found.")
