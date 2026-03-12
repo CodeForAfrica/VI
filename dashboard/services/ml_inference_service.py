@@ -233,94 +233,94 @@ class MLInferenceService:
             print(f"✅ Saved tone model to persistent cache: {cache_path}")
     
     def _load_strategic_classifier(self):
-    """Load calibrated strategic classifier from persistent cache or S3"""
-    print(f"_load_strategic_classifier called. Cache keys: {list(self._model_cache.keys())}") 
-    
-    # ✅ CRITICAL: Check in-memory cache FIRST
-    if 'strategic' in self._model_cache:
-        print("   ✅ Found strategic model in memory cache, returning.")
-        return self._model_cache['strategic']
-    
-    # ✅ Check persistent cache (model_cache/) FIRST
-    if self._load_from_persistent_cache('strategic'):
-        print("   ✅ Found strategic model in persistent cache, returning.")
-        return self._model_cache['strategic']
-    
-    # If neither cache exists, proceed with S3 download as fallback
-    print(f"⚠️  Strategic model not in cache, attempting S3 download...")
-    temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
-    self._temp_dirs.add(temp_dir)
-
-    print(f"\n🔍 === STRATEGIC MODEL DOWNLOAD ===")
-    print(f"📁 Temp dir: {temp_dir}")
-    
-    # Download the base model from S3 first
-    base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
-    if not os.path.exists(base_model_dir):
-        os.makedirs(base_model_dir, exist_ok=True)
-        if self.s3_client:
-            try:
-                base_prefix = 'microsoft_mdeberta-v3-base/'
-                print(f"📂 Looking for base model in S3: {base_prefix}")
-                pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
-                contents = pages.get('Contents', [])
-                print(f"   Found {len(contents)} files")
-                
-                for obj in contents:
-                    key = obj['Key']
-                    if key.endswith('/'):
-                        continue
-                    filename = key.replace(base_prefix, '')
-                    local_path = os.path.join(base_model_dir, filename)
-                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-                    try:
-                        self.s3_client.download_file(self.bucket_name, key, local_path)
-                        print(f"   Downloaded {key} -> {local_path}")
-                    except Exception as e_download_file:
-                        print(f"   WARNING: Could not download {key} from S3: {e_download_file}. Skipping.")
-                        continue
-                        
-                print(f"✅ Downloaded base model to {base_model_dir}")
-                print(f"   Files: {os.listdir(base_model_dir)}")
-            except Exception as e:
-                print(f"❌ Could not download base model: {e}")
-    
-    # Check what we have
-    print(f"📂 Files in temp_dir: {os.listdir(temp_dir)}")
-    
-    # Now download the classifier
-    classifier_prefix = 'calibrated_contrastive_peft/'
-    print(f"📂 Downloading classifier from: {classifier_prefix}")
-    
-    if not self._download_directory_from_s3(classifier_prefix, temp_dir):
-        raise Exception("Failed to download strategic classifier from S3")
-    
-    print(f"📂 Files after classifier download: {os.listdir(temp_dir)}")
-    
-    # Load the classifier with error handling
-    try:
-        from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
-        classifier = CalibratedStrategicClassifier.load(temp_dir)
+        """Load calibrated strategic classifier from persistent cache or S3"""
+        print(f"_load_strategic_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         
-        self._model_cache['strategic'] = classifier
+        # ✅ CRITICAL: Check in-memory cache FIRST
+        if 'strategic' in self._model_cache:
+            print("   ✅ Found strategic model in memory cache, returning.")
+            return self._model_cache['strategic']
         
-        # Load label encoder
-        label_enc_path = os.path.join(temp_dir, 'label_encoder.pkl')
-        if os.path.exists(label_enc_path):
-            with open(label_enc_path, 'rb') as f:
-                self._strategic_label_encoder = pickle.load(f)
+        # ✅ Check persistent cache (model_cache/) FIRST
+        if self._load_from_persistent_cache('strategic'):
+            print("   ✅ Found strategic model in persistent cache, returning.")
+            return self._model_cache['strategic']
         
-        print(f"✅ Strategic classifier loaded!")
-        # ✅ Save to persistent cache
-        self._save_to_persistent_cache('strategic', classifier)
-        return classifier
-    except Exception as e:
-        print(f"❌ Error loading strategic classifier: {e}")
-        import traceback
-        traceback.print_exc()
-        logger.warning("Strategic model failed to load, using keyword fallback")
-        return None
+        # If neither cache exists, proceed with S3 download as fallback
+        print(f"⚠️  Strategic model not in cache, attempting S3 download...")
+        temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
+        self._temp_dirs.add(temp_dir)
+    
+        print(f"\n🔍 === STRATEGIC MODEL DOWNLOAD ===")
+        print(f"📁 Temp dir: {temp_dir}")
+        
+        # Download the base model from S3 first
+        base_model_dir = os.path.join(temp_dir, 'microsoft_mdeberta-v3-base')
+        if not os.path.exists(base_model_dir):
+            os.makedirs(base_model_dir, exist_ok=True)
+            if self.s3_client:
+                try:
+                    base_prefix = 'microsoft_mdeberta-v3-base/'
+                    print(f"📂 Looking for base model in S3: {base_prefix}")
+                    pages = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=base_prefix)
+                    contents = pages.get('Contents', [])
+                    print(f"   Found {len(contents)} files")
+                    
+                    for obj in contents:
+                        key = obj['Key']
+                        if key.endswith('/'):
+                            continue
+                        filename = key.replace(base_prefix, '')
+                        local_path = os.path.join(base_model_dir, filename)
+                        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    
+                        try:
+                            self.s3_client.download_file(self.bucket_name, key, local_path)
+                            print(f"   Downloaded {key} -> {local_path}")
+                        except Exception as e_download_file:
+                            print(f"   WARNING: Could not download {key} from S3: {e_download_file}. Skipping.")
+                            continue
+                            
+                    print(f"✅ Downloaded base model to {base_model_dir}")
+                    print(f"   Files: {os.listdir(base_model_dir)}")
+                except Exception as e:
+                    print(f"❌ Could not download base model: {e}")
+        
+        # Check what we have
+        print(f"📂 Files in temp_dir: {os.listdir(temp_dir)}")
+        
+        # Now download the classifier
+        classifier_prefix = 'calibrated_contrastive_peft/'
+        print(f"📂 Downloading classifier from: {classifier_prefix}")
+        
+        if not self._download_directory_from_s3(classifier_prefix, temp_dir):
+            raise Exception("Failed to download strategic classifier from S3")
+        
+        print(f"📂 Files after classifier download: {os.listdir(temp_dir)}")
+        
+        # Load the classifier with error handling
+        try:
+            from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+            classifier = CalibratedStrategicClassifier.load(temp_dir)
+            
+            self._model_cache['strategic'] = classifier
+            
+            # Load label encoder
+            label_enc_path = os.path.join(temp_dir, 'label_encoder.pkl')
+            if os.path.exists(label_enc_path):
+                with open(label_enc_path, 'rb') as f:
+                    self._strategic_label_encoder = pickle.load(f)
+            
+            print(f"✅ Strategic classifier loaded!")
+            # ✅ Save to persistent cache
+            self._save_to_persistent_cache('strategic', classifier)
+            return classifier
+        except Exception as e:
+            print(f"❌ Error loading strategic classifier: {e}")
+            import traceback
+            traceback.print_exc()
+            logger.warning("Strategic model failed to load, using keyword fallback")
+            return None
         
     def _load_tone_classifier(self):
         """Load calibrated tone classifier from S3 or local path"""
