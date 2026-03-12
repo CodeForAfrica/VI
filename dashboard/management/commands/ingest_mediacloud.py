@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 import mediacloud.api
 import trafilatura
 import cloudscraper
+import requests
 
 # ────────────────────────────────────────────────
 # CONFIG (Updated with your credentials)
@@ -93,60 +94,61 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 # MAIN
 # ────────────────────────────────────────────────
+import requests
+
 def main():
     all_records = []
+    # MediaCloud API base URL for 2026
+    BASE_URL = "https://api.mediacloud.org/api/v3/stories/list"
     
-    # Pass the actual DATE objects, NOT strings
-    # This lets the mediacloud library call .isoformat() itself
-    s_date = START_DATE 
-    e_date = END_DATE
-
-    print(f"🛰️  Querying MediaCloud API from {s_date} to {e_date}...")       
+    print(f"🛰️  Direct API Query from {START_DATE} to {END_DATE}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
-        if not base_query: 
-            continue
+        if not base_query: continue
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Construct query
-                web_style_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
+                # Construct query string exactly like the web screenshot
+                full_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
                 
-                # CALL WITH DATE OBJECTS
-                results = mc_search.story_list(
-                    query=web_style_query, 
-                    start_date=s_date, 
-                    end_date=e_date
-                )
-
-                # Standard results handling
-                stories = results[0] if isinstance(results, tuple) else results
+                # Manual Request to bypass library bugs
+                params = {
+                    'q': full_query,
+                    'fq': f"publish_date:[{START_DATE} TO {END_DATE}]", # Simpler format
+                    'key': API_KEY,
+                    'rows': 100
+                }
                 
-                if stories:
-                    print(f"  ✅ Found {len(stories)} stories for {country} in {actor} media")
-                    for s in stories:
-                        record = {col: None for col in db_columns}
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor,
-                            "target_country": country,
-                            "lang_detect": s.get("language"),
-                            "pseudo_kept": True,
-                            "pseudo_weight": 1.0,
-                            "use_afrolm": False,
-                            "confidence": 1.0
-                        })
-                        all_records.append(record)
+                response = requests.get(BASE_URL, params=params)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    stories = data.get('results', [])
+                    
+                    if stories:
+                        print(f"  ✅ Found {len(stories)} stories for {country} in {actor}")
+                        for s in stories:
+                            record = {col: None for col in db_columns}
+                            record.update({
+                                "url": s.get("url"),
+                                "posting_time": s.get("publish_date"),
+                                "media_outlet": s.get("media_name"),
+                                "inferred_actor": actor,
+                                "target_country": country,
+                                "lang_detect": s.get("language"),
+                                "pseudo_kept": True,
+                                "confidence": 1.0
+                            })
+                            all_records.append(record)
+                    else:
+                        print(f"  🔎 0 results for {actor}")
                 else:
-                    print(f"  🔎 0 results for {actor}")
-                
+                    print(f"  ❌ API Error {response.status_code} for {actor}")
+
                 time.sleep(0.5) 
             except Exception as e:
-                logging.error(f"MediaCloud Error {country}-{actor}: {e}")
-                print(f"  ❌ Error querying {actor}: {e}")
+                print(f"  ❌ Connection Error for {actor}: {e}")
                          
     df = pd.DataFrame(all_records)
     if df.empty:
