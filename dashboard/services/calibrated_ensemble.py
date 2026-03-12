@@ -261,10 +261,12 @@ class CalibratedStrategicClassifier:
             )
 
             #  Proper PEFT loading with state dict filtering
+            # Load PEFT adapter with proper safetensors handling
             from peft import PeftModel
+            from safetensors.torch import load_file
             
             try:
-                # Try standard loading first
+                # Try standard PEFT loading first
                 model = PeftModel.from_pretrained(
                     base_model, 
                     model_dir,
@@ -274,13 +276,9 @@ class CalibratedStrategicClassifier:
                 print(f"⚠️  PEFT loading failed with KeyError: {e}")
                 print("  Using state dict filtering fallback...")
                 
-                # Load adapter state dict
-                # Load adapter state dict (weights_only=False for PyTorch 2.6 compatibility)
-                adapter_state_dict = torch.load(
-                    os.path.join(model_dir, 'adapter_model.safetensors'),
-                    weights_only=False,
-                    map_location='cpu'
-                )
+                # Load adapter state dict using safetensors library
+                adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
+                adapter_state_dict = load_file(adapter_path)
                 
                 # Get model state dict
                 model_state_dict = base_model.state_dict()
@@ -296,7 +294,6 @@ class CalibratedStrategicClassifier:
                 
                 # Wrap in PeftModel
                 model = PeftModel(base_model, model_dir)
-
             # Keep model on CPU
             model.to('cpu')
             model.eval()
