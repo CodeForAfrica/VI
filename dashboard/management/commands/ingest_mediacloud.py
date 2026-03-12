@@ -99,45 +99,65 @@ def main():
     print(f"🛰️  Querying MediaCloud API from {START_DATE} to {END_DATE}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
+        # 1. Cleaned Query: No single quotes, explicit double quotes for phrases
         base_query = QUERY_BY_COUNTRY.get(country)
         if not base_query: continue
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Fetch stories with explicit keywords
-                results = mc_search.story_list(
-                    query=base_query, 
-                    start_date=START_DATE.isoformat(), 
-                    end_date=END_DATE.isoformat(), 
-                    collection_ids=[actor_coll_id]
-                )
+                # 2. Pagination Logic (Crucial for 2026 API version)
+                pagination_token = None
+                batch_count = 0
                 
-                # MediaCloud API returns a list of stories directly or a tuple depending on version
-                # Let's handle both
-                stories = results[0] if isinstance(results, tuple) else results
+                while True:
+                    stories, pagination_token = mc_search.story_list(
+                        query=base_query, 
+                        start_date=START_DATE.isoformat(), 
+                        end_date=END_DATE.isoformat(), 
+                        collection_ids=[actor_coll_id],
+                        pagination_token=pagination_token
+                    )
+                    
+                    if not stories:
+                        # FALLBACK: If 0 found, try just the country name to test connection
+                        if batch_count == 0:
+                            test_stories, _ = mc_search.story_list(
+                                query=country, 
+                                start_date=START_DATE.isoformat(), 
+                                end_date=END_DATE.isoformat(), 
+                                collection_ids=[actor_coll_id]
+                            )
+                            if test_stories:
+                                print(f"  ⚠️  Complex query failed, but found {len(test_stories)} stories for '{country}' alone in {actor}.")
+                        break
+
+                    for s in stories:
+                        record = {col: None for col in db_columns}
+                        record.update({
+                            "url": s.get("url"),
+                            "posting_time": str(s.get("publish_date")),
+                            "media_outlet": s.get("media_name"),
+                            "inferred_actor": actor,
+                            "target_country": country,
+                            "lang_detect": s.get("language"),
+                            "pseudo_kept": True,
+                            "pseudo_weight": 1.0,
+                            "use_afrolm": False,
+                            "confidence": 1.0
+                        })
+                        all_records.append(record)
+                    
+                    batch_count += len(stories)
+                    if not pagination_token or batch_count > 100: # Cap batch for safety
+                        break
                 
-                if stories:
-                    print(f"  ✅ Found {len(stories)} stories for {country} in {actor} media")
+                if batch_count > 0:
+                    print(f"  ✅ Collected {batch_count} stories for {country} ({actor})")
                 
-                for s in stories:
-                    record = {col: None for col in db_columns}
-                    record.update({
-                        "url": s.get("url"),
-                        "posting_time": str(s.get("publish_date")),
-                        "media_outlet": s.get("media_name"),
-                        "inferred_actor": actor,
-                        "target_country": country,
-                        "lang_detect": s.get("language"),
-                        "pseudo_kept": True,
-                        "pseudo_weight": 1.0,
-                        "use_afrolm": False,
-                        "confidence": 1.0
-                    })
-                    all_records.append(record)
                 time.sleep(0.5) 
             except Exception as e:
                 logging.error(f"MediaCloud Error {country}-{actor}: {e}")
-
+                
     df = pd.DataFrame(all_records)
     if df.empty:
         print("\n❌ No articles found.")
