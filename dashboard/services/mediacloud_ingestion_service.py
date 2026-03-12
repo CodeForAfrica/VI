@@ -12,11 +12,16 @@ from urllib.parse import urlparse
 import os
 import django
 from django.conf import settings
+from pathlib import Path
 
-# Configure Django settings for database access
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(BASE_DIR)) 
+
+# 2. Configure Django
 if not settings.configured:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'vulnerability_index.settings') # Use your actual project name
     settings.configure(
-        DATABASES = {
+        DATABASES={
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
                 'NAME': os.getenv('DB_NAME', 'postgres'),
@@ -26,12 +31,13 @@ if not settings.configured:
                 'PORT': os.getenv('DB_PORT', '5432'),
             }
         },
-        INSTALLED_APPS=['dashboard'], # Add your app name here
+        INSTALLED_APPS=['dashboard'],
         USE_TZ=True,
     )
     django.setup()
 
 from django.db import connection
+from django.core.cache import cache
 
 # Database configuration using Django settings
 DB_USER = os.getenv('DB_USER', 'postgres')
@@ -263,7 +269,12 @@ def main():
         time.sleep(0.5)
 
     print("\nFinished. Check your database now.")
-
+    print("🧹 Cleaning dashboard cache...")
+        try:
+            cache.clear()
+            print("✅ Cache cleared successfully! Refresh your dashboard to see new data.")
+        except Exception as e:
+            print(f"⚠️  Note: Could not clear cache automatically: {e}")
 # Your original constants preserved exactly
 API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 
