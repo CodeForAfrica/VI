@@ -96,10 +96,10 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    # Updated 2026 Endpoint
-    BASE_URL = "https://search-api.mediacloud.org/api/v1/posts/search"
+    # This is the primary 2026 Search Gateway
+    BASE_URL = "https://directory.mediacloud.org/api/v3/stories/search"
     
-    print(f"🛰️  Direct API Query from {START_DATE} to {END_DATE}...")       
+    print(f"🛰️  Attempting Gateway Query at {BASE_URL}...")       
     
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
@@ -107,38 +107,46 @@ def main():
             
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # 2026 API often uses 'platform_collections' or 'collections' key
-                payload = {
-                    "query": f"({base_query})",
+                # The 2026 Gateway uses standard GET params
+                params = {
+                    "q": f"({base_query}) AND tags_id_media:{actor_coll_id}",
                     "start_date": START_DATE.isoformat(),
                     "end_date": END_DATE.isoformat(),
-                    "collections": [actor_coll_id],
-                    "limit": 100
+                    "rows": 50
                 }
                 
-                headers = {
-                    "Authorization": f"Token {API_KEY}",
-                    "Content-Type": "application/json"
-                }
+                headers = {"Authorization": f"Token {API_KEY}"}
 
-                # Using POST as many 2026 search APIs prefer complex queries in the body
-                response = requests.post(BASE_URL, json=payload, headers=headers)
+                # We add a 30s timeout to prevent the script from hanging
+                response = requests.get(BASE_URL, params=params, headers=headers, timeout=30)
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    # The key might be 'results' or 'posts' depending on the exact version
-                    stories = data.get('results', data.get('posts', []))
-                    
+                    stories = response.json().get('results', [])
                     if stories:
-                        print(f"  ✅ Found {len(stories)} stories for {country} in {actor}")
-                        # ... (existing record saving logic) ...
+                        print(f"  ✅ Found {len(stories)} stories for {country} ({actor})")
+                        for s in stories:
+                            record = {col: None for col in db_columns}
+                            record.update({
+                                "url": s.get("url"),
+                                "posting_time": str(s.get("publish_date")),
+                                "media_outlet": s.get("media_name"),
+                                "inferred_actor": actor,
+                                "target_country": country,
+                                "lang_detect": s.get("language"),
+                                "pseudo_kept": True,
+                                "confidence": 1.0
+                            })
+                            all_records.append(record)
+                    else:
+                        print(f"  🔎 0 results for {actor}")
                 else:
-                    print(f"  ❌ API Error {response.status_code} for {actor}: {response.text[:100]}")
+                    print(f"  ❌ Server Response {response.status_code}")
 
             except requests.exceptions.ConnectionError:
-                print(f"  ❌ DNS Error: Cannot resolve {BASE_URL}. Check internet or endpoint URL.")
+                # If this still fails, it's a network/DNS issue on your machine
+                print(f"  ❌ Network Error: Could not reach MediaCloud. Check your VPN or Firewall.")
             except Exception as e:
-                print(f"  ❌ Error for {actor}: {e}")
+                print(f"  ❌ Error: {e}")
                          
     df = pd.DataFrame(all_records)
     if df.empty:
