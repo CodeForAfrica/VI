@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 import mediacloud.api
 import trafilatura
 import cloudscraper
-
+import sys
 # ────────────────────────────────────────────────
 # CONFIG
 # ────────────────────────────────────────────────
