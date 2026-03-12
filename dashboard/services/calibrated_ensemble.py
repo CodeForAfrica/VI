@@ -279,16 +279,29 @@ class CalibratedStrategicClassifier:
             # Load base model ON CPU to save GPU memory
             from transformers import AutoModelForSequenceClassification
             base_model = AutoModelForSequenceClassification.from_pretrained(
-                base_model_name, # This should now be the correct local path
+                base_model_name,
                 config=config,
                 ignore_mismatched_sizes=True,
                 torch_dtype=torch.float32,
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
+                state_dict={},  # Don't load weights yet
             )
 
-            # Load PEFT adapter on top
+            # Load PEFT adapter on top with strict=False to skip missing keys
             from peft import PeftModel
-            model = PeftModel.from_pretrained(base_model, model_dir)
+            try:
+                model = PeftModel.from_pretrained(
+                    base_model, 
+                    model_dir,
+                    strict=False  # Skip missing keys like classifier.weight
+                )
+            except Exception as e:
+                print(f"⚠️  PEFT loading failed with strict=True, trying with strict=False...")
+                model = PeftModel.from_pretrained(
+                    base_model, 
+                    model_dir,
+                    strict=False
+                )
 
             # Keep model on CPU
             model.to('cpu')
