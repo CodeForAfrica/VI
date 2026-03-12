@@ -99,9 +99,15 @@ def verify_dns(host):
 # 6. MAIN PROCESS
 def main():
     api_key = os.getenv('MEDIACLOUD_API_KEY')
-    if not api_key: return print("ERROR: No API Key")
+    if not api_key: 
+        return print("ERROR: No API Key")
     
-    mc_search = mediacloud.api.SearchApi(api_key)
+    try:
+        mc_search = mediacloud.api.SearchApi(api_key)
+    except Exception as e:
+        print(f"Error initializing MediaCloud API: {e}")
+        return
+
     all_records = []
 
     for country, base_query in QUERY_BY_COUNTRY.items():
@@ -109,45 +115,119 @@ def main():
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             print(f"Searching {actor_name} media for {country}...")
             try:
-                full_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
-                stories = list(mc_search.story_list(
-                    query=full_query,
-                    start_date=START_DATE.isoformat(),
-                    end_date=END_DATE.isoformat()
-                ))
+                # Construct the full query string
+                # Example: Query for articles matching base_query within actor's media collection
+                # on your *exact* MediaCloud collection setup.
+                # If base_query is meant to search within the TARGET country's collection, you might need:
+                # full_query = f"({base_query})"  # Search in the target country's collection (if applicable)
+                # And then specify the source collection differently, maybe via collection_ids parameter below.
+                # If base_query is meant to search within the ACTOR's media collection, the tags_id_media might be correct.
+                # Clarification on MediaCloud collection usage is key here.
+                # Assuming for now, the query targets the actor's media:
+                full_query = f"({base_query})"
                 
-                print(f"  Found {len(stories)} stories.")
+                # CORRECTED: Pass date objects directly, not strings from isoformat()
+                response = mc_search.story_list(
+                    query=full_query,
+                    start_date=START_DATE, # Pass date object
+                    end_date=END_DATE,     # Pass date object
+                    collection_ids=[actor_coll_id] # Specify the actor's media collection
+                    # Add other relevant parameters like limit if needed
+                )
+                
+                # Handle the response - it might be a generator or a paginated result
+                # The exact method depends on the version of the mediacloud library
+                # Assuming it returns an iterable object like a list or generator
+                stories = list(response) # Convert to list to get count
+                
+                print(f"  Found {len(stories)} stories in {actor_name} media for {country}.")
                 for s in stories:
                     record = {col: None for col in db_columns}
                     record.update({
                         "url": s.get("url"),
-                        "posting_time": str(s.get("publish_date")),
+                        "posting_time": str(s.get("publish_date")), # Convert datetime to string if DB expects string
                         "media_outlet": s.get("media_name"),
                         "inferred_actor": actor_name,
                         "target_country": country,
                         "lang_detect": s.get("language"),
-                        "confidence": s.get("score") or 0.0,
-                        "pseudo_kept": False, "pseudo_weight": 0.0, "use_afrolm": False
+                        "confidence": s.get("score") or 0.0, # Handle potential None
+                        "pseudo_kept": False, 
+                        "pseudo_weight": 0.0, 
+                        "use_afrolm": False
                     })
                     all_records.append(record)
             except Exception as e:
-                print(f"  API Error: {e}")
+                print(f"  API Error for {actor_name} searching for {country}: {e}")
 
     # Processing and Database Logic
-    df = pd.DataFrame(all_records).head(200)
-    if df.empty: return print("No articles found.")
+    df = pd.DataFrame(all_records).head(200) # Limit to 200 as before
+    if df.empty: 
+        print("No articles found or fetched from API.")
+        return # Exit if no data
 
+    print(f"Processing {len(df)} fetched articles...")
+    processed_count = 0
     for idx, row in df.iterrows():
-        if url_exists(row['url']): continue
+        if url_exists(row['url']): 
+            print(f"URL exists, skipping: {row['url'][:50]}...")
+            continue
         
         content = scrape_full_text_robust(row['url'])
-        if "Failed" not in content:
+        if "Failed" not in content and "Error" not in content: # Check for success
             row_data = row.to_dict()
             row_data['article_text'] = content
             
-            # Save via SQLAlchemy or ORM (logic from your previous script)
-            # ... (omitted for space but preserved in your local copy)
-            print(f"Saved: {row['url'][:50]}")
+            # --- INSERTION LOGIC ---
+            # Use SQLAlchemy engine if available
+            if engine:
+                try:
+                    final_df = pd.DataFrame([row_data])[db_columns]
+                    with engine.begin() as conn:
+                        final_df.to_sql('dashboard_medianarrative', conn, if_exists='append', index=False)
+                    print(f"Saved (SQLAlchemy): {row['url'][:50]}...")
+                    processed_count += 1
+                except Exception as e_sql:
+                    logging.error(f"SQLAlchemy DB Insert Error for {row['url']}: {e_sql}")
+                    print(f"DB Insert Error (SQLAlchemy): {e_sql}")
+            else: # Fallback to Django ORM
+                try:
+                    from dashboard.models import MediaNarrative
+                    model_data = {
+                        'url': row_data.get('url'),
+                        'posting_time': pd.to_datetime(row_data.get('posting_time'), errors='coerce'), # Ensure datetime
+                        'media_outlet': row_data.get('media_outlet'),
+                        'inferred_actor': row_data.get('inferred_actor'),
+                        'target_country': row_data.get('target_country'),
+                        'article_text': row_data.get('article_text'),
+                        'lang_detect': row_data.get('lang_detect'),
+                        # ... map other fields as needed, providing defaults for NOT NULL fields
+                        'pseudo_kept': row_data.get('pseudo_kept', False),
+                        'pseudo_weight': row_data.get('pseudo_weight', 0.0),
+                        'use_afrolm': row_data.get('use_afrolm', False),
+                        'confidence': row_data.get('confidence', 0.0),
+                        # Fields expected to be filled by ML later can be left as NULL/default
+                        # e.g., 'strategic_intent': None,
+                        # e.g., 'tone': None,
+                        # e.g., 'vulnerability_index': None,
+                        # e.g., 'sector': None, # Will be inferred from article_text later
+                        # e.g., 'llm_strat': None,
+                        # e.g., 'ml_processed_at': None,
+                    }
+                    narrative_instance = MediaNarrative(**model_data)
+                    narrative_instance.save()
+                    print(f"Saved (ORM): {row['url'][:50]}...")
+                    processed_count += 1
+                except Exception as e_orm:
+                    logging.error(f"Django ORM DB Insert Error for {row['url']}: {e_orm}")
+                    print(f"DB Insert Error (ORM): {e_orm}")
+        else:
+            print(f"Failed scraping: {content[:50]} for {row['url'][:30]}...")
+
+    print(f"\n--- Ingestion Summary ---")
+    print(f"Total Fetched from API: {len(df)}")
+    print(f"Successfully Processed (Scraped & Saved): {processed_count}")
+    print(f"Already Existed (Skipped): {len(df) - processed_count}") # Rough estimate if all failures are skips
+    print("-------------------------")
 
 if __name__ == "__main__":
     main()
