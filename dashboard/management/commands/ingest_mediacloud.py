@@ -23,12 +23,10 @@ if project_root not in sys.path:
 # 2. DATA DICTIONARIES (Moved to Top for Scope)
 ACTOR_COLLECTION_IDS = {
     "USA": 34412234, "France": 34412146, "China": 34412193,
-    "Russia": 34412232, "Turkey": 34412131, "Saudi Arabia": 34412050,
-    "Israel": 34412391, "Iran": 34412284, "UAE": 34412114,
+    "Russia": 34412232, "Turkey": 34412131, "Saudi Arabia": 34412050412391, "Iran": 34412284, "UAE": 34412114,
 }
 
-TARGET_COLLECTION_IDS = {
-    "Ethiopia": 34412034, "Senegal": 38380807, "DRC": 34412042,
+TARGET_COLLECTION_IDS =iopia": 34412034, "Senegal": 38380807, "DRC": 34412042,
     "South Africa": 34412238, "Côte d'Ivoire": 34412173,
 }
 
@@ -36,11 +34,11 @@ START_DATE = date(2026, 1, 1)
 END_DATE   = date(2026, 3, 11)
 
 QUERY_BY_COUNTRY = {
-    "Ethiopia": "(infrastructure project OR debt relief OR railway OR industrial park)", # Shortened for brevity
-    "Senegal": "(multipartisme OR élection) AND (Senegal OR Dakar)",
-    "DRC": "(élection OR présidentielle) AND (RDC OR Kinshasa)",
-    "Côte d'Ivoire": "(élection OR présidentielle) AND (Abidjan OR Ouattara)",
-    "South Africa": "(ANC OR Ramaphosa) AND (trade OR investment)"
+    "Ethiopia": r'(("infrastructure project" OR "debt relief" OR "railway" OR "industrial park" OR "investment" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease cooperation" OR "mosque" OR "church" OR "religious diplomacy" OR "propaganda" OR "disinformation" OR "social media campaign" OR "broadcast in Amharic") OR ("ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ " OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ"))',
+    "Senegal": r'(("multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Senegal" OR "Senegalais" OR "Dakar" OR "Diamniadio" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue")) OR (("tàmbali" OR "jàngoro" OR "politique" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo"OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan") AND ("Senegaal"))',
+    "DRC": r'(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("République démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi")) OR (("bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "5G" OR "Huawei" OR "IA" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya") AND ("RDC"))',
+    "Côte d'Ivoire": r'(("élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite") AND ("Côte d\'Ivoire" OR "Cote d\'Ivoire" OR "Cote d'Ivoire" OR "Ivory Coast" OR "Abidjan" OR "Yamoussoukro" OR "Alassane Ouattara" OR "Laurent Gbagbo" OR "Henri Konan Bédié" OR "Robert Daudelin" OR "Emmanuel Etiennette" OR "Marcel Amon Tanoh" OR "Kandia Camara" OR "Amadou Gon Coulibaly" OR "Hamed Bakayoko" OR "Adama Bictogo" OR "Charles Blé Goudé")) OR (("baoulé" OR "baoule" OR "dioula" OR "dyula" OR "senufo" OR "lobi" OR "loby" OR "lobyi" OR "lobyie" OR "lobyien" OR "lobyienne" OR "lobyiens" OR "lobyienes" OR "lobyien(ne)" OR "lobyien(ne)s" OR "lobyien.ne" OR "lobyien.ne.s" OR "lobyien.ne.s." OR "lobyien.ne.s.." OR "lobyien.ne.s...") AND ("Côte d\'Ivoire"))', # Example for Cote d'Ivoire, expand as needed
+    "South Africa": r'(("South Africa" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS") AND ("trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism" OR "propaganda" OR "disinformation" OR "5G" OR "Huawei" OR "AI" OR "vaccine")) OR (("iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS") AND ("uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo"))' # Example for SA, expand as needed
 }
 
 db_columns = [
@@ -96,7 +94,7 @@ def verify_dns(host):
         return True
     except: return False
 
-# 6. MAIN PROCESS
+# 6. MAIN PROCESS - CORRECTED VERSION
 def main():
     api_key = os.getenv('MEDIACLOUD_API_KEY')
     if not api_key: 
@@ -116,18 +114,12 @@ def main():
             print(f"Searching {actor_name} media for {country}...")
             try:
                 # Construct the full query string
-                # Example: Query for articles matching base_query within actor's media collection
-                # on your *exact* MediaCloud collection setup.
-                # If base_query is meant to search within the TARGET country's collection, you might need:
-                # full_query = f"({base_query})"  # Search in the target country's collection (if applicable)
-                # And then specify the source collection differently, maybe via collection_ids parameter below.
-                # If base_query is meant to search within the ACTOR's media collection, the tags_id_media might be correct.
-                # Clarification on MediaCloud collection usage is key here.
-                # Assuming for now, the query targets the actor's media:
+                # Searching within the actor's collection for target country terms
                 full_query = f"({base_query})"
-                
-                # CORRECTED: Pass date objects directly, not strings from isoformat()
-                response = mc_search.story_list(
+
+                # CORRECTED: mc_search.story_list returns (stories_list, total_count)
+                # Pass date objects directly
+                stories_list, total_count_from_api = mc_search.story_list(
                     query=full_query,
                     start_date=START_DATE, # Pass date object
                     end_date=END_DATE,     # Pass date object
@@ -135,22 +127,19 @@ def main():
                     # Add other relevant parameters like limit if needed
                 )
                 
-                # Handle the response - it might be a generator or a paginated result
-                # The exact method depends on the version of the mediacloud library
-                # Assuming it returns an iterable object like a list or generator
-                stories = list(response) # Convert to list to get count
-                
-                print(f"  Found {len(stories)} stories in {actor_name} media for {country}.")
-                for s in stories:
+                # 'stories_list' should now be a list of dictionaries
+                print(f"  Found {len(stories_list)} stories in {actor_name} media for {country} (API reported total: {total_count_from_api}).")
+                for story_dict in stories_list: # Iterate over the list of story dicts
+                    # 'story_dict' should be a dictionary like {'url': '...', 'publish_date': ..., ...}
                     record = {col: None for col in db_columns}
                     record.update({
-                        "url": s.get("url"),
-                        "posting_time": str(s.get("publish_date")), # Convert datetime to string if DB expects string
-                        "media_outlet": s.get("media_name"),
+                        "url": story_dict.get("url"),
+                        "posting_time": str(story_dict.get("publish_date")), # Convert datetime to string if DB expects string
+                        "media_outlet": story_dict.get("media_name"),
                         "inferred_actor": actor_name,
                         "target_country": country,
-                        "lang_detect": s.get("language"),
-                        "confidence": s.get("score") or 0.0, # Handle potential None
+                        "lang_detect": story_dict.get("language"),
+                        "confidence": story_dict.get("score") or 0.0, # Handle potential None
                         "pseudo_kept": False, 
                         "pseudo_weight": 0.0, 
                         "use_afrolm": False
@@ -158,6 +147,7 @@ def main():
                     all_records.append(record)
             except Exception as e:
                 print(f"  API Error for {actor_name} searching for {country}: {e}")
+                print(f"    Exception Type: {type(e).__name__}") # Added for debugging
 
     # Processing and Database Logic
     df = pd.DataFrame(all_records).head(200) # Limit to 200 as before
