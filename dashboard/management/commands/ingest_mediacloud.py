@@ -173,13 +173,16 @@ def main():
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             print(f"  Searching {actor_name} media ({actor_coll_id}) about {country}...")
             try:
-                # Library call - no manual endpoints!
-                stories, count = mc_search.story_list(
-                    query=base_query,
-                    start_date=START_DATE,
-                    end_date=END_DATE,
-                    collection_ids=[actor_coll_id]
-                )
+                # v4 syntax: Combine query and collection ID
+                full_query = f"({base_query}) AND tags_id_media:{actor_coll_id}"
+                
+                # Fetch stories as a list
+                stories = list(mc_search.story_list(
+                    query=full_query,
+                    start_date=START_DATE.isoformat(),
+                    end_date=END_DATE.isoformat()
+                ))
+                
                 print(f"    Found {len(stories)} stories.")
                 
                 for s in stories:
