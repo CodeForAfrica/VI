@@ -77,24 +77,39 @@ def url_exists(url):
         return False
 
 def scrape_full_text_robust(url):
-    """Scrape full text with multiple fallback methods"""
+    """Scrape full text with stealth headers to bypass blocks like Reuters"""
+    # Stealth headers to mimic a real browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://www.google.com/'
+    }
+    
     try:
-        # Method 1: Trafilatura (most reliable)
+        # Method 1: Trafilatura (using internal fetch)
         downloaded = trafilatura.fetch_url(url)
         if downloaded:
             text_content = trafilatura.extract(downloaded)
             if text_content and len(text_content.strip()) > 100:
                 return text_content.strip()
         
-        # Method 2: CloudScraper as backup
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(url, timeout=15)
+        # Method 2: CloudScraper (FIXED: Added headers and browser config)
+        # Setting browser config helps CloudScraper solve JavaScript challenges better
+        scraper = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
+        )
+        
+        # We pass the headers here so Reuters sees a real browser
+        response = scraper.get(url, headers=headers, timeout=15)
+        
         if response.status_code == 200:
             text_content = trafilatura.extract(response.text)
-            if text_content:
+            if text_content and len(text_content.strip()) > 100:
                 return text_content.strip()
         
-        return f"Failed to scrape content from {url}"
+        return f"Failed to scrape content from {url} (Status: {response.status_code})"
+        
     except Exception as e:
         return f"Error scraping {url}: {str(e)}"
 
