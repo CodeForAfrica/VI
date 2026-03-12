@@ -113,6 +113,7 @@ def main():
                     "start_date": START_DATE.isoformat(),
                     "end_date": END_DATE.isoformat(),
                     "rows": 50
+                    "api_key": API_KEY
                 }
                 
                 headers = {"Authorization": f"Token {API_KEY}"}
