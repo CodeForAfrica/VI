@@ -171,7 +171,7 @@ class CalibratedStrategicClassifier:
     @classmethod
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
-    
+        from django.core.cache import cache
         
         # CLEAR CACHE IMMEDIATELY AS REQUESTED
         cache.clear()
