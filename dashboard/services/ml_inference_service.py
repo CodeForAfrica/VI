@@ -60,9 +60,12 @@ class MLInferenceService:
         self._tone_label_encoder = None
         self._strategic_vocab = None
 
-        # ✅ Add persistent cache directory
+        # ✅ Add persistent cache directory (this is the old one, might become secondary)
         self.model_cache_dir = Path(settings.BASE_DIR) / 'model_cache'
         self.model_cache_dir.mkdir(exist_ok=True)
+
+        # ✅ NEW: Add the specific directory where the archive was extracted
+        self.local_models_dir = Path("/home/ubuntu/Vulnerability_index_tool/app/models/model_cache")
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
@@ -83,7 +86,7 @@ class MLInferenceService:
             fallback_path = os.path.join(os.path.dirname(settings.BASE_DIR), csv_filename)
             if os.path.exists(fallback_path):
                 df = pd.read_csv(fallback_path)
-                logger.info(f"✅ Loaded CSV risk data from fallback path: {fallback_path}")
+                logger.info(f"✅ from fallback path: {fallback_path}")
                 return df
 
             logger.warning(f"⚠️ CSV risk file not found. Looked in: {path} and {fallback_path}")
@@ -160,10 +163,10 @@ class MLInferenceService:
             return False
             
     def _load_from_persistent_cache(self, model_type):
-        """Load model from persistent cache directory"""
+        """Load model from persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
         if cache_path.exists():
-            print(f"✅ Loading {model_type} model from persistent cache: {cache_path}")
+            print(f"✅ Loading {model_type} model from OLD persistent cache: {cache_path}")
             
             if model_type == 'strategic':
                 # Load strategic classifier from cache
@@ -177,7 +180,7 @@ class MLInferenceService:
                     with open(label_enc_path, 'rb') as f:
                         self._strategic_label_encoder = pickle.load(f)
                 
-                print(f"✅ Strategic classifier loaded from cache!")
+                print(f"✅ Strategic classifier loaded from OLD cache!")
                 return True
             
             elif model_type == 'tone':
@@ -195,13 +198,74 @@ class MLInferenceService:
                     self._tone_label_encoder = LabelEncoder()
                     self._tone_label_encoder.classes_ = np.array(label_info['classes'])
                 
-                print(f"✅ Tone classifier loaded from cache!")
+                print(f"✅ Tone classifier loaded from OLD cache!")
                 return True
         
         return False
 
+    def _load_from_local_archive_cache(self, model_type):
+        """Load model from the specific archive cache directory (NEW CACHE PATH)"""
+        # Define the expected path based on model type within the archive cache
+        if model_type == 'strategic':
+            # Assume the strategic model components (adapters, label encoder) are in a subdirectory
+            # e.g., /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/calibrated_contrastive_peft/
+            # This path should match where the archive was extracted
+            archive_model_path = self.local_models_dir / 'calibrated_contrastive_peft'
+        elif model_type == 'tone':
+            # Assume the tone model components are in a subdirectory
+            # e.g., /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/calibrated_stacked_ensemble/
+            archive_model_path = self.local_models_dir / 'calibrated_stacked_ensemble'
+        else:
+            return False # Unsupported model type for this cache
+
+        if archive_model_path.exists():
+            print(f"✅ Loading {model_type} model from ARCHIVE cache: {archive_model_path}")
+            
+            try:
+                if model_type == 'strategic':
+                    # Load strategic classifier from the archive path
+                    from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+                    classifier = CalibratedStrategicClassifier.load(str(archive_model_path))
+                    self._model_cache['strategic'] = classifier
+                    
+                    # Load label encoder - assume it's in the archive model path
+                    label_enc_path = archive_model_path / 'label_encoder.pkl'
+                    if label_enc_path.exists():
+                        with open(label_enc_path, 'rb') as f:
+                            self._strategic_label_encoder = pickle.load(f)
+                    
+                    print(f"✅ Strategic classifier loaded from ARCHIVE cache!")
+                    return True
+                
+                elif model_type == 'tone':
+                    # Load tone classifier from the archive path
+                    from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
+                    classifier = CalibratedStackedEnsemble.load(str(archive_model_path))
+                    self._model_cache['tone'] = classifier
+                    
+                    # Load label encoder info - assume it's in the archive model path
+                    label_enc_path = archive_model_path / 'label_info.json'
+                    if label_enc_path.exists():
+                        with open(label_enc_path, 'r') as f:
+                            label_info = json.load(f)
+                        from sklearn.preprocessing import LabelEncoder
+                        self._tone_label_encoder = LabelEncoder()
+                        self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                    
+                    print(f"✅ Tone classifier loaded from ARCHIVE cache!")
+                    return True
+            except Exception as e:
+                print(f"❌ Error loading {model_type} model from ARCHIVE cache: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+        else:
+            print(f"⚠️ Archive cache path does not exist: {archive_model_path}")
+        
+        return False # Model not found in archive cache
+
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
-        """Save model to persistent cache directory"""
+        """Save model to persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
         cache_path.mkdir(parents=True, exist_ok=True)
         
@@ -215,7 +279,7 @@ class MLInferenceService:
                 with open(label_enc_path, 'wb') as f:
                     pickle.dump(self._strategic_label_encoder, f)
             
-            print(f"✅ Saved strategic model to persistent cache: {cache_path}")
+            print(f"✅ Saved strategic model to OLD persistent cache: {cache_path}")
         
         elif model_type == 'tone':
             # Save classifier to cache
@@ -230,10 +294,10 @@ class MLInferenceService:
                 with open(label_enc_path, 'w') as f:
                     json.dump(label_info, f)
             
-            print(f"✅ Saved tone model to persistent cache: {cache_path}")
+            print(f"✅ Saved tone model to OLD persistent cache: {cache_path}")
     
     def _load_strategic_classifier(self):
-        """Load calibrated strategic classifier from persistent cache or S3"""
+        """Load calibrated strategic classifier from caches or S3"""
         print(f"_load_strategic_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         
         # ✅ CRITICAL: Check in-memory cache FIRST
@@ -241,13 +305,18 @@ class MLInferenceService:
             print("   ✅ Found strategic model in memory cache, returning.")
             return self._model_cache['strategic']
         
-        # ✅ Check persistent cache (model_cache/) FIRST
-        if self._load_from_persistent_cache('strategic'):
-            print("   ✅ Found strategic model in persistent cache, returning.")
+        # ✅ NEW: Check ARCHIVE cache FIRST (Priority 1)
+        if self._load_from_local_archive_cache('strategic'):
+            print("   ✅ Found strategic model in ARCHIVE cache, returning.")
             return self._model_cache['strategic']
         
-        # If neither cache exists, proceed with S3 download as fallback
-        print(f"⚠️  Strategic model not in cache, attempting S3 download...")
+        # ✅ Check OLD persistent cache NEXT (Priority 2)
+        if self._load_from_persistent_cache('strategic'):
+            print("   ✅ Found strategic model in OLD persistent cache, returning.")
+            return self._model_cache['strategic']
+        
+        # If neither cache exists, proceed with S3 download as fallback (Priority 3)
+        print(f"⚠️  Strategic model not in any local cache, attempting S3 download...")
         temp_dir = tempfile.mkdtemp(prefix='strategic_model_')
         self._temp_dirs.add(temp_dir)
     
@@ -312,7 +381,7 @@ class MLInferenceService:
                     self._strategic_label_encoder = pickle.load(f)
             
             print(f"✅ Strategic classifier loaded!")
-            # ✅ Save to persistent cache
+            # ✅ Save to OLD persistent cache (as a fallback for future runs if archive cache is moved)
             self._save_to_persistent_cache('strategic', classifier)
             return classifier
         except Exception as e:
@@ -323,22 +392,27 @@ class MLInferenceService:
             return None
         
     def _load_tone_classifier(self):
-        """Load calibrated tone classifier from S3 or local path"""
+        """Load calibrated tone classifier from caches or S3"""
         print(f"_load_tone_classifier called. Cache keys: {list(self._model_cache.keys())}") 
         # ✅ Check cache first - return immediately if cached
         if 'tone' in self._model_cache:
             print("✅ Using cached tone classifier")
             return self._model_cache['tone']
 
-        # ✅ Check persistent cache first
+        # ✅ NEW: Check ARCHIVE cache FIRST (Priority 1)
+        if self._load_from_local_archive_cache('tone'):
+            print("   ✅ Found tone model in ARCHIVE cache, returning.")
+            return self._model_cache['tone']
+
+        # ✅ Check OLD persistent cache NEXT (Priority 2)
         if self._load_from_persistent_cache('tone'):
-            print("   Found tone model in persistent cache, returning.")
+            print("   Found tone model in OLD persistent cache, returning.")
             return self._model_cache['tone']
         
-        # ✅ NEW: Check if tone model exists in the known local directory before attempting S3 download
+        # ✅ Check if tone model exists in the KNOWN LOCAL PATH (Priority 3 - existing check)
         KNOWN_TONE_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_stacked_ensemble"
         if os.path.exists(KNOWN_TONE_MODEL_PATH):
-            print(f"✅ Loading tone classifier from local path: {KNOWN_TONE_MODEL_PATH}")
+            print(f"✅ Loading tone classifier from KNOWN LOCAL PATH: {KNOWN_TONE_MODEL_PATH}")
             
             # Load the classifier
             from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
@@ -355,14 +429,14 @@ class MLInferenceService:
                 self._tone_label_encoder.classes_ = np.array(label_info['classes'])
                 print(f"✅ Tone classifier loaded with labels: {label_info['classes']}")
             
-            print(f"✅ SUCCESS: Tone classifier loaded from local path!")
-            # ✅ Save to persistent cache
+            print(f"✅ SUCCESS: Tone classifier loaded from KNOWN LOCAL PATH!")
+            # ✅ Save to OLD persistent cache (as a fallback for future runs if archive cache is moved)
             self._save_to_persistent_cache('tone', classifier)
             return classifier
         else:
             print(f"⚠️  Local tone model not found at {KNOWN_TONE_MODEL_PATH}, attempting S3 download...")
         
-        # If local path doesn't exist, proceed with S3 download as fallback
+        # If local path doesn't exist, proceed with S3 download as fallback (Priority 4)
         temp_dir = tempfile.mkdtemp(prefix='tone_model_')
         self._temp_dirs.add(temp_dir)
         
@@ -397,7 +471,7 @@ class MLInferenceService:
                     print(f"✅ Tone classifier loaded with labels: {label_info['classes']}")
                 
                 print(f"✅ SUCCESS: Tone classifier ready!")
-                # ✅ Save to persistent cache
+                # ✅ Save to OLD persistent cache (as a fallback for future runs if archive cache is moved)
                 self._save_to_persistent_cache('tone', classifier)
                 return classifier
 
@@ -545,10 +619,7 @@ class MLInferenceService:
             # Rwanda
             'rwandan': 'Rwanda',
             'rwanda': 'Rwanda',
-            'new times': 'Rwanda',
-        }
-        
-        # Check for partial matches
+            'new times': 'Rwanda        # Check for partial matches
         for media_name, actor in media_actor_mapping.items():
             if media_name in media_outlet_lower:
                 return actor
@@ -661,7 +732,7 @@ class MLInferenceService:
                 logger.warning("Tone classifier not available, returning neutral")
                 return 'neutral', 0.3
                 
-            probs = classifier.predict_proba([article_text], calibrated=True, batch_size=1)
+            probs = classifier.predict_proba([article_text],_size=1)
             pred_idx = np.argmax(probs[0])
             if self._tone_label_encoder:
                 pred_label = self._tone_label_encoder.inverse_transform([pred_idx])[0]
@@ -762,8 +833,7 @@ class MLInferenceService:
                 "sovereignty erosion": "Sovereignty",
                 "sovereignty threat": "Sovereignty",
                 "lgbtq rights": "LGBTQ",
-                "lgbt advocacy": "LGBTQ",
-                "religious influence": "Religious",
+                "lgbt advocacy": "LGBTreligious influence": "Religious",
                 "religious polarisation": "Religious",
                 "election influence": "ElectionInfluence", 
                 "election interference": "ElectionInfluence",
