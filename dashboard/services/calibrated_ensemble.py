@@ -218,18 +218,18 @@ class CalibratedStrategicClassifier:
         # Load models ONE AT A TIME and keep them on CPU
         models = []
         tokenizers = []
-
+        
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
-
+        
             # Load tokenizer from LOCAL directory
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
-
-            # Get PEFT config
+        
+            # Get PEFT config (might be needed in the try block too, or always for fallback)
             from peft import PeftConfig
-            peft_config = PeftConfig.from_pretrained(model_dir)
-
+            # peft_config = PeftConfig.from_pretrained(model_dir) # Don't load here if it's only for fallback
+        
             # Download base model from Hugging Face Hub if local path doesn't exist
             KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
             expected_base_model_dir_name = 'microsoft_mdeberta-v3-base'
@@ -249,7 +249,7 @@ class CalibratedStrategicClassifier:
                 base_model_name,
                 num_labels=num_labels
             )
-
+        
             # Load base model ON CPU to save GPU memory
             from transformers import AutoModelForSequenceClassification
             base_model = AutoModelForSequenceClassification.from_pretrained(
@@ -259,7 +259,7 @@ class CalibratedStrategicClassifier:
                 torch_dtype=torch.float32,
                 low_cpu_mem_usage=True,
             )
-
+        
             #  Proper PEFT loading with state dict filtering
             # Load PEFT adapter with proper safetensors handling
             from peft import PeftModel
@@ -272,15 +272,12 @@ class CalibratedStrategicClassifier:
                     model_dir,
                     is_trainable=False
                 )
-            except KeyError as e:
-                print(f"⚠️  PEFT loading failed with KeyError: {e}")
-                print("  Using state dict filtering fallback...")
-                
-            except KeyError as e:
+                print(f"  ✅ Model {i+1} loaded via standard PEFT loading.")
+            except KeyError as e: # <-- SINGLE except block for KeyError
                 print(f"⚠️  PEFT loading failed with KeyError: {e}")
                 print("  Using state dict filtering fallback...")
             
-                # Load PEFT configuration explicitly
+                # Load PEFT configuration explicitly (inside the except block)
                 from peft import PeftConfig
                 peft_config = PeftConfig.from_pretrained(model_dir) # Load config from the adapter directory
             
@@ -303,17 +300,18 @@ class CalibratedStrategicClassifier:
                 # Wrap the base model with the loaded PEFT config
                 # This is the corrected line: pass the config object, not the string path
                 model = PeftModel(base_model, peft_config)
+                print(f"  ✅ Model {i+1} loaded via state dict filtering fallback.")
             # Keep model on CPU
             model.to('cpu')
             model.eval()
-
+        
             models.append(model)
             tokenizers.append(tokenizer)
-
+        
             # Clear cache after each model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
+        
         print()  # New line after progress
 
         # Create ensemble (models stay on CPU)
