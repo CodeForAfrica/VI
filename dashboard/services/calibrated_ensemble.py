@@ -231,6 +231,7 @@ class CalibratedStrategicClassifier:
             raise FileNotFoundError(f"Required base model {expected_base_model_dir_name} not found.")
 
         # 2. Load the "Template" Base Model once
+        from transformers import AutoConfig
         config = AutoConfig.from_pretrained(base_model_name, num_labels=num_labels)
         shared_base_model = AutoModelForSequenceClassification.from_pretrained(
             base_model_name,
