@@ -178,6 +178,9 @@ class CalibratedStrategicClassifier:
         from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
         from peft import PeftConfig, PeftModel
         print(f"\n:heavy_check_mark: Loading calibrated ensemble from {save_dir}")
+        # Clear GPU memory before loading
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         # Load metadata
         with open(os.path.join(save_dir, 'ensemble_info.json'), 'r') as f:
             info = json.load(f)
@@ -189,8 +192,8 @@ class CalibratedStrategicClassifier:
         num_labels = len(label_encoder.classes_)
         models, tokenizers = [], []
         for i in range(info['num_models']):
-            model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
+            model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             # 1. Load tokenizer from adapter directory
             tokenizer = AutoTokenizer.from_pretrained(model_dir)
             # 2. Get base model name from adapter config
@@ -215,19 +218,26 @@ class CalibratedStrategicClassifier:
             model.eval()
             models.append(model)
             tokenizers.append(tokenizer)
-            # Optional: clear GPU cache after each model
+            # Clear cache after each model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         print()  # new line after progress
         # Create ensemble (models stay on CPU)
-        from your_ensemble_class import StrategicEnsemble  # adjust import as needed
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
         # Load calibrator (if present)
         calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
         if os.path.exists(calibrator_path):
             with open(calibrator_path, 'rb') as f:
-                calibrator = pickle.load(f)
+                save_dict = pickle.load(f)
+                # Reconstruct calibrator (handles HybridCalibrator, VennAbers, etc.)
+                if isinstance(save_dict, dict) and 'method' in save_dict:
+                    calibrator = HybridCalibrator()
+                    calibrator.method = save_dict['method']
+                    calibrator.calibrator = save_dict['calibrator']
+                    calibrator.calibrated = save_dict.get('calibrated', True)
+                else:
+                    calibrator = save_dict  # direct instance
             print(":white_check_mark: Calibrator loaded")
         print(":white_check_mark: Ensemble loaded successfully")
         return cls(ensemble, calibrator)
