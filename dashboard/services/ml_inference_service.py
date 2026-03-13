@@ -207,62 +207,62 @@ class MLInferenceService:
         """Load model from the specific archive cache directory (NEW CACHE PATH)"""
         # Define the expected path based on model type within the archive cache
         if model_type == 'strategic':
-        # The strategic model components (adapters, label encoder) should be in:
-        # /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/strategic_model/
-        archive_model_path = self.local_models_dir / 'strategic_model'
-    elif model_type == 'tone':
-        # The tone model components should be in:
-        # /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/tone_model/
-        archive_model_path = self.local_models_dir / 'tone_model'
-    else:
-        print(f"⚠️ Unsupported model type for archive cache: {model_type}")
-        return False # Unsupported model type for this cache
-
-    if archive_model_path.exists():
-        print(f"✅ Loading {model_type} model from ARCHIVE cache: {archive_model_path}")
-        
-        try:
-            if model_type == 'strategic':
-                # Load strategic classifier from the archive path
-                from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
-                classifier = CalibratedStrategicClassifier.load(str(archive_model_path))
-                self._model_cache['strategic'] = classifier
-                
-                # Load label encoder - assume it's in the archive model path
-                label_enc_path = archive_model_path / 'label_encoder.pkl'
-                if label_enc_path.exists():
-                    with open(label_enc_path, 'rb') as f:
-                        self._strategic_label_encoder = pickle.load(f)
-                
-                print(f"✅ Strategic classifier loaded from ARCHIVE cache!")
-                return True
-            
-            elif model_type == 'tone':
-                # Load tone classifier from the archive path
-                from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
-                classifier = CalibratedStackedEnsemble.load(str(archive_model_path))
-                self._model_cache['tone'] = classifier
-                
-                # Load label encoder info - assume it's in the archive model path
-                label_enc_path = archive_model_path / 'label_info.json'
-                if label_enc_path.exists():
-                    with open(label_enc_path, 'r') as f:
-                        label_info = json.load(f)
-                    from sklearn.preprocessing import LabelEncoder
-                    self._tone_label_encoder = LabelEncoder()
-                    self._tone_label_encoder.classes_ = np.array(label_info['classes'])
-                
-                print(f"✅ Tone classifier loaded from ARCHIVE cache!")
-                return True
-        except Exception as e:
-            print(f"❌ Error loading {model_type} model from ARCHIVE cache: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    else:
-        print(f"⚠️ Archive cache path does not exist: {archive_model_path}")
+            # The strategic model components (adapters, label encoder) should be in:
+            # /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/strategic_model/
+            archive_model_path = self.local_models_dir / 'strategic_model'
+        elif model_type == 'tone':
+            # The tone model components should be in:
+            # /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/tone_model/
+            archive_model_path = self.local_models_dir / 'tone_model'
+        else:
+            print(f"⚠️ Unsupported model type for archive cache: {model_type}")
+            return False # Unsupported model type for this cache
     
-    return False # Model not found in archive cache
+        if archive_model_path.exists():
+            print(f"✅ Loading {model_type} model from ARCHIVE cache: {archive_model_path}")
+            
+            try:
+                if model_type == 'strategic':
+                    # Load strategic classifier from the archive path
+                    from dashboard.services.calibrated_ensemble import CalibratedStrategicClassifier
+                    classifier = CalibratedStrategicClassifier.load(str(archive_model_path))
+                    self._model_cache['strategic'] = classifier
+                    
+                    # Load label encoder - assume it's in the archive model path
+                    label_enc_path = archive_model_path / 'label_encoder.pkl'
+                    if label_enc_path.exists():
+                        with open(label_enc_path, 'rb') as f:
+                            self._strategic_label_encoder = pickle.load(f)
+                    
+                    print(f"✅ Strategic classifier loaded from ARCHIVE cache!")
+                    return True
+                
+                elif model_type == 'tone':
+                    # Load tone classifier from the archive path
+                    from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
+                    classifier = CalibratedStackedEnsemble.load(str(archive_model_path))
+                    self._model_cache['tone'] = classifier
+                    
+                    # Load label encoder info - assume it's in the archive model path
+                    label_enc_path = archive_model_path / 'label_info.json'
+                    if label_enc_path.exists():
+                        with open(label_enc_path, 'r') as f:
+                            label_info = json.load(f)
+                        from sklearn.preprocessing import LabelEncoder
+                        self._tone_label_encoder = LabelEncoder()
+                        self._tone_label_encoder.classes_ = np.array(label_info['classes'])
+                    
+                    print(f"✅ Tone classifier loaded from ARCHIVE cache!")
+                    return True
+            except Exception as e:
+                print(f"❌ Error loading {model_type} model from ARCHIVE cache: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+        else:
+            print(f"⚠️ Archive cache path does not exist: {archive_model_path}")
+        
+        return False # Model not found in archive cache
     
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
