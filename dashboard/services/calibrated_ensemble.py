@@ -257,48 +257,43 @@ class CalibratedStrategicClassifier:
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
-
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
 
             from peft import PeftModel, PeftConfig
-            from safetensors.torch import load_file
             import copy
 
+            # --- THE FIX: Create a fresh copy of the base for each ensemble member ---
+            # This prevents "Multiple Adapters" warnings and head-mismatch errors
+            base_model_for_this_adapter = copy.deepcopy(shared_base_model)
+
             try:
-                # Use standard PEFT loading with the shared instance
+                # Attach adapter to the FRESH copy
                 model = PeftModel.from_pretrained(
-                    shared_base_model,
+                    base_model_for_this_adapter,
                     model_dir,
                     is_trainable=False
                 )
-                print(f"  ✅ Model {i+1} loaded via standard PEFT loading.")
+                print(f"  ✅ Model {i+1} adapter attached successfully.")
             except Exception as e:
-                print(f"⚠️  PEFT loading failed for model {i}: {e}. Trying fallback...")
-                
-                # Fallback logic using deepcopy to avoid in-place corruption of shared base
+                print(f"⚠️  PEFT loading failed for model {i+1}: {e}. Trying fallback...")
+                # Fallback: manually inject weights if standard loading fails
+                from safetensors.torch import load_file
                 adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
                 adapter_state_dict = load_file(adapter_path)
-                model_state_dict = shared_base_model.state_dict()
-
-                filtered_state_dict = {
-                    k: v for k, v in adapter_state_dict.items()
-                    if k in model_state_dict
-                }
-
-                base_model_for_this_adapter = copy.deepcopy(shared_base_model)
+                
+                # Filter and load
+                model_state_dict = base_model_for_this_adapter.state_dict()
+                filtered_state_dict = {k: v for k, v in adapter_state_dict.items() if k in model_state_dict}
                 base_model_for_this_adapter.load_state_dict(filtered_state_dict, strict=False)
                 
                 peft_config = PeftConfig.from_pretrained(model_dir)
                 model = PeftModel(base_model_for_this_adapter, peft_config)
-                print(f"  ✅ Model {i+1} loaded via state dict filtering fallback.")
 
-            # Keep model on CPU
             model.to('cpu')
             model.eval()
-
             models.append(model)
             tokenizers.append(tokenizer)
-
+            
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
