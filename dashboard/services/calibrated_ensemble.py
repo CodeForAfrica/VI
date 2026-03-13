@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from peft import PeftModel
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
