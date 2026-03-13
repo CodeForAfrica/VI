@@ -172,7 +172,8 @@ class CalibratedStrategicClassifier:
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
         from django.core.cache import cache
-        
+        from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training
+
         # CLEAR CACHE IMMEDIATELY AS REQUESTED
         cache.clear()
         print("🧹 Django cache cleared successfully.")
