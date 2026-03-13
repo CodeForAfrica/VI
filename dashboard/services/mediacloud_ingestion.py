@@ -144,7 +144,20 @@ def print_progress(current, total, saved, failed):
     filled = int(bar_length * current // total)
     bar = '█' * filled + ' ' * (bar_length - filled)
     print(f"\rProcessing: {percent:3d}% |{bar}| {current}/{total} (Saved: {saved}, Failed: {failed})", end='', flush=True)
+    
+def is_article_relevant(article_content, target_country_name):
+    """
+    Checks if the target country name is mentioned in the article content.
+    Performs a simple, case-insensitive substring search.
+    """
+    if not article_content or not target_country_name:
+        return False # Consider empty inputs as irrelevant
 
+    # Simple case-insensitive check
+    # You might want to make this more robust (e.g., check for whole words only)
+    # using regular expressions if partial matches are an issue.
+    return target_country_name.lower() in article_content.lower()
+    
 def main():
     all_records = []
     print("🛰️ Querying MediaCloud API...")       
@@ -187,20 +200,33 @@ def main():
         if not url or url_exists(url):
             failed_count += 1
             continue
-        
+    
         content = scrape_full_text_robust(url)
         if "Failed" not in content and "Error" not in content:
+            # --- ADD RELEVANCE CHECK HERE ---
+            # Extract the target country from the row (as determined by the MediaCloud query)
+            target_country_from_query = row['target_country'] # Use the country from the query loop
+    
+            # Perform the relevance check: is the target country mentioned in the scraped content?
+            if not is_article_relevant(content, target_country_from_query):
+                print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Target: {target_country_from_query}, not found in text)")
+                failed_count += 1 # Consider this a "failure" to meet the relevance criterion
+                continue # Skip saving this article to the database
+            else:
+                print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Target: {target_country_from_query})")
+           
+    
             row_data = row.to_dict()
             row_data['article_text'] = content
-            
+    
             if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
                 row_data['inferred_actor'] = 'USA'
-            
+    
             try:
                 with engine.begin() as conn:
                     final_df = pd.DataFrame([row_data])[db_columns]
                     final_df.to_sql(DB_TABLE, conn, if_exists='append', index=False)
-                    saved_count += 1
+                saved_count += 1
             except Exception as e:
                 logging.error(f"DB Insert Error for {url}: {e}")
                 failed_count += 1
