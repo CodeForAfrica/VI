@@ -232,7 +232,7 @@ class CalibratedStrategicClassifier:
         
             # Download base model from Hugging Face Hub if local path doesn't exist
             KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
-            expected_base_model_dir_name = 'microsoft_mdeberta-v3-base'
+            expected_base_model_dir_name = 'microsoft_deberta-v3-large'
             base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
             
             if os.path.exists(base_model_local_path_ec2):
