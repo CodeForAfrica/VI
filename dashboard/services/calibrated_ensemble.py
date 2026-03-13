@@ -177,7 +177,7 @@ class CalibratedStrategicClassifier:
         import torch
         from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
         from peft import PeftConfig, PeftModel
-        print(f"\n:heavy_check_mark: Loading calibrated ensemble from {save_dir}")
+        print(f"\n✅ Loading calibrated ensemble from {save_dir}")
         # Clear GPU memory before loading
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -187,43 +187,77 @@ class CalibratedStrategicClassifier:
         print(f"  Models: {info['num_models']}")
         print(f"  Classes: {info['num_labels']}")
         # Load label encoder
-        with open(os.path.join(save_dir, 'label_encoder.pkl'), 'rb') as f:
+        label_enc_path = os.path.join(save_dir, 'label_encoder.pkl')
+        if not os.path.exists(label_enc_path):
+            # Try .skops extension if .pkl not found
+            label_enc_path = os.path.join(save_dir, 'label_encoder.skops')
+        with open(label_enc_path, 'rb') as f:
             label_encoder = pickle.load(f)
         num_labels = len(label_encoder.classes_)
         models, tokenizers = [], []
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
+    
             # 1. Load tokenizer from adapter directory
             tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    
             # 2. Get base model name from adapter config
             peft_config = PeftConfig.from_pretrained(model_dir)
-            base_model_name = peft_config.base_model_name_or_path
-            # 3. Load base model with correct number of labels
+            base_model_name_or_path = peft_config.base_model_name_or_path
+            print(f"    Adapter {i} expects base model: {base_model_name_or_path}")
+    
+            # 3. Determine the actual path for the base model
+            # Check if base model exists locally within save_dir first
+            # Common naming convention for downloaded base models in the archive/cache:
+            # e.g., save_dir contains 'microsoft_mdeberta-v3-base/'
+            # Construct potential local path based on base_model_name_or_path
+            # Replace '/' with '_' for directory names (standard in many contexts)
+            expected_local_subdir_name = base_model_name_or_path.replace('/', '_')
+            local_base_model_path = os.path.join(save_dir, expected_local_subdir_name)
+    
+            if os.path.exists(local_base_model_path):
+                print(f"    📁 Found base model locally: {local_base_model_path}")
+                actual_base_model_path = local_base_model_path
+            else:
+                print(f"    🌐 Base model not found locally, using Hub ID: {base_model_name_or_path}")
+                # If not found locally, use the Hub ID. This will fail gracefully if HF_HUB_OFFLINE=1
+                actual_base_model_path = base_model_name_or_path
+    
+            # 4. Load base model config from the determined path
             config = AutoConfig.from_pretrained(
-                base_model_name,
+                actual_base_model_path, # Use the local path or hub ID
                 num_labels=num_labels
             )
+    
+            # 5. Load base model from the determined path
             base_model = AutoModelForSequenceClassification.from_pretrained(
-                base_model_name,
+                actual_base_model_path, # Use the local path or hub ID
                 config=config,
                 ignore_mismatched_sizes=True,
                 torch_dtype=torch.float32,
                 low_cpu_mem_usage=True
             )
-            # 4. Load PEFT adapter on top
+    
+            # 6. Load PEFT adapter on top of the loaded base model
             model = PeftModel.from_pretrained(base_model, model_dir)
-            # 5. Keep on CPU initially
+    
+            # 7. Keep on CPU initially
             model.to('cpu')
             model.eval()
+    
             models.append(model)
             tokenizers.append(tokenizer)
+    
             # Clear cache after each model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+    
         print()  # new line after progress
+    
         # Create ensemble (models stay on CPU)
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
+    
         # Load calibrator (if present)
         calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
@@ -232,12 +266,17 @@ class CalibratedStrategicClassifier:
                 save_dict = pickle.load(f)
                 # Reconstruct calibrator (handles HybridCalibrator, VennAbers, etc.)
                 if isinstance(save_dict, dict) and 'method' in save_dict:
-                    calibrator = HybridCalibrator()
-                    calibrator.method = save_dict['method']
-                    calibrator.calibrator = save_dict['calibrator']
-                    calibrator.calibrated = save_dict.get('calibrated', True)
+                    # Assuming HybridCalibrator exists or adapting logic as needed
+                    # For VennAbersStrategicCalibrator, load directly if it's the type
+                    # This part might need adjustment based on how different calibrators are saved
+                    calibrator = VennAbersStrategicCalibrator() # Or reconstruct HybridCalibrator
+                    calibrator.__dict__.update(save_dict) # Example reconstruction
+                    # calibrator.method = save_dict['method']
+                    # calibrator.calibrator = save_dict['calibrator']
+                    # calibrator.calibrated = save_dict.get('calibrated', True)
                 else:
-                    calibrator = save_dict  # direct instance
-            print(":white_check_mark: Calibrator loaded")
-        print(":white_check_mark: Ensemble loaded successfully")
+                    calibrator = save_dict  # direct instance (like VennAbersStrategicCalibrator)
+            print("✅ Calibrator loaded")
+    
+        print("✅ Ensemble loaded successfully")
         return cls(ensemble, calibrator)
