@@ -30,7 +30,7 @@ db_columns = [
     "article_text", "posting_time", "media_outlet", "inferred_actor",
     "target_country", "url", "lang_detect", "strategic_intent",
     "sector", "tone", "confidence", "use_afrolm", "llm_strat",
-    "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight",
+    "llmm_strat_notes", "pseudo_kept", "pseudo_weight",
     "llm_strat_id", "strategic_intent_id"
 ]
 
@@ -74,7 +74,7 @@ TARGET_COLLECTION_IDS = {
     "Ethiopia":       34412034,
     "Senegal":        38380807,
     "DRC":            34412042,
-    "SA":             34412238, 
+    "SA":             34412238,
     "Côte d'Ivoire":  34412173,
 }
 
@@ -86,7 +86,7 @@ QUERY_BY_COUNTRY = {
             ("narrative*" OR "public opinion" OR " "policy shift" OR "state media" OR "foreign influence")
             OR ("weaponized" OR "information warfare" OR "disinformation" OR "fake news" OR "propaganda" OR "media campaign" OR "social media amplification" OR "broadcast in Amharic")
             OR ("investment" OR "infrastructure project" OR "debt relief" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease" OR "energy cooperation" OR "mosque" OR "church" OR "religious coopration")
-            OR ("instability" OR "ethnic tension" OR "protest" OR "insurgency" OR "border dispute" OR "geopolitical competition")
+            OR ("instability" OR "ethnic tension" OR "protest" OR "insurgency" ORgeopolitical competition")
         )
         AND NOT ("sports" OR "football results" OR "travel guide" OR "cooking" OR "entertainment news")
     )''',
@@ -94,7 +94,7 @@ QUERY_BY_COUNTRY = {
     "Senegal": '''(
         ("Senegal" OR "Sénégal" OR "Dakar" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue" OR "tàmbali" OR "jàngoro" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo" OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan")
         AND (
-            ("narrative*" OR "souveraineté" OR "souveraineté économique" OR "sentiment anti-français" OR "anti-French sentiment" OR "perceptions publiques" OR "opinion publique" OR "public opinion")
+            ("narrative*" OR "souveraineté" OR "souveraineté économique" OR "sentiment anti-français" OR sentiment" OR "perceptions publiques" OR "opinion publique" OR "public opinion")
             OR ("weaponized" OR "manipulation" OR "disinformation" OR "coordonné" OR "fake news" OR "propaganda" OR "désinformation" OR "influence étrangère" OR "coordonnée" OR "ingérence" OR "multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "conficius" OR "université" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
             OR ("investment" OR "infrastructure project" OR "projets pétroliers" OR "ressources naturelles" OR "investissements directs" OR "dette" OR "prêt" OR "debt" OR "foreign aid" OR "aide étrangère" OR "commerce" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "aide" OR "cacao" OR "énergie" OR "agriculture")
             OR ("instability" OR "tensions politiques" OR "manifestations" OR "protests" OR "terrorisme" OR "sécurité régionale" OR "Sahel" OR "AES")
@@ -105,7 +105,7 @@ QUERY_BY_COUNTRY = {
         ("South Africa" OR "Suid-Afrika" OR "Mzansi" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS" OR "iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS" OR "uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo")
         AND (
             ("narrative*" OR "GNU" OR "Government of National Unity" OR "coalition" OR "non-aligned" OR "alignment" OR "strategic autonomy" OR "koalisie" OR "nasionale eenheid")
-            OR ("weaponized" OR "disinformation" OR "deepfake" OR "troll farm" OR "bot network" OR "fopnuus" OR "propaganda" OR "information manipulation" OR "interference" OR "propaganda" OR "disinformation" OR "social media campaign" OR "5G" OR "Huawei" OR "AI" OR "vaccine")
+            OR ("weaponized" OR "disinformation" OR "deepfake" OR "troll farm" OR "bot network" OR "fopnuus" OR "propaganda" OR "information manipulation"" OR "propaganda" OR "disinformation" OR "social media campaign" OR "5G" OR "Huawei" OR "AI" OR "vaccine")
             OR ("energy crisis" OR "load shedding" OR "Eskom" OR "just energy transition" OR "nuclear deal" OR "Chinese investment" OR "Russian influence" OR "kragkrisis" OR "trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism")
             OR ("service delivery protest" OR "xenophobia" OR "social unrest" OR "polarization" OR "stoking" OR "incitement" OR "betoging" OR "mislukking")
         )
@@ -114,7 +114,7 @@ QUERY_BY_COUNTRY = {
     "DRC": '''(
         ("Democratic Republic of the Congo" OR "République Démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Tshisekedi" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi" OR "bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya")
         AND (
-            ("critical minerals" OR "cobalt" OR "lithium" OR "minerais stratégiques" OR "souveraineté minière" OR "Gecamines" OR "contrats chinois" OR "US-DRC partnership" OR "maadini" OR "mumbanda" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "conficius" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
+            ("critical minerals" OR "cobalt" OR "lithium" OR "minerais stratégiques" OR "souveraineté minière" OR "Gecamines" OR "contrats chinois" OR "US-DRC partnership" OR "maadini" OR "mumbanda" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse"us" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
             OR ("weaponized" OR "disinformation" OR "fake news" OR "propaganda" OR "désinformation" OR "ingérence" OR "manipulation de l'information" OR "lokuta" OR "habari za uongo")
             OR ("M23" OR "Wazalendo" OR "East" OR "Est" OR "Kivu" OR "Ituri" OR "Goma" OR "security-for-minerals" OR "balkanisation" OR "bitumba" OR "vita")
             OR ("élections" OR "human rights" OR "droits de l'homme" OR "corruption" OR "liberté de la presse" OR "bokonzi" OR "demokrasi")
@@ -131,7 +131,6 @@ QUERY_BY_COUNTRY = {
         )
     )'''
 }
-# --- End of QUERY_BY_COUNTRY ---
 
 scraper = cloudscraper.create_scraper()
 
@@ -174,15 +173,28 @@ def verify_dns(host):
         print("Check if your RDS instance is 'Publicly Accessible' or if you are on the correct VPN/Network.")
         return False
 
+def is_article_relevant(article_content, target_country_name):
+    """
+    Checks if the target country name is mentioned in the article content.
+    Performs a simple, case-insensitive substring search.
+    """
+    if not article_content or not target_country_name:
+        return False # Consider empty inputs as irrelevant
+
+    # case-insensitive check
+    # You might want to make this more robust (e.g., check for whole words only)
+    # using regular expressions if partial matches are an issue.
+    return target_country_name.lower() in article_content.lower()
+
 def main():
     all_records = []
-    print("🛰️ Querying MediaCloud API...")       
+    print("🛰️ Querying MediaCloud API...")
     # iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(country)
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                time.sleep(0.5) 
+                time.sleep(0.5)
                 stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[actor_coll_id])
                 for s in stories:
                     record = {col: None for col in db_columns}
@@ -200,7 +212,7 @@ def main():
                     all_records.append(record)
             except Exception as e:
                 logging.error(f"MediaCloud Error {country}-{actor}: {e}")
-                
+
     df = pd.DataFrame(all_records)
     if df.empty:
         print("❌ No articles found.")
@@ -231,18 +243,27 @@ def main():
         if not url or not isinstance(url, str) or url_exists(url):
             failed_count += 1 # Increment failed counter for skipped URLs
             continue
-        
+
         content = scrape_full_text_robust(url)
 
-        # --- CHECK CONTENT QUALITY LIKE PREVIOUS SCRIPT ---
+        # --- CHECK CONTENT QUALITY  ---
         is_not_error = not content.startswith("Failed:") and not content.startswith("Error:")
-        has_content = len(content) > 200 
-        # --- END CHECK CONTENT QUALITY LIKE PREVIOUS SCRIPT ---
+        has_content = len(content) > 1000 # Increased minimum length check
 
-        if is_not_error and has_content:
+        # --- RELEVANCE CHECK (Integrated Logic) ---
+        # Extract the target country from the row
+        target_country_from_query = row['target_country'] # Use the country from the query loop
+
+        # Perform the relevance check: is the target country mentioned in the scraped content?
+        is_relevant = is_article_relevant(content, target_country_from_query)
+
+        if is_not_error and has_content and is_relevant:
+            # All checks passed: quality and relevance
+            print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Target: {target_country_from_query})")
+
             row_data = row.to_dict()
             row_data['article_text'] = content
-            
+
             if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
                 row_data['inferred_actor'] = 'USA'
 
@@ -255,7 +276,13 @@ def main():
             except Exception as e:
                 logging.error(f"DB Insert Error for {url}: {e}")
                 failed_count += 1 # Increment failed counter for DB errors
+        elif not is_relevant:
+            # Relevance check failed
+            print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Target: {target_country_from_query}, not found in text)")
+            failed_count += 1 # Consider this a "failure" to meet the relevance criterion
+            continue # Explicitly continue, though not strictly necessary here due to elif structure
         else:
+            # Either scraping failed or content was too short
             failed_count += 1 # Increment failed counter for scraping errors/low content
             print(f"[{idx+1}/{len(df)}] ❌ Real Failure: {content[:50]}... for {str(url)[:30]}")
 
