@@ -276,24 +276,33 @@ class CalibratedStrategicClassifier:
                 print(f"⚠️  PEFT loading failed with KeyError: {e}")
                 print("  Using state dict filtering fallback...")
                 
+            except KeyError as e:
+                print(f"⚠️  PEFT loading failed with KeyError: {e}")
+                print("  Using state dict filtering fallback...")
+            
+                # Load PEFT configuration explicitly
+                from peft import PeftConfig
+                peft_config = PeftConfig.from_pretrained(model_dir) # Load config from the adapter directory
+            
                 # Load adapter state dict using safetensors library
                 adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
                 adapter_state_dict = load_file(adapter_path)
-                
+            
                 # Get model state dict
                 model_state_dict = base_model.state_dict()
-                
+            
                 # Filter adapter state dict to only include keys that exist in model
                 filtered_state_dict = {
-                    k: v for k, v in adapter_state_dict.items() 
+                    k: v for k, v in adapter_state_dict.items()
                     if k in model_state_dict
                 }
-                
-                # Load filtered state dict
+            
+                # Load filtered state dict into the base model
                 base_model.load_state_dict(filtered_state_dict, strict=False)
-                
-                # Wrap in PeftModel
-                model = PeftModel(base_model, model_dir)
+            
+                # Wrap the base model with the loaded PEFT config
+                # This is the corrected line: pass the config object, not the string path
+                model = PeftModel(base_model, peft_config)
             # Keep model on CPU
             model.to('cpu')
             model.eval()
