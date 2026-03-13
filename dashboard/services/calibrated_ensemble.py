@@ -215,60 +215,74 @@ class CalibratedStrategicClassifier:
         # Get number of labels from the loaded label encoder
         num_labels = len(label_encoder.classes_)
 
+        # *** CRITICAL FIX: Load the CORRECT base model ONCE ***
+        # Determine the base model name/path *once* before the loop.
+        # This assumes the ensemble was trained with a specific base model.
+        # For the 'calibrated_contrastive_peft' model bundle, it should be 'deberta-v3-large'.
+        # You might need to encode this information in ensemble_info.json or derive it from save_dir name.
+        # For now, let's assume it's 'deberta-v3-large' based on the error log.
+        KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
+        expected_base_model_dir_name = 'microsoft_deberta-v3-large' # HARDCODED for this ensemble type
+        base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
+
+        if os.path.exists(base_model_local_path_ec2):
+            base_model_name = base_model_local_path_ec2
+            print(f"  ✅ Using local base model: {base_model_name}")
+        else:
+            # Fallback: This shouldn't happen if the model was prepared correctly for deployment.
+            # But if it does, download from HF Hub.
+            print(f"  ⚠️  Local base model {expected_base_model_dir_name} not found.")
+            print(f"  ❌ Cannot proceed. Please ensure the correct base model ({expected_base_model_dir_name}) is available locally at {KNOWN_MODELS_DIR_EC2}.")
+            raise FileNotFoundError(f"Required base model not found locally: {base_model_local_path_ec2}")
+
+        # Load base model config with correct num_labels
+        from transformers import AutoConfig
+        config = AutoConfig.from_pretrained(
+            base_model_name,
+            num_labels=num_labels
+        )
+
+        # Load base model ON CPU to save GPU memory - THIS IS LOADED ONCE
+        from transformers import AutoModelForSequenceClassification
+        shared_base_model = AutoModelForSequenceClassification.from_pretrained(
+            base_model_name,
+            config=config,
+            ignore_mismatched_sizes=True,
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+        )
+        print(f"  ✅ Shared base model loaded from: {base_model_name}")
+
         # Load models ONE AT A TIME and keep them on CPU
         models = []
         tokenizers = []
-        
+
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
-        
+
             # Load tokenizer from LOCAL directory
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
-        
-            # Get PEFT config (might be needed in the try block too, or always for fallback)
+
+            # *** CRITICAL FIX: Use the SHARED base model instance ***
+            # Instead of loading the base model again inside the loop,
+            # clone or copy the shared_base_model instance (or just pass its config/structure if PEFT handles it)
+            # However, PEFT typically expects the *original* base model instance to attach the adapter layers to.
+            # So, we pass the 'shared_base_model' instance directly to PeftModel.from_pretrained/load.
+
+            # Get PEFT config for this specific model
             from peft import PeftConfig
-            # peft_config = PeftConfig.from_pretrained(model_dir) # Don't load here if it's only for fallback
-        
-            # Download base model from Hugging Face Hub if local path doesn't exist
-            KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
-            expected_base_model_dir_name = 'microsoft_deberta-v3-large'
-            base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
-            
-            if os.path.exists(base_model_local_path_ec2):
-                base_model_name = base_model_local_path_ec2
-                print(f"  ✅ Using local base model: {base_model_name}")
-            else:
-                print(f"  ⚠️  Local base model not found, downloading from Hugging Face Hub...")
-                base_model_name = "microsoft/Deberta-v3-base"
-                print(f"  📥 Downloading base model from Hugging Face Hub: {base_model_name}")
-                
-            # Load base model config with correct num_labels
-            from transformers import AutoConfig
-            config = AutoConfig.from_pretrained(
-                base_model_name,
-                num_labels=num_labels
-            )
-        
-            # Load base model ON CPU to save GPU memory
-            from transformers import AutoModelForSequenceClassification
-            base_model = AutoModelForSequenceClassification.from_pretrained(
-                base_model_name,
-                config=config,
-                ignore_mismatched_sizes=True,
-                torch_dtype=torch.float32,
-                low_cpu_mem_usage=True,
-            )
-        
-            #  Proper PEFT loading with state dict filtering
+            peft_config = PeftConfig.from_pretrained(model_dir)
+
+            #  Proper PEFT loading with state dict filtering, using the SHARED base model
             # Load PEFT adapter with proper safetensors handling
             from peft import PeftModel
             from safetensors.torch import load_file
-            
+
             try:
-                # Try standard PEFT loading first
+                # Try standard PEFT loading - ATTACH adapter to the SHARED base model
                 model = PeftModel.from_pretrained(
-                    base_model, 
+                    shared_base_model, # Use the shared instance
                     model_dir,
                     is_trainable=False
                 )
@@ -276,42 +290,50 @@ class CalibratedStrategicClassifier:
             except KeyError as e: # <-- SINGLE except block for KeyError
                 print(f"⚠️  PEFT loading failed with KeyError: {e}")
                 print("  Using state dict filtering fallback...")
-            
-                # Load PEFT configuration explicitly (inside the except block)
-                from peft import PeftConfig
-                peft_config = PeftConfig.from_pretrained(model_dir) # Load config from the adapter directory
-            
+
                 # Load adapter state dict using safetensors library
                 adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
                 adapter_state_dict = load_file(adapter_path)
-            
-                # Get model state dict
-                model_state_dict = base_model.state_dict()
-            
-                # Filter adapter state dict to only include keys that exist in model
+
+                # Get model state dict from the SHARED base model
+                model_state_dict = shared_base_model.state_dict()
+
+                # Filter adapter state dict to only include keys that exist in the shared model
                 filtered_state_dict = {
                     k: v for k, v in adapter_state_dict.items()
                     if k in model_state_dict
                 }
-            
-                # Load filtered state dict into the base model
-                base_model.load_state_dict(filtered_state_dict, strict=False)
-            
-                # Wrap the base model with the loaded PEFT config
-                # This is the corrected line: pass the config object, not the string path
-                model = PeftModel(base_model, peft_config)
+
+                # Load filtered state dict into the SHARED base model instance
+                # This modifies the shared_base_model in-place. This is generally not desired
+                # if each ensemble model needs its own independent parameters.
+                # A better approach might be to deepcopy the shared_base_model for each PEFT load,
+                # but that increases memory usage temporarily.
+                # PEFT is designed to work with a single base model instance and multiple adapters,
+                # but here we want multiple independent PeftModels, each with its own adapter attached to its own base copy.
+
+                # Option 1: Deepcopy the shared base model for each adapter (increases peak memory)
+                import copy
+                base_model_for_this_adapter = copy.deepcopy(shared_base_model)
+
+                base_model_for_this_adapter.load_state_dict(filtered_state_dict, strict=False)
+
+                # Wrap the *copied* base model with the loaded PEFT config
+                peft_config = PeftConfig.from_pretrained(model_dir) # Reload config for this specific adapter
+                model = PeftModel(base_model_for_this_adapter, peft_config)
                 print(f"  ✅ Model {i+1} loaded via state dict filtering fallback.")
+
             # Keep model on CPU
             model.to('cpu')
             model.eval()
-        
+
             models.append(model)
             tokenizers.append(tokenizer)
-        
-            # Clear cache after each model
+
+            # Clear cache after each model if needed (though less critical now that base is shared/copied)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        
+
         print()  # New line after progress
 
         # Create ensemble (models stay on CPU)
