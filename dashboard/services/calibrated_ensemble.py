@@ -222,7 +222,7 @@ class CalibratedStrategicClassifier:
         # You might need to encode this information in ensemble_info.json or derive it from save_dir name.
         # For now, let's assume it's 'deberta-v3-large' based on the error log.
         KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
-        expected_base_model_dir_name = 'microsoft_deberta-v3-large' # HARDCODED for this ensemble type
+        expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' # HARDCODED for this ensemble type
         base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
 
         if os.path.exists(base_model_local_path_ec2):
