@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training, AutoConfig
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
@@ -171,6 +171,16 @@ class CalibratedStrategicClassifier:
     @classmethod
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
+        import os
+        import json
+        import copy
+        import torch
+        import pickle
+        import logging
+        from django.core.cache import cache
+        from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
+        from peft import PeftModel, PeftConfig
+        from safetensors.torch import load_file
         from django.core.cache import cache
         from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training
 
