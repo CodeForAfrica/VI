@@ -13,6 +13,7 @@ import logging
 import skops.io as sio  
 import copy
 
+
 logger = logging.getLogger(__name__)
 
 class StrategicEnsemble:
@@ -26,7 +27,7 @@ class StrategicEnsemble:
         self.label_encoder = label_encoder
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # IMPORTANT: Keep models on CPU to save memory
+        # Keep models on CPU to save memory
         # They will be moved to GPU one at a time during inference
         for model in self.models:
             model.to('cpu')
@@ -170,16 +171,7 @@ class CalibratedStrategicClassifier:
     @classmethod
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
-        import os
-        import json
-        import copy
-        import torch
-        import pickle
-        import logging
-        from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
-        from peft import PeftModel, PeftConfig
-        from safetensors.torch import load_file
-        from django.core.cache import cache  
+    
         
         # CLEAR CACHE IMMEDIATELY AS REQUESTED
         cache.clear()
@@ -217,7 +209,7 @@ class CalibratedStrategicClassifier:
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
             
-            # THE FIX: Deepcopy prevents the "Already found peft_config" error
+            # Deepcopy prevents the "Already found peft_config" error
             fresh_base_copy = copy.deepcopy(shared_base_model)
 
             try:
@@ -225,7 +217,7 @@ class CalibratedStrategicClassifier:
                 print(f"  ✅ Model {i+1} loaded successfully.")
             except Exception as e:
                 print(f"  ⚠️ Manual fallback for model {i+1}: {e}")
-                # THE FALLBACK: Manually filter weights to avoid KeyError
+                # Manually filter weights to avoid KeyError
                 adapter_weights = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
                 model_keys = fresh_base_copy.state_dict().keys()
                 # Only load weights that match the base model structure
