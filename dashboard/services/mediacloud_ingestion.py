@@ -171,17 +171,24 @@ def main():
                 time.sleep(0.5) 
                 stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[actor_coll_id])
                 for s in stories:
+                    # Initialize record with all required columns set to None
+                    # The target_country will be derived from content later
+                    # The inferred_actor will be derived from media_outlet later
                     record = {col: None for col in db_columns}
+                    # Update with fetched data, providing defaults for potentially missing keys
+                    # Initially assign target_country based on the loop (will be overridden by content derivation)
+                    # Assign media_outlet and inferred_actor (inferred_actor will be overridden by outlet derivation)
                     record.update({
                         "url": s.get("url"),
-                        "posting_time": str(s.get("publish_date")),
+                        "posting_time": str(s.get("publish_date")) if s.get("publish_date") else None,
                         "media_outlet": s.get("media_name"),
-                        "inferred_actor": actor,
-                        "target_country": country,
+                        "inferred_actor": actor, # Initially assigned from the loop (actor collection), will be overridden
+                        "target_country": country, # Initially assigned from the loop (country collection), will be overridden
                         "lang_detect": s.get("language"),
-                        "pseudo_kept": True,
-                        "pseudo_weight": 1.0,
-                        "use_afrolm": False
+                        "pseudo_kept": s.get("pseudo_kept", True),
+                        "pseudo_weight": s.get("pseudo_weight", 1.0),
+                        "use_afrolm": s.get("use_afrolm", False),
+                        # Other fields remain None initially
                     })
                     all_records.append(record)
             except Exception as e:
@@ -215,41 +222,130 @@ def main():
         # --- END CHECK TIME BUDGET INSIDE LOOP ---
 
         url = row['url']
-        if not url or url_exists(url):
+        if not url or not isinstance(url, str) or url_exists(url):
             failed_count += 1
-            continue
+            continue # Increment failed counter for skipped URLs / duplicates
 
         content = scrape_full_text_robust(url)
-        if "Failed" not in content and "Error" not in content:
-            # --- ADD RELEVANCE CHECK HERE ---
-            # Extract the target country from the row (as determined by the MediaCloud query)
-            target_country_from_query = row['target_country'] # Use the country from the query loop
 
-            # Perform the relevance check: is the target country mentioned in the scraped content?
-            if not is_article_relevant(content, target_country_from_query):
-                print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Target: {target_country_from_query}, not found in text)")
+        # --- CHECK CONTENT QUALITY  ---
+        is_not_error = not content.startswith("Failed:") and not content.startswith("Error:")
+        has_content = len(content) > 1000 # Increased minimum length check
+        # --- END CHECK CONTENT QUALITY ---
+
+        if is_not_error and has_content:
+            # --- DERIVE TARGET COUNTRY FROM CONTENT ---
+            # Use the scraped content to determine the actual target country
+            # This is a simple keyword-based approach - consider NER for better accuracy
+            article_text_lower = content.lower()
+
+            # Define lists of potential target countries (match your model's expected format)
+            # These should ideally come from a central configuration or your Django models
+            potential_target_countries = ['ethiopia', 'senegal', 'drc', 'south africa', 'cote d\'ivoire', 'ivory coast']
+
+            # Derive target country from content
+            derived_target_country = row['target_country'] # Fallback to original (from query) if not found in content
+            for country_name in potential_target_countries:
+                 if country_name.lower() in article_text_lower:
+                     derived_target_country = country_name.title() # Or however your DB expects it
+                     break # Stop at first match found
+
+            # --- DERIVE INFERRED ACTOR FROM MEDIA OUTLET NAME ---
+            # Use the media_outlet name to determine the inferred_actor
+            media_outlet_name = row['media_outlet']
+            if not media_outlet_name:
+                 # If media_outlet is missing, set inferred_actor to None/empty string
+                 derived_inferred_actor = "" # Or None, depending on your DB schema preference for nullable fields
+                 print(f"[{idx+1}/{len(df)}] ⚠️ Media outlet name missing for {url}. Inferred actor will be empty.")
+            else:
+                 # Map media outlet name to actor
+                 # Use the function from ml_inference_service.py or define a local mapping here
+                 # Let's define a local mapping for this script's use
+                 media_actor_mapping = {
+                     # France
+                     'france24': 'France', 'france 24': 'France', 'le monde': 'France',
+                     'lefigaro': 'France', 'french': 'France', 'france': 'France',
+                     # China
+                     'china daily': 'China', 'xinhua': 'China', 'cgtn': 'China', 'cctv': 'China',
+                     'china': 'China', 'chinese': 'China',
+                     # USA
+                     'bbc': 'USA', 'cnn': 'USA', 'nytimes': 'USA', 'washington post': 'USA',
+                     'reuters': 'USA', 'ap news': 'USA', 'associated press': 'USA', 'voa': 'USA',
+                     'american': 'USA', 'usa': 'USA',
+                     # Russia
+                     'rt': 'Russia', 'sputnik': 'Russia', 'tass': 'Russia', 'russia today': 'Russia',
+                     'russian': 'Russia', 'moscow times': 'Russia',
+                     # Saudi
+                     'saudi': 'Saudi', 'arab news': 'Saudi',
+                     # Turkey
+                     'turkish': 'Turkey', 'turkey': 'Turkey', 'anadolu': 'Turkey',
+                     # UAE
+                     'uae': 'UAE', 'emirates': 'UAE', 'gulf news': 'UAE',
+                     # Israel
+                     'israeli': 'Israel', 'israel': 'Israel', 'times of israel': 'Israel',
+                     # Iran
+                     'iranian': 'Iran', 'iran': 'Iran', 'tehran times': 'Iran',
+                     # Rwanda
+                     'rwandan': 'Rwanda', 'rwanda': 'Rwanda', 'new times': 'Rwanda',
+                 }
+                 derived_inferred_actor = "Unknown" # Default value
+                 media_outlet_lower = media_outlet_name.lower()
+                 for media_name, actor in media_actor_mapping.items():
+                     if media_name in media_outlet_lower:
+                         derived_inferred_actor = actor
+                         break # Stop at first match found
+
+            # --- ADD RELEVANCE CHECK HERE ---
+            # Use the DERIVED target country from the content for the relevance check
+            # Check if the derived_target_country name appears in the article text
+            if not is_article_relevant(content, derived_target_country):
+                print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Derived Target: {derived_target_country}, not found in text)")
                 failed_count += 1 # Consider this a "failure" to meet the relevance criterion
                 continue # Skip saving this article to the database
             else:
-                print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Target: {target_country_from_query})")
+                print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Derived Target: {derived_target_country}, Derived Actor: {derived_inferred_actor})")
             # --- END ADD RELEVANCE CHECK ---
 
-            row_data = row.to_dict()
-            row_data['article_text'] = content
+            # Prepare row_data for database insertion
+            row_data = row.to_dict() # Start with the row data fetched from MediaCloud
+            row_data['article_text'] = content # Add the scraped text
+            # Override the initially assigned target_country with the derived value
+            row_data['target_country'] = derived_target_country
+            # Override the initially assigned inferred_actor with the derived value from media_outlet
+            row_data['inferred_actor'] = derived_inferred_actor
 
-            if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
-                row_data['inferred_actor'] = 'USA'
+            # DO NOT set defaults for strategic_intent, tone, confidence, vulnerability # They should remain NULL/None for the ML pipeline to process later
+            # Ensure critical fields like target_country, article_text are present and not None
+            # The inferred_actor can be Unknown/empty string if media outlet wasn't recognized.
 
             try:
+                # Ensure all required columns are present and have acceptable values
+                # This step implicitly handles missing columns from the initial dict creation/update
+                # by relying on the DataFrame constructor and to_sql's handling.
+                # However, explicitly checking for critical fields before insertion can be safer.
+                # The primary check is the relevance check and content quality.
+                # The database schema should define which fields are actually required (NOT NULL) upon insertion.
+
+                # Check if essential fields for saving are populated (they should be if we reach here)
+                # Check for article_text, target_country specifically.
+                # inferred_actor is allowed to be empty/unknown as per requirement.
+                if not row_data.get('article_text') or not row_data.get('target_country'):
+                     print(f"[{idx+1}/{len(df)}] ❌ Critical data missing (article_text/target_country) for {url}. Skipping.")
+                     failed_count += 1
+                     continue
+
+                final_df = pd.DataFrame([row_data])[db_columns] # Create DF with correct schema
                 with engine.begin() as conn:
-                    final_df = pd.DataFrame([row_data])[db_columns]
-                    final_df.to_sql(DB_TABLE, conn, if_exists='append', index=False)
-                saved_count += 1
+                    final_df.to_sql(DB_TABLE, conn, if_exists='append', index=False) # Save to DB
+                saved_count += 1 # Increment saved counter IF the save succeeds
+                print(f"[{idx+1}/{len(df)}] Saved ({row_data['target_country']} | {row_data['inferred_actor']}): {url[:40]}...") # Log successful save
             except Exception as e:
-                logging.error(f"DB Insert Error for {url}: {e}")
-                failed_count += 1
+                logging.error(f"DB Insert Error for {url}: {e}") # Log detailed error to file
+                print(f"[{idx+1}/{len(df)}] ❌ DB Insert Error for {url[:40]}...: {e}") # Log brief error to console
+                failed_count += 1 # Increment failed counter for DB errors
         else:
-            failed_count += 1
+            failed_count += 1 # Increment failed counter for scraping errors/low content
+            print(f"[{idx+1}/{len(df)}] ❌ Real Failure: {content[:50]}... for {str(url)[:30]}")
 
         # --- ADJUST PROGRESS PRINTING FOR CAPPED LOOP ---
         # Use the capped total_attempted and current counters, print every 5 or at the end
@@ -260,6 +356,3 @@ def main():
         time.sleep(0.5) # Respectful delay
 
     print(f"\n\n🏁 Finished. Attempted: {total_attempted}, Saved: {saved_count}, Failed/Timed-out: {failed_count}")
-
-if __name__ == "__main__":
-    main()
