@@ -215,25 +215,23 @@ class CalibratedStrategicClassifier:
         # Get number of labels from the loaded label encoder
         num_labels = len(label_encoder.classes_)
 
-        # *** CRITICAL FIX: Load the CORRECT base model ONCE ***
-        # Determine the base model name/path *once* before the loop.
-        # This assumes the ensemble was trained with a specific base model.
-        # For the 'calibrated_contrastive_peft' model bundle, it should be 'deberta-v3-large'.
-        # You might need to encode this information in ensemble_info.json or derive it from save_dir name.
-        # For now, let's assume it's 'deberta-v3-large' based on the error log.
+        # - Correct path definitions to avoid NameError ---
         KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
-        expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' # HARDCODED for this ensemble type
+        expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' 
+        
+        # Define paths before checking existence
+        base_model_in_save_dir = os.path.join(save_dir, expected_base_model_dir_name)
         base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
 
-        if os.path.exists(base_model_local_path_ec2):
+        if os.path.exists(base_model_in_save_dir):
+            base_model_name = base_model_in_save_dir
+            print(f"  ✅ Using downloaded base model from temp: {base_model_name}")
+        elif os.path.exists(base_model_local_path_ec2):
             base_model_name = base_model_local_path_ec2
             print(f"  ✅ Using local base model: {base_model_name}")
         else:
-            # Fallback: This shouldn't happen if the model was prepared correctly for deployment.
-            # But if it does, download from HF Hub.
-            print(f"  ⚠️  Local base model {expected_base_model_dir_name} not found.")
-            print(f"  ❌ Cannot proceed. Please ensure the correct base model ({expected_base_model_dir_name}) is available locally at {KNOWN_MODELS_DIR_EC2}.")
-            raise FileNotFoundError(f"Required base model not found locally: {base_model_local_path_ec2}")
+            print(f"  ❌ Cannot proceed. Base model {expected_base_model_dir_name} not found in {save_dir} or {KNOWN_MODELS_DIR_EC2}")
+            raise FileNotFoundError(f"Required base model {expected_base_model_dir_name} not found.")
 
         # Load base model config with correct num_labels
         from transformers import AutoConfig
@@ -242,7 +240,7 @@ class CalibratedStrategicClassifier:
             num_labels=num_labels
         )
 
-        # Load base model ON CPU to save GPU memory - THIS IS LOADED ONCE
+        # Load base model ON CPU to save GPU memory
         from transformers import AutoModelForSequenceClassification
         shared_base_model = AutoModelForSequenceClassification.from_pretrained(
             base_model_name,
@@ -253,7 +251,6 @@ class CalibratedStrategicClassifier:
         )
         print(f"  ✅ Shared base model loaded from: {base_model_name}")
 
-        # Load models ONE AT A TIME and keep them on CPU
         models = []
         tokenizers = []
 
@@ -261,65 +258,37 @@ class CalibratedStrategicClassifier:
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
 
-            # Load tokenizer from LOCAL directory
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
 
-            # *** CRITICAL FIX: Use the SHARED base model instance ***
-            # Instead of loading the base model again inside the loop,
-            # clone or copy the shared_base_model instance (or just pass its config/structure if PEFT handles it)
-            # However, PEFT typically expects the *original* base model instance to attach the adapter layers to.
-            # So, we pass the 'shared_base_model' instance directly to PeftModel.from_pretrained/load.
-
-            # Get PEFT config for this specific model
-            from peft import PeftConfig
-            peft_config = PeftConfig.from_pretrained(model_dir)
-
-            #  Proper PEFT loading with state dict filtering, using the SHARED base model
-            # Load PEFT adapter with proper safetensors handling
-            from peft import PeftModel
+            from peft import PeftModel, PeftConfig
             from safetensors.torch import load_file
+            import copy
 
             try:
-                # Try standard PEFT loading - ATTACH adapter to the SHARED base model
+                # Use standard PEFT loading with the shared instance
                 model = PeftModel.from_pretrained(
-                    shared_base_model, # Use the shared instance
+                    shared_base_model,
                     model_dir,
                     is_trainable=False
                 )
                 print(f"  ✅ Model {i+1} loaded via standard PEFT loading.")
-            except KeyError as e: # <-- SINGLE except block for KeyError
-                print(f"⚠️  PEFT loading failed with KeyError: {e}")
-                print("  Using state dict filtering fallback...")
-
-                # Load adapter state dict using safetensors library
+            except Exception as e:
+                print(f"⚠️  PEFT loading failed for model {i}: {e}. Trying fallback...")
+                
+                # Fallback logic using deepcopy to avoid in-place corruption of shared base
                 adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
                 adapter_state_dict = load_file(adapter_path)
-
-                # Get model state dict from the SHARED base model
                 model_state_dict = shared_base_model.state_dict()
 
-                # Filter adapter state dict to only include keys that exist in the shared model
                 filtered_state_dict = {
                     k: v for k, v in adapter_state_dict.items()
                     if k in model_state_dict
                 }
 
-                # Load filtered state dict into the SHARED base model instance
-                # This modifies the shared_base_model in-place. This is generally not desired
-                # if each ensemble model needs its own independent parameters.
-                # A better approach might be to deepcopy the shared_base_model for each PEFT load,
-                # but that increases memory usage temporarily.
-                # PEFT is designed to work with a single base model instance and multiple adapters,
-                # but here we want multiple independent PeftModels, each with its own adapter attached to its own base copy.
-
-                # Option 1: Deepcopy the shared base model for each adapter (increases peak memory)
-                import copy
                 base_model_for_this_adapter = copy.deepcopy(shared_base_model)
-
                 base_model_for_this_adapter.load_state_dict(filtered_state_dict, strict=False)
-
-                # Wrap the *copied* base model with the loaded PEFT config
-                peft_config = PeftConfig.from_pretrained(model_dir) # Reload config for this specific adapter
+                
+                peft_config = PeftConfig.from_pretrained(model_dir)
                 model = PeftModel(base_model_for_this_adapter, peft_config)
                 print(f"  ✅ Model {i+1} loaded via state dict filtering fallback.")
 
@@ -330,13 +299,12 @@ class CalibratedStrategicClassifier:
             models.append(model)
             tokenizers.append(tokenizer)
 
-            # Clear cache after each model if needed (though less critical now that base is shared/copied)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        print()  # New line after progress
+        print() 
 
-        # Create ensemble (models stay on CPU)
+        # Create ensemble
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
 
         # Load calibrator
@@ -348,9 +316,8 @@ class CalibratedStrategicClassifier:
                 calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
                 logger.info(f"✅ Calibrator loaded.")
             except Exception as e_cal:
-                 logger.error(f"Failed to load calibrator: {e_cal}")
-                 calibrator = VennAbersStrategicCalibrator()
-                 logger.warning("Continuing without calibrator due to load error.")
+                logger.error(f"Failed to load calibrator: {e_cal}")
+                calibrator = VennAbersStrategicCalibrator()
         else:
             logger.warning(f"Calibrator file {calibrator_path} not found.")
 
