@@ -8,9 +8,11 @@ import trafilatura
 import cloudscraper
 import sys
 import os
+
 # ────────────────────────────────────────────────
 # CONFIG
 # ────────────────────────────────────────────────
+
 # Database configuration using Django settings
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
@@ -251,7 +253,8 @@ def main():
 
         # --- ADJUST PROGRESS PRINTING FOR CAPPED LOOP ---
         # Use the capped total_attempted and current counters, print every 5 or at the end
-        if idx % 5 == 0 or idx == total_attempted -  print_progress(idx + 1, total_attempted, saved_count, failed_count)
+        if idx % 5 == 0 or idx == total_attempted - 1: # CORRECTED LINE: Added ':'
+            print_progress(idx + 1, total_attempted, saved_count, failed_count)
         # --- END ADJUST PROGRESS PRINTING ---
 
         time.sleep(0.5) # Respectful delay
