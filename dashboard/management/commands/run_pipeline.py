@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true', help='Test without saving')
-        parser.add_argument('--limit', type=int, default=50, help='Number of articles to process')
+        parser.add_argument('--limit', type=int, default=None, help='Number of articles to process')
         parser.add_argument('--skip-extraction', action='store_true', help='Skip text extraction')
         parser.add_argument('--skip-ml', action='store_true', help='Skip ML inference')
 
