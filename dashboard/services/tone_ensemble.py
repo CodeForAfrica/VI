@@ -255,7 +255,7 @@ class CalibratedStackedEnsemble:
             
             # --- ADDED PEFT LOADING LOGIC ---
             # Get PEFT config to check if it's a PEFT model directory
-            peft_config_path = os.path 'adapter_config.json') # Standard PEFT config name
+            peft_config_path = os.path.join(full_path, 'adapter_config.json')  # Standard PEFT config name
             if os.path.exists(peft_config_path):
                 logger.info(f"PEFT model detected in {full_path}. Loading base model and applying adapter...")
                 
