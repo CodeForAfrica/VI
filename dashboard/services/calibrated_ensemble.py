@@ -170,45 +170,38 @@ class CalibratedStrategicClassifier:
     @classmethod
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
-        # --- ALL NECESSARY IMPORTS INSIDE TO AVOID NAMEERRORS ---
         import os
         import json
         import copy
         import torch
-        import logging
         import pickle
+        import logging
         from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
         from peft import PeftModel, PeftConfig
         from safetensors.torch import load_file
+        from django.core.cache import cache  
         
+        # CLEAR CACHE IMMEDIATELY AS REQUESTED
+        cache.clear()
+        print("🧹 Django cache cleared successfully.")
+
         logger = logging.getLogger(__name__)
         print(f"\n📂 Loading calibrated ensemble from {save_dir}")
 
-        # Load metadata
         with open(os.path.join(save_dir, 'ensemble_info.json'), 'r') as f:
             info = json.load(f)
 
-        # Load label encoder
         label_enc_path_pkl = os.path.join(save_dir, 'label_encoder.pkl')
         with open(label_enc_path_pkl, 'rb') as f:
             label_encoder = pickle.load(f)
-        
         num_labels = len(label_encoder.classes_)
 
-        # Determine Base Model Path
-        KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
-        expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' 
-        base_model_in_save_dir = os.path.join(save_dir, expected_base_model_dir_name)
-        base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
+        # Define Base Model Path
+        base_model_name = os.path.join(save_dir, 'microsoft_mdeberta-v3-base')
+        if not os.path.exists(base_model_name):
+            base_model_name = "/home/ubuntu/Vulnerability_index_tool/app/models/microsoft_mdeberta-v3-base"
 
-        if os.path.exists(base_model_in_save_dir):
-            base_model_name = base_model_in_save_dir
-        elif os.path.exists(base_model_local_path_ec2):
-            base_model_name = base_model_local_path_ec2
-        else:
-            raise FileNotFoundError(f"Base model {expected_base_model_dir_name} not found.")
-
-        # Load Template Base Model
+        # Load Template Base
         config = AutoConfig.from_pretrained(base_model_name, num_labels=num_labels)
         shared_base_model = AutoModelForSequenceClassification.from_pretrained(
             base_model_name,
@@ -218,32 +211,24 @@ class CalibratedStrategicClassifier:
             low_cpu_mem_usage=True,
         ).to('cpu')
 
-        models = []
-        tokenizers = []
+        models, tokenizers = [], []
 
         for i in range(info['num_models']):
-            print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
-
-            # Create a clean copy for this specific member
+            
+            # THE FIX: Deepcopy prevents the "Already found peft_config" error
             fresh_base_copy = copy.deepcopy(shared_base_model)
 
             try:
-                # Attempt standard load
-                model = PeftModel.from_pretrained(
-                    fresh_base_copy,
-                    model_dir,
-                    is_trainable=False
-                )
+                model = PeftModel.from_pretrained(fresh_base_copy, model_dir, is_trainable=False)
                 print(f"  ✅ Model {i+1} loaded successfully.")
             except Exception as e:
-                print(f"  ⚠️  Manual fallback for model {i+1} due to: {e}")
-                # MANUAL FALLBACK: Load adapter weights directly
+                print(f"  ⚠️ Manual fallback for model {i+1}: {e}")
+                # THE FALLBACK: Manually filter weights to avoid KeyError
                 adapter_weights = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
-                
-                # Filter out keys that might cause conflict (like classifier)
                 model_keys = fresh_base_copy.state_dict().keys()
+                # Only load weights that match the base model structure
                 filtered_weights = {k: v for k, v in adapter_weights.items() if k in model_keys}
                 
                 fresh_base_copy.load_state_dict(filtered_weights, strict=False)
@@ -256,12 +241,12 @@ class CalibratedStrategicClassifier:
 
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
         
-        # Load calibrator
-        calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
         if os.path.exists(calibrator_path):
             from dashboard.services.calibrators import VennAbersStrategicCalibrator
             calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
+        else:
+            calibrator = None
 
         print(f"✅ Strategic Ensemble fully loaded.")
         return cls(ensemble, calibrator)
