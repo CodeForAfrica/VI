@@ -344,7 +344,6 @@ class CalibratedStackedEnsemble:
                     "builtins.type", "builtins.function", "numpy.dtype", "numpy.ndarray",
                     # Add specific sklearn types based on your actual meta_model type
                     # e.g., "sklearn.linear_model._logistic.LogisticRegression",
-                    # "sklearn.ensemble._forest.RandomForestClassifier",
                     # Add other necessary types reported by get_untrusted_types
                 ]
                 meta_model = sio.load(meta_model_path_skops, trusted=trusted_types)
@@ -352,7 +351,9 @@ class CalibratedStackedEnsemble:
             except Exception as e_skops:
                 logger.warning(f"Failed to load meta_model with skops ({e_skops}), falling back to joblib.")
 
-        if meta_model is None and os.path.exists(meta_model_path_joblib(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
+        # Corrected Line: Fixed the missing closing parenthesis
+        if meta_model is None and os.path.exists(meta_model_path_joblib):
+            logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
             try:
                 meta_model = joblib.load(os.path.join(load_dir, 'meta_model.pkl'))
                 logger.info("✅ Meta-model loaded using joblib.")
@@ -362,7 +363,7 @@ class CalibratedStackedEnsemble:
 
         if meta_model is None:
             raise FileNotFoundError("Neither meta_model.skops nor meta_model.pkl found in the model directory.")
-
+            
         # Create label encoder
         with open(os.path.join(load_dir, 'label_info.json'), 'r') as f:
             label_info = json.load(f)
