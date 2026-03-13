@@ -619,7 +619,9 @@ class MLInferenceService:
             # Rwanda
             'rwandan': 'Rwanda',
             'rwanda': 'Rwanda',
-            'new times': 'Rwanda        # Check for partial matches
+            'new times': 'Rwanda',        
+            
+            # Check for partial matches
         for media_name, actor in media_actor_mapping.items():
             if media_name in media_outlet_lower:
                 return actor
