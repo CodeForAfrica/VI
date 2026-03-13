@@ -190,23 +190,39 @@ def main():
         print("❌ No articles found.")
         return
 
-    total_attempted = len(df)
+    # --- ADD AUTOMATION SAFEGUARDS ---
+    MAX_ARTICLES_PER_RUN = 200
+    MAX_RUNTIME_SECONDS = 800  # Example limit, adjust as needed
+    total_found = len(df) # Store the original count before capping
+    df = df.head(MAX_ARTICLES_PER_RUN)  # Cap the number of articles processed
+    total_attempted = len(df) # Recalculate based on the capped dataframe
+    print(f"✅ Found {total_found} articles (processing up to {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
+    # --- END ADD AUTOMATION SAFEGUARDS ---
+
+    # --- ADD TIME BUDGET CHECK ---
+    loop_start = time.time()
     saved_count = 0
-    failed_count = 0
-    print(f"✅ Found {total_attempted} articles. Starting Scraper...")
+    failed_count = 0  # Initialize counter for the capped run loop
+    # --- END ADD TIME BUDGET CHECK ---
 
     for idx, row in df.iterrows():
+        # --- CHECK TIME BUDGET INSIDE LOOP ---
+        if time.time() - loop_start > MAX_RUNTIME_SECONDS:
+            print(f"\n⏰ Time budget ({MAX_RUNTIME_SECONDS}s) reached at article {idx}. Stopping to avoid timeout.")
+            break  # Exit the loop gracefully
+        # --- END CHECK TIME BUDGET INSIDE LOOP ---
+
         url = row['url']
         if not url or url_exists(url):
             failed_count += 1
             continue
-    
+
         content = scrape_full_text_robust(url)
         if "Failed" not in content and "Error" not in content:
             # --- ADD RELEVANCE CHECK HERE ---
             # Extract the target country from the row (as determined by the MediaCloud query)
             target_country_from_query = row['target_country'] # Use the country from the query loop
-    
+
             # Perform the relevance check: is the target country mentioned in the scraped content?
             if not is_article_relevant(content, target_country_from_query):
                 print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Target: {target_country_from_query}, not found in text)")
@@ -214,14 +230,14 @@ def main():
                 continue # Skip saving this article to the database
             else:
                 print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Target: {target_country_from_query})")
-           
-    
+            # --- END ADD RELEVANCE CHECK ---
+
             row_data = row.to_dict()
             row_data['article_text'] = content
-    
+
             if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
                 row_data['inferred_actor'] = 'USA'
-    
+
             try:
                 with engine.begin() as conn:
                     final_df = pd.DataFrame([row_data])[db_columns]
@@ -233,12 +249,14 @@ def main():
         else:
             failed_count += 1
 
-        if idx % 5 == 0 or idx == total_attempted:
-            print_progress(idx + 1, total_attempted, saved_count, failed_count)
-        
-        time.sleep(1.2)
+        # --- ADJUST PROGRESS PRINTING FOR CAPPED LOOP ---
+        # Use the capped total_attempted and current counters, print every 5 or at the end
+        if idx % 5 == 0 or idx == total_attempted -  print_progress(idx + 1, total_attempted, saved_count, failed_count)
+        # --- END ADJUST PROGRESS PRINTING ---
 
-    print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed: {failed_count}")
+        time.sleep(0.5) # Respectful delay
+
+    print(f"\n\n🏁 Finished. Attempted: {total_attempted}, Saved: {saved_count}, Failed/Timed-out: {failed_count}")
 
 if __name__ == "__main__":
     main()
