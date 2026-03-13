@@ -1,3 +1,5 @@
+# tone_ensemble.py
+
 import os
 import json
 import pickle
@@ -8,8 +10,10 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import ProbabilitiesEstimator
-#from scipy.stats import probables
 import logging
+# Import PEFT and safetensors if PEFT models are used
+from peft import PeftModel, PeftConfig
+from safetensors.torch import load_file
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,7 @@ class ToneProbabilitiesEstimator:
     
     def predict(self, X):
         return np.argmax(X, axis=1)
+
 class StackedEnsemble:
     """Simplified Stacked Ensemble for inference only (from your notebook)"""
     def __init__(self, base_models, tokenizers, label_encoder, meta_model, device=None):
@@ -185,6 +190,7 @@ class CalibratedStackedEnsemble:
             tokenizer.save_pretrained(model_dir)
 
         # Save meta-model using skops if possible, fallback to joblib
+        import skops.io as sio # Import here if needed for saving
         meta_model_path_joblib = os.path.join(save_dir, 'meta_model.pkl')
         meta_model_path_skops = os.path.join(save_dir, 'meta_model.skops')
         try:
@@ -229,12 +235,81 @@ class CalibratedStackedEnsemble:
             full_path = os.path.join(load_dir, model_dir)
             # Use local path, not remote name
             tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
-            model = AutoModelForSequenceClassification.from_pretrained(full_path)
-            model.eval()
+            
+            # --- ADDED PEFT LOADING LOGIC ---
+            # Get PEFT config to check if it's a PEFT model directory
+            peft_config_path = os.path 'adapter_config.json') # Standard PEFT config name
+            if os.path.exists(peft_config_path):
+                logger.info(f"PEFT model detected in {full_path}. Loading base model and applying adapter...")
+                
+                # Load PEFT config to get base model name and adapter details
+                peft_config = PeftConfig.from_pretrained(full_path)
+
+                # Load base model (assuming it's available locally or can be downloaded)
+                # You might need to adjust the base model name/path based on your setup
+                # For example, if the base model is always expected to be local:
+                KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
+                expected_base_model_dir_name = peft_config.base_model_name_or_path.split('/')[-1] # Get last part of path as name
+                base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
+                
+                if os.path.exists(base_model_local_path_ec2):
+                    base_model_name = base_model_local_path_ec2
+                    print(f"  ✅ Using local base model: {base_model_name}")
+                else:
+                    # Fallback: use the name from the PEFT config to download from HF hub
+                    base_model_name = peft_config.base_model_name_or_path
+                    print(f"  ⚠️  Local base model not found for {expected_base_model_dir_name}, downloading from Hugging Face Hub: {base_model_name}")
+                
+                # Load base model config
+                from transformers import AutoConfig
+                config = AutoConfig.from_pretrained(base_model_name)
+                # Load base model
+                from transformers import AutoModelForSequenceClassification
+                base_model = AutoModelForSequenceClassification.from_pretrained(
+                    base_model_name,
+                    config=config,
+                    torch_dtype=torch.float32, # Specify dtype if needed
+                    low_cpu_mem_usage=True,
+                )
+                
+                # Load PEFT adapter weights
+                try:
+                    # Standard PEFT loading
+                    model = PeftModel.from_pretrained(base_model, full_path, is_trainable=False)
+                except KeyError as e:
+                    print(f"⚠️  PEFT loading failed with KeyError: {e}")
+                    print("  Using state dict filtering fallback...")
+                    # Load adapter state dict using safetensors
+                    adapter_path = os.path.join(full_path, 'adapter_model.safetensors')
+                    adapter_state_dict = load_file(adapter_path)
+                    
+                    # Get model state dict
+                    model_state_dict = base_model.state_dict()
+                    
+                    # Filter adapter state dict to only include keys that exist in model
+                    filtered_state_dict = {
+                        k: v for k, v in adapter_state_dict.items()
+                        if k in model_state_dict
+                    }
+                    
+                    # Load filtered state dict into the base model
+                    base_model.load_state_dict(filtered_state_dict, strict=False)
+                    
+                    # Wrap the base model with the loaded adapter configuration
+                    # This requires reloading the config object to pass to PeftModel
+                    peft_config = PeftConfig.from_pretrained(full_path) # Reload config
+                    model = PeftModel(base_model, peft_config)
+                    
+            else: # If not a PEFT model, load normally
+                logger.info(f"Loading standard model from {full_path}...")
+                model = AutoModelForSequenceClassification.from_pretrained(full_path)
+            
+            model.eval() # Set to evaluation mode
             tokenizers.append(tokenizer)
             base_models.append(model)
 
         # Load meta-model: Try skops first, then joblib
+        import skops.io as sio # Import here for loading
         meta_model_path_skops = os.path.join(load_dir, 'meta_model.skops')
         meta_model_path_joblib = os.path.join(load_dir, 'meta_model.pkl')
 
@@ -243,9 +318,6 @@ class CalibratedStackedEnsemble:
             logger.info(f"Loading meta_model from {meta_model_path_skops} using skops...")
             try:
                 # Load with skops, specifying trusted types if needed
-                # Common types for sklearn models: 'builtins.type', 'numpy.dtype', 'numpy.ndarray',
-                # 'sklearn.linear_model.*', 'sklearn.ensemble.*', etc. Add based on your actual meta_model type.
-                # For now, let's assume a common case like LogisticRegression might need specific types.
                 # It's safest to use get_untrusted_types first on your saved model.
                 # trusted_types = sio.get_untrusted_types(file=meta_model_path_skops)
                 # print("Untrusted types found:", trusted_types)
@@ -253,8 +325,9 @@ class CalibratedStackedEnsemble:
                 # For this example, we'll use a broad default, but you should refine this.
                 trusted_types = [
                     "builtins.type", "builtins.function", "numpy.dtype", "numpy.ndarray",
-                    # Add specific sklearn types based on your meta_model (e.g., if it's LogisticRegression):
-                    # "sklearn.linear_model._logistic.LogisticRegression",
+                    # Add specific sklearn types based on your actual meta_model type
+                    # e.g., "sklearn.linear_model._logistic.LogisticRegression",
+                    # "sklearn.ensemble._forest.RandomForestClassifier",
                     # Add other necessary types reported by get_untrusted_types
                 ]
                 meta_model = sio.load(meta_model_path_skops, trusted=trusted_types)
@@ -262,8 +335,7 @@ class CalibratedStackedEnsemble:
             except Exception as e_skops:
                 logger.warning(f"Failed to load meta_model with skops ({e_skops}), falling back to joblib.")
 
-        if meta_model is None and os.path.exists(meta_model_path_joblib):
-            logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
+        if meta_model is None and os.path.exists(meta_model_path_joblib(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
             try:
                 meta_model = joblib.load(os.path.join(load_dir, 'meta_model.pkl'))
                 logger.info("✅ Meta-model loaded using joblib.")
@@ -290,15 +362,30 @@ class CalibratedStackedEnsemble:
             logger.info(f"Loading Venn-Abers calibrator from {calibrator_path}...")
             try:
                 # Load calibrator using its own method (which uses pickle internally)
+                # To handle the aliasing issue, temporarily define ProbabilitiesEstimator in this scope
+                # or ensure the class ToneProbabilitiesEstimator is available where pickle looks.
+                # The line ProbabilitiesEstimator = ToneProbabilitiesEstimator at the end of the module
+                # should help, but if the pickle specifically looks for 'ProbabilitiesEstimator',
+                # this might be the root cause.
+                # A common workaround is to define the alias *before* the pickle.load call
+                # in the scope where it will be unpickled. Since this happens inside VennAbersCalibrator.load,
+                # which uses pickle.load internally, we ensure the class is available globally.
+                # The assignment at the end of the file should suffice for most cases.
+                # If issues persist, the calibrator might need to be re-saved using ToneProbabilitiesEstimator directly.
                 calibrator.load(calibrator_path)
             except Exception as e_cal:
-                logger.error(f"Failed to load Venn-Abers calibrator: {e_cal}")
-                # Depending on your needs, you might want to continue without the calibrator
-                # or raise an error here. Let's continue without it for now.
-                # raise # Uncomment if calibrator is mandatory
-                logger.warning("Continuing without Venn-Abers calibrator.")
+                 logger.error(f"Failed to load Venn-Abers calibrator: {e_cal}")
+                 # Depending on your needs, you might want to continue without the calibrator
+                 # or raise an error here. Let's continue without it for now.
+                 # raise # Uncomment if calibrator is mandatory
+                 logger.warning("Continuing without Venn-Abers calibrator due to load error.")
+        else:
+             logger.warning(f"Venn-Abers calibrator file {calibrator_path} not found.")
 
         print(f"✅ Calibrated ensemble loaded from {load_dir}")
         return cls(ensemble, calibrator)
-ProbabilitiesEstimator = ToneProbabilitiesEstimator
 
+# --- ALIAS DEFINITION (Important for Pickle Loading) ---
+# This line helps if the VennAbers calibrator was saved expecting 'ProbabilitiesEstimator'.
+# It should be at the module level, after the class definitions.
+ProbabilitiesEstimator = ToneProbabilitiesEstimator
