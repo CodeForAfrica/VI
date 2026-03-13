@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from dashboard.services.calibrators import ProbabilitiesEstimator
@@ -278,10 +278,8 @@ class CalibratedStackedEnsemble:
                     print(f"  ⚠️  Local base model not found for {expected_base_model_dir_name}, downloading from Hugging Face Hub: {base_model_name}")
                 
                 # Load base model config
-                from transformers import AutoConfig
                 config = AutoConfig.from_pretrained(base_model_name)
                 # Load base model
-                from transformers import AutoModelForSequenceClassification
                 base_model = AutoModelForSequenceClassification.from_pretrained(
                     base_model_name,
                     config=config,
