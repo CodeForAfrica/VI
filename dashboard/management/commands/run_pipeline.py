@@ -18,7 +18,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true', help='Test without saving')
-        parser.add_argument('--limit', type=int, default=None, help='Number of articles to process')
+        # Remove default=50 to process ALL articles unless explicitly limited
+        parser.add_argument('--limit', type=int, default=None, help='Number of articles to process (default: process all)')
         parser.add_argument('--skip-extraction', action='store_true', help='Skip text extraction')
         parser.add_argument('--skip-ml', action='store_true', help='Skip ML inference')
 
@@ -39,7 +40,11 @@ class Command(BaseCommand):
         scraper = cloudscraper.create_scraper()
 
         self.stdout.write(self.style.SUCCESS(f"--- Starting Full Pipeline (Dry Run: {dry_run}) ---"))
-        self.stdout.write(f"Limit: {limit} articles")
+        # Clarify the limit in the output
+        if limit is not None:
+            self.stdout.write(f"Limit: {limit} articles (or fewer if less exist needing processing)")
+        else:
+            self.stdout.write(f"Limit: None (Processing all articles needing processing)")
 
         # Define valid lists here for validation if needed later in the loop
         valid_countries = ['senegal', 'drc', 'ethiopia', 'cote d\'ivoire', 'ivory coast', 'south africa']
@@ -50,24 +55,27 @@ class Command(BaseCommand):
         # 'id' or 'created_at'/'posting_time' indicates recent ingestion.
         # Filter based on missing derived fields.
         # Vulnerability index is calculated *after* other fields, so don't filter on it initially.
+        # Focus on articles needing ML inference (strategic_intent, tone)
+        # Also filter for articles that have the *prerequisites* for ML: article_text, target_country, inferred_actor
         articles = MediaNarrative.objects.filter(
-            # missing initially: article_text (needs extraction), strategic_intent, tone (need ML)
-            # other missing: target_country, inferred_actor (need derivation)
-            # Filter for missing article_text, strategic_intent, tone.
-            # Target/inferred_actor derivation happens *within* the loop based on media_outlet and article_text.
-            (Q(article_text__isnull=True) | Q(article_text='')) # Text is needed first for ML and target derivation
-            |
-            (Q(strategic_intent__isnull=True) | Q(strategic_intent='')) # Needs ML
-            |
-            (Q(tone__isnull=True) | Q(tone='')) # Needs ML
-            # Add other conditions if needed, e.g., if vulnerability_index is calculated and stored
-            # and is missing for new articles, but it's calculated *after* other fields.
-            # | (Q(vulnerability_index__isnull=True) | Q(vulnerability_index='')) # Calculated later
+            # Prerequisites must exist
+            (Q(article_text__isnull=False) & ~Q(article_text='')) &
+            (Q(target_country__isnull=False) & ~Q(target_country='')) &
+            (Q(inferred_actor__isnull=False) & ~Q(inferred_actor=''))
+            # AND at least one ML-derived field is missing
+            &
+            (
+                (Q(strategic_intent__isnull=True) | Q(strategic_intent='')) # Needs ML
+                |
+                (Q(tone__isnull=True) | Q(tone='')) # Needs ML
+                # Potentially also filter by vulnerability_index if it's calculated here and needs updating
+                # | (Q(vulnerability_index__isnull=True) | Q(vulnerability_index='')) # Calculated later
+            )
         )
 
-        # Get unique articles and limit
+        # Get unique articles and limit if specified
         articles = articles.distinct().order_by('id') # Order consistently
-        if limit:
+        if limit is not None: # Only apply limit if it was explicitly provided
              articles = articles[:limit]
 
         total_count = articles.count()
@@ -91,115 +99,45 @@ class Command(BaseCommand):
 
                 # --- ARTICLE TEXT EXTRACTION (Using trafilatura) ---
                 # Determine the article text to use
-                article_text = article.article_text # Start with existing text
-
-                # If text is missing and extraction is not skipped, try to get it from the URL
-                if (not article_text or article_text.strip() == '') and not skip_extraction:
-                    self.stdout.write("   🔍 Article text missing, attempting extraction...")
-                    try:
-                        response = scraper.get(article.url, timeout=30)
-
-                        if response.status_code == 200:
-                            # Use trafilatura to extract the main text
-                            extracted_text = trafilatura.extract(response.text)
-
-                            if extracted_text and len(extracted_text.strip()) >= 50: # Minimum length check
-                                article_text = extracted_text
-                                self.stdout.write(self.style.SUCCESS(f"✅ Extracted {len(article_text)} characters"))
-                            else:
-                                self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction failed or text too short (< 50 chars)"))
-                                skipped += 1
-                                continue
-                        else:
-                            self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: HTTP {response.status_code}"))
-                            skipped += 1
-                            continue
-
-                    except Exception as e:
-                        self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Extraction error {str(e)[:50]}"))
-                        skipped += 1
-                        continue
-                elif (not article_text or article_text.strip() == '') and skip_extraction:
-                     # No text available and extraction is skipped
-                     self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: No article_text available and extraction skipped"))
-                     skipped += 1
-                     continue
-                # If article_text was already present, proceed
+                # Since the filter guarantees article_text exists and is not empty, we can use it directly
+                # unless --skip-extraction is True and it's still needed for some reason (unlikely given filter).
+                # The filter above ensures article_text is present.
+                article_text = article.article_text # Should be present due to filter
+                self.stdout.write(f"   📝 Using {len(article_text)} char text from DB.")
 
                 # --- TARGET COUNTRY & INFERRED ACTOR DERIVATION & VALIDATION ---
-                # These fields are derived NOW from the extracted text or known source info.
-                # Start with existing values if any (might be from ingestion)
-                target_country = article.target_country
-                inferred_actor = article.inferred_actor
+                # These fields should now be available based on the filter
+                target_country = article.target_country # Should be present due to filter
+                inferred_actor = article.inferred_actor # Should be present due to filter
 
-                # --- DERIVE TARGET COUNTRY from ARTICLE TEXT ---
-                # This is the "from the context" part.
-                # Implement logic to find country names/entities in the article_text.
-                # Here, we implement a simple keyword search based on valid_countries.
-                if not target_country or target_country.strip() == '':
-                     self.stdout.write("   🔍 Deriving target country from article text...")
-                     found_country = None
-                     for country_name in valid_countries:
-                         # Simple check, might need refinement (e.g., case-insensitive, whole words, NER)
-                         if country_name.lower() in article_text.lower():
-                             found_country = country_name.title() # Use title case for consistency
-                             self.stdout.write(f"   ✅ Found country '{found_country}' in text.")
-                             break
-                     if found_country:
-                         target_country = found_country
-                     else:
-                         self.stdout.write(self.style.ERROR(f"❌ Could not derive target country from text for {article.id}. Skipping."))
-                         skipped += 1
-                         continue # Cannot proceed without target country
-
-                # --- DERIVE INFERRED ACTOR from MEDIA OUTLET ---
-                # This is the "from media outlet column" part.
-                # Use the ml_service function based on the article's media_outlet.
-                if not inferred_actor or inferred_actor.strip() == '':
-                    self.stdout.write("   🔍 Deriving inferred actor from media outlet...")
-                    media_outlet = article.media_outlet or '' # Get the source outlet
-                    inferred_actor_from_source = ml_service.get_actor_from_media_outlet(media_outlet)
-
-                    if not inferred_actor_from_source or inferred_actor_from_source == 'Unknown':
-                        self.stdout.write(self.style.ERROR(f"❌ Could not derive inferred actor from media outlet '{media_outlet}' for {article.id}. Skipping."))
-                        skipped += 1
-                        continue # Cannot proceed without inferred actor
-                    else:
-                        inferred_actor = inferred_actor_from_source
-                        self.stdout.write(f"   ✅ Derived inferred_actor: {inferred_actor} from outlet: {media_outlet}")
-
-                # --- VALIDATE DERIVED VALUES ---
-                # Check if the derived values are in the expected lists.
+                # --- VALIDATE DERIVED VALUES (Optional but good practice) ---
+                # Check if the retrieved values are in the expected lists.
                 target_country_valid = target_country and any(tc.lower() in target_country.lower() for tc in valid_countries)
                 inferred_actor_valid = inferred_actor and any(ia.lower() in inferred_actor.lower() for ia in valid_actors)
-                
+
                 if not target_country_valid:
                     # Log why it might be missing or not standard
                     if not target_country:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Target country is empty for {article.id}. Derivation might have failed or no match found in text."))
+                        self.stdout.write(self.style.ERROR(f"   ❌ Target country is unexpectedly empty for {article.id} despite filter."))
                     else:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Derived target country '{target_country}' for {article.id} is not in the standard list: {valid_countries}."))
+                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved target country '{target_country}' for {article.id} is not in the standard list: {valid_countries}."))
                     # Decide: Skip, Continue, or Log - Here we continue but log
                     # skipped += 1 # Uncomment if skipping is desired for invalid country
                     # continue
                 if not inferred_actor_valid:
                     # Log why it might be missing or not standard
                     if not inferred_actor:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Inferred actor is empty for {article.id}. Derivation from media outlet '{article.media_outlet}' might have failed."))
+                        self.stdout.write(self.style.ERROR(f"   ❌ Inferred actor is unexpectedly empty for {article.id} despite filter."))
                     else:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Derived inferred actor '{inferred_actor}' for {article.id} is not in the standard list: {valid_actors}."))
+                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved inferred actor '{inferred_actor}' for {article.id} is not in the standard list: {valid_actors}."))
                     # Decide: Skip, Continue, or Log - Here we continue but log
                     # skipped += 1 # Uncomment if skipping is desired for invalid actor
                     # continue
-                
-                # Final check if required fields are now available after derivation and validation
-                # Even if they are not in the standard list, they might still be valid non-standard values.
-                # to skip if they are empty/None after the derivation attempt.
+
+                # Final check if required fields are available after retrieval/filtering
+                # This is mostly redundant now due to the filter, but acts as a safety net.
                 if not target_country or not inferred_actor:
-                    # This check primarily catches the scenario where derivation itself failed (returned None/empty string)
-                    # and was not caught earlier in the derivation logic itself.
-                    # If derivation succeeded but produced a non-standard value, this check will pass.
-                    self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Missing required target_country ({target_country}) or inferred_actor ({inferred_actor}) after derivation attempt."))
+                    self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Missing required target_country ({target_country}) or inferred_actor ({inferred_actor}) after retrieval."))
                     skipped += 1
                     continue
                 self.stdout.write(f"   ✅ Valid: {target_country} | Actor: {inferred_actor}")
@@ -209,6 +147,7 @@ class Command(BaseCommand):
                     # The ml_service instance will use its internal caching
                     # to avoid re-downloading models if they were already loaded
                     # during the processing of a previous article in this loop.
+                    # It should prioritize local models over S3 downloads.
                     self.stdout.write("   🤖 Performing ML inference...")
                     results = ml_service.perform_inference(article_text)
 
@@ -257,12 +196,10 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.WARNING(f"   [DRY RUN] Processed ID {article.id}"))
                 else:
                     # Update the article object with results
-                    # Only update article_text if it was extracted in this run
-                    if article.article_text != article_text:
-                        article.article_text = article_text
-                    # Update target_country and inferred_actor derived here
-                    article.target_country = target_country
-                    article.inferred_actor = inferred_actor
+                    # article_text was already present or derived, no need to update here
+                    # Update target_country and inferred_actor if they were derived in this loop (they weren't in this version, taken from DB)
+                    # article.target_country = target_country # Already in DB
+                    # article.inferred_actor = inferred_actor # Already in DB
                     article.strategic_intent = strategic_intent
                     article.tone = tone
                     article.confidence = confidence
