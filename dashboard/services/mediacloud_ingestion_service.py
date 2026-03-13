@@ -50,10 +50,8 @@ mc_search = mediacloud.api.SearchApi(API_KEY)
 
 
 # START_DATE = date(2026, 1, 1) # use for specific dates
-START_DATE = date.today() - timedelta(days=1) # Yesterday
-
-
-END_DATE = date.today() # Use date object consistently
+START_DATE = date(2026, 1, 1)
+END_DATE = date.today()
 
 ACTOR_COLLECTION_IDS = {
     "USA":           34412234,
