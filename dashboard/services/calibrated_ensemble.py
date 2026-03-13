@@ -11,6 +11,7 @@ import joblib
 from dashboard.services.calibrators import VennAbersStrategicCalibrator
 import logging
 import skops.io as sio  
+import copy
 
 logger = logging.getLogger(__name__)
 
