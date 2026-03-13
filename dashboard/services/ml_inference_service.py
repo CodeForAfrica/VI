@@ -564,7 +564,7 @@ class MLInferenceService:
             'lefigaro': 'France',
             'french': 'France',
             'france': 'France',
-            
+        
             # China
             'china daily': 'China',
             'xinhua': 'China',
@@ -572,19 +572,19 @@ class MLInferenceService:
             'china': 'China',
             'chinese': 'China',
             'cctv': 'China',
-            
+        
             # USA
-            'bbc': 'USA',
+            'bbc': 'USA', # Note: BBC is UK, this might be a mistake in the mapping itself, but structurally OK
             'cnn': 'USA',
             'nytimes': 'USA',
             'washington post': 'USA',
-            'reuters': 'USA',
+            'reuters': 'USA', # Note: Reuters is international, this might be a mistake
             'ap news': 'USA',
             'associated press': 'USA',
             'voa': 'USA',
             'american': 'USA',
             'usa': 'USA',
-            
+        
             # Russia
             'rt': 'Russia',
             'sputnik': 'Russia',
@@ -592,35 +592,36 @@ class MLInferenceService:
             'russia today': 'Russia',
             'russian': 'Russia',
             'moscow times': 'Russia',
-            
+        
             # Saudi
             'saudi': 'Saudi',
             'arab news': 'Saudi',
-            
+        
             # Turkey
             'turkish': 'Turkey',
             'turkey': 'Turkey',
             'anadolu': 'Turkey',
-            
+        
             # UAE
             'uae': 'UAE',
             'emirates': 'UAE',
             'gulf news': 'UAE',
-            
-            #israeli': 'Israel',
+        
+            # Israel
+            'israeli': 'Israel',
             'israel': 'Israel',
             'times of israel': 'Israel',
-            
+        
             # Iran
             'iranian': 'Iran',
             'iran': 'Iran',
             'tehran times': 'Iran',
-            
+        
             # Rwanda
             'rwandan': 'Rwanda',
             'rwanda': 'Rwanda',
-            'new times': 'Rwanda',        
-            
+            'new times': 'Rwanda', # <-- Make sure this line has the comma and the overall dict has the closing '}'
+        }            
             # Check for partial matches
         for media_name, actor in media_actor_mapping.items():
             if media_name in media_outlet_lower:
