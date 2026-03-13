@@ -152,8 +152,25 @@ class VennAbersCalibrator:
 
     def load(self, load_path):
         """Load calibrator"""
+        # Define the alias *before* loading, within this module's scope
+        # This ensures pickle can find ProbabilitiesEstimator when unpickling
+        import sys
+        # Get the current module (tone_ensemble)
+        current_module = sys.modules[__name__] # __name__ is 'dashboard.services.tone_ensemble'
+        # Temporarily add the alias to the current module's globals
+        if 'ProbabilitiesEstimator' not in current_module.__dict__:
+             # Ensure ToneProbabilitiesEstimator is defined first (it should be by now)
+             if 'ToneProbabilitiesEstimator' in current_module.__dict__:
+                 current_module.__dict__['ProbabilitiesEstimator'] = current_module.__dict__['ToneProbabilitiesEstimator']
+             else:
+                 # Fallback: define it directly if ToneProbabilitiesEstimator is somehow not found
+                 # This is unlikely if the class is defined in the same file before this method
+                 # but added for robustness.
+                 ToneProbabilitiesEstimator = globals()['ToneProbabilitiesEstimator']
+                 current_module.__dict__['ProbabilitiesEstimator'] = ToneProbabilitiesEstimator
+
         with open(load_path, 'rb') as f:
-            self.va_multi = pickle.load(f)
+            self.va_multi = pickle.load(f) # Now pickle should find ProbabilitiesEstimator
         self.calibrated = True
         print(f"✅ Venn-Abers calibrator loaded from {load_path}")
         return self
