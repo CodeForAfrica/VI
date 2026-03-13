@@ -170,53 +170,32 @@ class CalibratedStrategicClassifier:
     @classmethod
     def load(cls, save_dir, device=None):
         """Load calibrated ensemble (MEMORY EFFICIENT)"""
+        # --- ALL NECESSARY IMPORTS INSIDE TO AVOID NAMEERRORS ---
+        import os
+        import json
+        import copy
+        import torch
+        import logging
+        import pickle
+        from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
+        from peft import PeftModel, PeftConfig
+        from safetensors.torch import load_file
+        
+        logger = logging.getLogger(__name__)
         print(f"\n📂 Loading calibrated ensemble from {save_dir}")
-
-        # Clear GPU memory before loading
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         # Load metadata
         with open(os.path.join(save_dir, 'ensemble_info.json'), 'r') as f:
             info = json.load(f)
-        print(f"  Models: {info['num_models']}")
-        print(f"  Classes: {info['num_labels']}")
 
-        # Load label encoder using skops first, then fallback to pickle
-        label_enc_path_skops = os.path.join(save_dir, 'label_encoder.skops')
+        # Load label encoder
         label_enc_path_pkl = os.path.join(save_dir, 'label_encoder.pkl')
-
-        label_encoder = None
-
-        if os.path.exists(label_enc_path_skops):
-            logger.info(f"Loading LabelEncoder from {label_enc_path_skops} using skops...")
-            try:
-                trusted_types = [
-                    "builtins.type", "numpy.dtype", "numpy.ndarray",
-                    "sklearn.preprocessing._label.LabelEncoder",
-                ]
-                label_encoder = sio.load(label_enc_path_skops, trusted=trusted_types)
-                logger.info("✅ LabelEncoder loaded using skops.")
-            except Exception as e_skops:
-                logger.warning(f"Skops load failed for LabelEncoder ({e_skops}), falling back to pickle.")
-
-        if label_encoder is None and os.path.exists(label_enc_path_pkl):
-            logger.info(f"Loading LabelEncoder from {label_enc_path_pkl} using pickle...")
-            try:
-                with open(label_enc_path_pkl, 'rb') as f:
-                    label_encoder = pickle.load(f)
-                logger.info("✅ LabelEncoder loaded using pickle.")
-            except Exception as e_pickle:
-                logger.error(f"Failed to load LabelEncoder with pickle: {e_pickle}")
-                raise
-
-        if label_encoder is None:
-            raise FileNotFoundError("Neither label_encoder.skops nor label_encoder.pkl found in the model directory.")
-
-        # Get number of labels from the loaded label encoder
+        with open(label_enc_path_pkl, 'rb') as f:
+            label_encoder = pickle.load(f)
+        
         num_labels = len(label_encoder.classes_)
 
-        # - Correct path definitions to avoid NameError ---
+        # Determine Base Model Path
         KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
         expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' 
         base_model_in_save_dir = os.path.join(save_dir, expected_base_model_dir_name)
@@ -224,15 +203,12 @@ class CalibratedStrategicClassifier:
 
         if os.path.exists(base_model_in_save_dir):
             base_model_name = base_model_in_save_dir
-            print(f"  ✅ Using downloaded base model from temp: {base_model_name}")
         elif os.path.exists(base_model_local_path_ec2):
             base_model_name = base_model_local_path_ec2
-            print(f"  ✅ Using local base model: {base_model_name}")
         else:
-            raise FileNotFoundError(f"Required base model {expected_base_model_dir_name} not found.")
+            raise FileNotFoundError(f"Base model {expected_base_model_dir_name} not found.")
 
-        # 2. Load the "Template" Base Model once
-        from transformers import AutoConfig
+        # Load Template Base Model
         config = AutoConfig.from_pretrained(base_model_name, num_labels=num_labels)
         shared_base_model = AutoModelForSequenceClassification.from_pretrained(
             base_model_name,
@@ -241,56 +217,51 @@ class CalibratedStrategicClassifier:
             torch_dtype=torch.float32,
             low_cpu_mem_usage=True,
         ).to('cpu')
-        
+
         models = []
         tokenizers = []
 
-        # 3. Loop through and create independent copies
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
 
-            # -Create a fresh copy for each adapter ---
+            # Create a clean copy for this specific member
             fresh_base_copy = copy.deepcopy(shared_base_model)
 
             try:
-                # Attach adapter to the fresh copy
+                # Attempt standard load
                 model = PeftModel.from_pretrained(
                     fresh_base_copy,
                     model_dir,
                     is_trainable=False
                 )
-                print(f"  ✅ Model {i+1} adapter attached successfully.")
+                print(f"  ✅ Model {i+1} loaded successfully.")
             except Exception as e:
-                print(f"⚠️  Fallback triggered for model {i+1}: {e}")
-                # Manual fallback if standard loading fails
-                from safetensors.torch import load_file
-                adapter_state_dict = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
-                fresh_base_copy.load_state_dict(adapter_state_dict, strict=False)
-                peft_config = PeftConfig.from_pretrained(model_dir)
-                model = PeftModel(fresh_base_copy, peft_config)
+                print(f"  ⚠️  Manual fallback for model {i+1} due to: {e}")
+                # MANUAL FALLBACK: Load adapter weights directly
+                adapter_weights = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
+                
+                # Filter out keys that might cause conflict (like classifier)
+                model_keys = fresh_base_copy.state_dict().keys()
+                filtered_weights = {k: v for k, v in adapter_weights.items() if k in model_keys}
+                
+                fresh_base_copy.load_state_dict(filtered_weights, strict=False)
+                p_config = PeftConfig.from_pretrained(model_dir)
+                model = PeftModel(fresh_base_copy, p_config)
 
-            model.eval() # Keep on CPU
+            model.eval()
             models.append(model)
             tokenizers.append(tokenizer)
 
-        print(f"\n✅ All {len(models)} models loaded into ensemble.")
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
         
         # Load calibrator
         calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
         if os.path.exists(calibrator_path):
-            logger.info(f"Loading calibrator from {calibrator_path}...")
-            try:
-                calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
-                logger.info(f"✅ Calibrator loaded.")
-            except Exception as e_cal:
-                logger.error(f"Failed to load calibrator: {e_cal}")
-                calibrator = VennAbersStrategicCalibrator()
-        else:
-            logger.warning(f"Calibrator file {calibrator_path} not found.")
+            from dashboard.services.calibrators import VennAbersStrategicCalibrator
+            calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
 
-        print(f"✅ Ensemble loaded successfully")
+        print(f"✅ Strategic Ensemble fully loaded.")
         return cls(ensemble, calibrator)
