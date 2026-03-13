@@ -836,7 +836,8 @@ class MLInferenceService:
                 "sovereignty erosion": "Sovereignty",
                 "sovereignty threat": "Sovereignty",
                 "lgbtq rights": "LGBTQ",
-                "lgbt advocacy": "LGBTreligious influence": "Religious",
+                "lgbt advocacy": "LGBTQ", # <-- CORRECTED: Added comma here
+                "religious influence": "Religious",
                 "religious polarisation": "Religious",
                 "election influence": "ElectionInfluence", 
                 "election interference": "ElectionInfluence",
