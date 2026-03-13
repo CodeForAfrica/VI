@@ -218,8 +218,6 @@ class CalibratedStrategicClassifier:
         # - Correct path definitions to avoid NameError ---
         KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
         expected_base_model_dir_name = 'microsoft_mdeberta-v3-base' 
-        
-        # Define paths before checking existence
         base_model_in_save_dir = os.path.join(save_dir, expected_base_model_dir_name)
         base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
 
@@ -230,78 +228,54 @@ class CalibratedStrategicClassifier:
             base_model_name = base_model_local_path_ec2
             print(f"  ✅ Using local base model: {base_model_name}")
         else:
-            print(f"  ❌ Cannot proceed. Base model {expected_base_model_dir_name} not found in {save_dir} or {KNOWN_MODELS_DIR_EC2}")
             raise FileNotFoundError(f"Required base model {expected_base_model_dir_name} not found.")
 
-        # Load base model config with correct num_labels
-        from transformers import AutoConfig
-        config = AutoConfig.from_pretrained(
-            base_model_name,
-            num_labels=num_labels
-        )
-
-        # Load base model ON CPU to save GPU memory
-        from transformers import AutoModelForSequenceClassification
+        # 2. Load the "Template" Base Model once
+        config = AutoConfig.from_pretrained(base_model_name, num_labels=num_labels)
         shared_base_model = AutoModelForSequenceClassification.from_pretrained(
             base_model_name,
             config=config,
             ignore_mismatched_sizes=True,
             torch_dtype=torch.float32,
             low_cpu_mem_usage=True,
-        )
-        print(f"  ✅ Shared base model loaded from: {base_model_name}")
-
+        ).to('cpu')
+        
         models = []
         tokenizers = []
 
+        # 3. Loop through and create independent copies
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
             tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
 
-            from peft import PeftModel, PeftConfig
-            import copy
-
-            # --- THE FIX: Create a fresh copy of the base for each ensemble member ---
-            # This prevents "Multiple Adapters" warnings and head-mismatch errors
-            base_model_for_this_adapter = copy.deepcopy(shared_base_model)
+            # -Create a fresh copy for each adapter ---
+            fresh_base_copy = copy.deepcopy(shared_base_model)
 
             try:
-                # Attach adapter to the FRESH copy
+                # Attach adapter to the fresh copy
                 model = PeftModel.from_pretrained(
-                    base_model_for_this_adapter,
+                    fresh_base_copy,
                     model_dir,
                     is_trainable=False
                 )
                 print(f"  ✅ Model {i+1} adapter attached successfully.")
             except Exception as e:
-                print(f"⚠️  PEFT loading failed for model {i+1}: {e}. Trying fallback...")
-                # Fallback: manually inject weights if standard loading fails
+                print(f"⚠️  Fallback triggered for model {i+1}: {e}")
+                # Manual fallback if standard loading fails
                 from safetensors.torch import load_file
-                adapter_path = os.path.join(model_dir, 'adapter_model.safetensors')
-                adapter_state_dict = load_file(adapter_path)
-                
-                # Filter and load
-                model_state_dict = base_model_for_this_adapter.state_dict()
-                filtered_state_dict = {k: v for k, v in adapter_state_dict.items() if k in model_state_dict}
-                base_model_for_this_adapter.load_state_dict(filtered_state_dict, strict=False)
-                
+                adapter_state_dict = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
+                fresh_base_copy.load_state_dict(adapter_state_dict, strict=False)
                 peft_config = PeftConfig.from_pretrained(model_dir)
-                model = PeftModel(base_model_for_this_adapter, peft_config)
+                model = PeftModel(fresh_base_copy, peft_config)
 
-            model.to('cpu')
-            model.eval()
+            model.eval() # Keep on CPU
             models.append(model)
             tokenizers.append(tokenizer)
-            
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
 
-        print() 
-
-        # Create ensemble
+        print(f"\n✅ All {len(models)} models loaded into ensemble.")
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
-
+        
         # Load calibrator
         calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
