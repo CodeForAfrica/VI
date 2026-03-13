@@ -170,86 +170,64 @@ class CalibratedStrategicClassifier:
 
     @classmethod
     def load(cls, save_dir, device=None):
-        """Load calibrated ensemble (MEMORY EFFICIENT)"""
+        """Load calibrated ensemble – each adapter uses its own base model."""
         import os
         import json
-        import copy
-        import torch
         import pickle
-        import logging
-        from django.core.cache import cache
+        import torch
         from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification
-        from peft import PeftModel, PeftConfig
-        from safetensors.torch import load_file
-        from django.core.cache import cache
-        from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig, set_peft_model_state_dict, prepare_model_for_kbit_training
-
-        # CLEAR CACHE IMMEDIATELY AS REQUESTED
-        cache.clear()
-        print("🧹 Django cache cleared successfully.")
-
-        logger = logging.getLogger(__name__)
-        print(f"\n📂 Loading calibrated ensemble from {save_dir}")
-
+        from peft import PeftConfig, PeftModel
+        print(f"\n:heavy_check_mark: Loading calibrated ensemble from {save_dir}")
+        # Load metadata
         with open(os.path.join(save_dir, 'ensemble_info.json'), 'r') as f:
             info = json.load(f)
-
-        label_enc_path_pkl = os.path.join(save_dir, 'label_encoder.pkl')
-        with open(label_enc_path_pkl, 'rb') as f:
+        print(f"  Models: {info['num_models']}")
+        print(f"  Classes: {info['num_labels']}")
+        # Load label encoder
+        with open(os.path.join(save_dir, 'label_encoder.pkl'), 'rb') as f:
             label_encoder = pickle.load(f)
         num_labels = len(label_encoder.classes_)
-
-        # Define Base Model Path
-        base_model_name = os.path.join(save_dir, 'microsoft_mdeberta-v3-base')
-        if not os.path.exists(base_model_name):
-            base_model_name = "/home/ubuntu/Vulnerability_index_tool/app/models/microsoft_mdeberta-v3-base"
-
-        # Load Template Base
-        config = AutoConfig.from_pretrained(base_model_name, num_labels=num_labels)
-        shared_base_model = AutoModelForSequenceClassification.from_pretrained(
-            base_model_name,
-            config=config,
-            ignore_mismatched_sizes=True,
-            torch_dtype=torch.float32,
-            low_cpu_mem_usage=True,
-        ).to('cpu')
-
         models, tokenizers = [], []
-
         for i in range(info['num_models']):
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
-            tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
-            
-            # Deepcopy prevents the "Already found peft_config" error
-            fresh_base_copy = copy.deepcopy(shared_base_model)
-
-            try:
-                model = PeftModel.from_pretrained(fresh_base_copy, model_dir, is_trainable=False)
-                print(f"  ✅ Model {i+1} loaded successfully.")
-            except Exception as e:
-                print(f"  ⚠️ Manual fallback for model {i+1}: {e}")
-                # Manually filter weights to avoid KeyError
-                adapter_weights = load_file(os.path.join(model_dir, 'adapter_model.safetensors'))
-                model_keys = fresh_base_copy.state_dict().keys()
-                # Only load weights that match the base model structure
-                filtered_weights = {k: v for k, v in adapter_weights.items() if k in model_keys}
-                
-                fresh_base_copy.load_state_dict(filtered_weights, strict=False)
-                p_config = PeftConfig.from_pretrained(model_dir)
-                model = PeftModel(fresh_base_copy, p_config)
-
+            print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
+            # 1. Load tokenizer from adapter directory
+            tokenizer = AutoTokenizer.from_pretrained(model_dir)
+            # 2. Get base model name from adapter config
+            peft_config = PeftConfig.from_pretrained(model_dir)
+            base_model_name = peft_config.base_model_name_or_path
+            # 3. Load base model with correct number of labels
+            config = AutoConfig.from_pretrained(
+                base_model_name,
+                num_labels=num_labels
+            )
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_name,
+                config=config,
+                ignore_mismatched_sizes=True,
+                torch_dtype=torch.float32,
+                low_cpu_mem_usage=True
+            )
+            # 4. Load PEFT adapter on top
+            model = PeftModel.from_pretrained(base_model, model_dir)
+            # 5. Keep on CPU initially
+            model.to('cpu')
             model.eval()
             models.append(model)
             tokenizers.append(tokenizer)
-
+            # Optional: clear GPU cache after each model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        print()  # new line after progress
+        # Create ensemble (models stay on CPU)
+        from your_ensemble_class import StrategicEnsemble  # adjust import as needed
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
-        
+        # Load calibrator (if present)
+        calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
         if os.path.exists(calibrator_path):
-            from dashboard.services.calibrators import VennAbersStrategicCalibrator
-            calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
-        else:
-            calibrator = None
-
-        print(f"✅ Strategic Ensemble fully loaded.")
+            with open(calibrator_path, 'rb') as f:
+                calibrator = pickle.load(f)
+            print(":white_check_mark: Calibrator loaded")
+        print(":white_check_mark: Ensemble loaded successfully")
         return cls(ensemble, calibrator)
