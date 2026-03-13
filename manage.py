@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 import os
 import sys
-from django.conf import settings
-from django.core.management.base import BaseCommand
-from django.db.models import Q
 import django
+
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     try:
