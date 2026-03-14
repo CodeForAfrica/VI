@@ -65,7 +65,7 @@ class MLInferenceService:
         self.model_cache_dir.mkdir(exist_ok=True)
 
         # ✅ NEW: Add the specific directory where the archive was extracted
-        self.local_models_dir = Path("/home/ubuntu/Vulnerability_index_tool/app/models/model_cache")
+        self.local_models_dir = Path("/Users/hannateshager/Vulnerability_index_tool/model_cache")
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
