@@ -333,15 +333,14 @@ class DisinfoAnalysisChatbot:
         country_mapping = { # Renamed from 'country_map' for clarity if you want, but keep the name consistent
             "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", "ivory coast": "Côte d'Ivoire",
             "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia",
-            # Add other potential variations if needed, e.g.:
-            # "cote ivoire": "Côte d'Ivoire", "southafrica": "South Africa",
+            "cote ivoire": "Côte d'Ivoire", "southafrica": "South Africa",
         }
         actor_mapping = { # Renamed from 'actor_map' for clarity if you want, but keep the name consistent
             "uae": "UAE", "china": "China", "france": "France", "us": "United States",
             "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia",
             "saudi arabia": "Saudi Arabia", "turkey": "Turkey", "israel": "Israel", "iran": "Iran",
             "rwanda": "Rwanda", "nonstate": "NonState"
-            # Add other potential variations if needed
+            
         }
 
         # Build the context based on found entities
@@ -451,7 +450,7 @@ class DisinfoAnalysisChatbot:
         context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
         return context
 
-      def get_insights_from_ai(self, query, context):
+    def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
         Analyze the context provided and answer the query concisely.
@@ -467,7 +466,7 @@ class DisinfoAnalysisChatbot:
                 temperature=0.1,
             )
 
-            # --- CRITICAL CHECKS ADDED HERE ---
+            # --- CHECKS  ---
             # Check if the API response object itself is None (unlikely but possible if library fails)
             if chat_completion is None:
                 print("DEBUG: chat_completion object is None") # Add logging
