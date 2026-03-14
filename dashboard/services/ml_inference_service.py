@@ -471,7 +471,7 @@ class MLInferenceService:
         # ✅ Check if tone model exists in the KNOWN LOCAL PATH (Priority 3 - existing check)
         # This path might be redundant if the archive cache is the primary source now,
         # but keeping it for compatibility if this specific path was used previously.
-        KNOWN_TONE_MODEL_PATH = "/home/ubuntu/Vulnerability_index_tool/app/models/calibrated_stacked_ensemble"
+        KNOWN_TONE_MODEL_PATH = "/Users/hannateshager/Vulnerability_index_tool/model_cache/strategic_model
         if os.path.exists(KNOWN_TONE_MODEL_PATH):
             print(f"✅ Loading tone classifier from KNOWN LOCAL PATH: {KNOWN_TONE_MODEL_PATH}")
 
