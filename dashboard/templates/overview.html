@@ -210,33 +210,71 @@
     {% endfor %}
 </div>
 
+
 <!-- ADD PAGINATION CONTROLS HERE -->
-<div class="row g-4 mb-3">
-    <div class="col-12">
+<div class="row g-4 mb-5">
+    <div class="col-12 text-center">
         {% if page_obj.has_other_pages %}
             <nav aria-label="Article pagination">
-                <ul class="pagination justify-content-center">
+                <ul class="pagination justify-content-center flex-wrap">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">Previous</a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}
+                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                ← Previous
+                            </a>
                         </li>
                     {% endif %}
 
+                    <!-- Show First, Ellipsis, Current, Ellipsis, Last -->
+                    {% if page_obj.paginator.num_pages > 7 %}
+                        {% if page_obj.number > 4 %}
+                            <li class="page-item"><a class="page-link" href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a></li>
+                            {% if page_obj.number > 5 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                        {% endif %}
+                    {% endif %}
+
                     {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
+                        {% if num == page_obj.number %}
                             <li class="page-item active">
                                 <span class="page-link">{{ num }}</span>
                             </li>
-                        {% else %}
+                        {% elif num < page_obj.number|add:3 and num > page_obj.number|add:-3 %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}
+                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                    {{ num }}
+                                </a>
                             </li>
                         {% endif %}
                     {% endfor %}
 
+                    {% if page_obj.paginator.num_pages > 7 %}
+                        {% if page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+                            {% if page_obj.number < page_obj.paginator.num_pages|add:-4 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}
+                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                    {{ page_obj.paginator.num_pages }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endif %}
+
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&calc_target_country={{ selected_country|urlencode }}&calc_foreign_actor={{ selected_actor|urlencode }}&calc_strategic_intent={{ selected_intent|urlencode }}">Next</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}
+                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                Next →
+                            </a>
                         </li>
                     {% endif %}
                 </ul>
