@@ -35,7 +35,8 @@ import re
 import io
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
-from dashboard.services.ml_inference_service import map_to_canonical_intent
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +483,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         # Optional: Remove common suffixes/prefixes if applicable, e.g., "narrative", "strategy"
         # s = re.sub(r'\b(narrative|strategy|influence|erosion|interference)\b', '', s).strip()
         return s
+        
     def map_to_canonical_intent(stored_intent_str):
         if not stored_intent_str:
             return "Unknown" # Or handle empty/null as needed
@@ -499,7 +501,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         # If no match found, return the original string or a default
         # Returning the original allows for debugging if unexpected values appear
         # Returning "Unknown" might hide new/missed intents
-        return stored_intent_str # Or return "Unknown"
+        return stored_intent_str
 
     # Apply mappings and normalizations
     c_term = target_country.lower().strip()
