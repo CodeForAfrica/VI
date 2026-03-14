@@ -454,25 +454,34 @@ class DisinfoAnalysisChatbot:
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the *specific* context provided and answer the user's query concisely.
-        Focus strictly on foreign influence and strategic narratives mentioned in the context.
-        If the context does not contain information relevant to the user's query (e.g., the query asks about Senegal/France but the context is about Ethiopia/US),
-        explicitly state: "The provided context does not contain information about [Country] and [Actor]. No specific narratives can be reported based on the current data."
-        Do not fabricate or infer narratives from unrelated context.
+        Analyze the context provided and answer the query concisely. 
+        Focus strictly on foreign influence and strategic narratives.
         """
-        # Rest of the method remains largely the same, using the improved context
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"} # This should be fine even if context is None
                 ],
                 model=self.model,
-                temperature=0.1, # Low temperature for factualness
+                temperature=0.1,
             )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            return f"AI Error: {str(e)}"
+            # Add a check here to ensure the expected structure exists
+            if not chat_completion or not chat_completion.choices or len(chat_completion.choices) == 0:
+                 return "AI Error: Received an unexpected response from the model."
+            # Attempt to get the content
+            content = chat_completion.choices[0].message.content
+            # Add a check if content itself is None
+            if content is None:
+                 return "AI Error: The model returned an empty response."
+            return content # Return the content
+        except AttributeError as e:
+            # This catches errors like 'NoneType' object has no attribute 'choices'
+            print(f"Groq API Attribute Error: {e}") # Log the error
+            return f"AI Error: Communication issue with the model ({e})."
+        except Exception as e: # Catch other potential exceptions (network, invalid key, etc.)
+            print(f"Groq API General Error: {e}") # Log the error
+            return f"AI Error: {str(e)}" # Return a safe error message
             
     def get_actor_stats(self, country=None):
         """Get aggregated stats for actors"""
