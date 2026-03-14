@@ -67,6 +67,65 @@ INTENT_CHOICES = [
     ('ElectionInfluence', 'Election Influence'),
 ]
 
+# intent_mapping DICTIONARY
+intent_mapping = {
+    # Direct matches (if ML outputs match CSV exactly)
+    "economic": "Economic",
+    "sovereignty": "Sovereignty",
+    "lgbtq": "LGBTQ",
+    "religious": "Religious",
+    "electioninfluence": "ElectionInfluence",
+    "militarypresence": "MilitaryPresence",
+    "resourcedependency": "ResourceDependency",
+    "socialfragility": "SocialFragility",
+
+    # Common variations/spelling from ML model output (case-insensitive)
+    "economic dependency": "Economic",
+    "sovereignty erosion": "Sovereignty",
+    "sovereignty threat": "Sovereignty",
+    "lgbtq rights": "LGBTQ",
+    "lgbt advocacy": "LGBTQ",
+    "religious influence": "Religious",
+    "religious polarisation": "Religious",
+    "election influence": "ElectionInfluence",
+    "election interference": "ElectionInfluence",
+    "electoral interference": "ElectionInfluence",
+    "military presence": "MilitaryPresence",
+    "military base": "MilitaryPresence",
+    "resource dependency": "ResourceDependency",
+    "resource control": "ResourceDependency",
+    "social fragility": "SocialFragility",
+    "social unrest": "SocialFragility",
+    "information warfare": "SocialFragility",
+    "human rights advocacy": "LGBTQ",
+    "debt trap diplomacy": "Economic",
+    "cultural influence": "SocialFragility",
+    "centralization of power": "Sovereignty",
+    "cultural exchange": "Economic",
+    "cultural hegemony": "Sovereignty",
+    "democratic interference": "ElectionInfluence",
+    "diplomatic cooperation": "Economic",
+    "diplomatic influence": "Sovereignty",
+}
+def map_to_canonical_intent(stored_intent_str):
+    if not stored_intent_str:
+        return "Unknown" # Or handle empty/null as needed
+
+    # Normalize the input string for comparison (lowercase, strip, handle common separators)
+    normalized_input = re.sub(r'\s+', ' ', stored_intent_str.strip().lower())
+
+    # Look for a match in the intent_mapping
+    canonical_intent = intent_mapping.get(normalized_input)
+
+    # If a match is found, return the canonical value
+    if canonical_intent:
+        return canonical_intent
+
+    # If no match found, return the original string or a default
+    # Returning the original allows for debugging if unexpected values appear
+    # Returning "Unknown" might hide new/missed intents
+    return stored_intent_str
+    
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
@@ -483,25 +542,7 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
         # Optional: Remove common suffixes/prefixes if applicable, e.g., "narrative", "strategy"
         # s = re.sub(r'\b(narrative|strategy|influence|erosion|interference)\b', '', s).strip()
         return s
-        
-    def map_to_canonical_intent(stored_intent_str):
-        if not stored_intent_str:
-            return "Unknown" # Or handle empty/null as needed
-    
-        # Normalize the input string for comparison (lowercase, strip, handle common separators)
-        normalized_input = re.sub(r'\s+', ' ', stored_intent_str.strip().lower())
-    
-        # Look for a match in the intent_mapping
-        canonical_intent = intent_mapping.get(normalized_input)
-    
-        # If a match is found, return the canonical value
-        if canonical_intent:
-            return canonical_intent
-    
-        # If no match found, return the original string or a default
-        # Returning the original allows for debugging if unexpected values appear
-        # Returning "Unknown" might hide new/missed intents
-        return stored_intent_str
+
 
     # Apply mappings and normalizations
     c_term = target_country.lower().strip()
@@ -828,7 +869,7 @@ def overview(request):
         #     article.vulnerability_index = float(article.vulnerability_index)
     
         # This ensures the displayed value matches the canonical form from INTENT_CHOICES
-        article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
+      article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
 
     # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
