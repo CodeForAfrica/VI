@@ -208,29 +208,33 @@ class CalibratedStrategicClassifier:
             print(f"    Adapter {i} expects base model: {base_model_name_or_path}")
     
             # 3. Determine the actual path for the base model
-            # Check if base model exists locally within save_dir first
-            # Common naming convention for downloaded base models in the archive/cache:
-            # e.g., save_dir contains 'microsoft_mdeberta-v3-base/'
-            # Construct potential local path based on base_model_name_or_path
-            # Replace '/' with '_' for directory names (standard in many contexts)
-            expected_local_subdir_name = base_model_name_or_path.replace('/', '_')
-            local_base_model_path = os.path.join(save_dir, expected_local_subdir_name)
+            # -CHECK ADJACENT DIRECTORY STRUCTURE -
+            # The save_dir is likely /path/to/archive_cache/strategic_model
+            # The base model is expected to be in /path/to/archive_cache/microsoft_mdeberta-v3-base
+            # So, find the parent directory of save_dir, then append the expected base model subdirectory name.
+            save_dir_parent = os.path.dirname(save_dir) # e.g., /path/to/archive_cache/
+            expected_local_base_model_subdir_name = 'microsoft_mdeberta-v3-base' # The name of the base model dir you created
+            local_base_model_path = os.path.join(save_dir_parent, expected_local_base_model_subdir_name) # e.g., /path/to/archive_cache/microsoft_mdeberta-v3-base
     
+            # Check if the base model exists in the expected adjacent location
             if os.path.exists(local_base_model_path):
-                print(f"    📁 Found base model locally: {local_base_model_path}")
+                print(f"    📁 Found base model in adjacent directory: {local_base_model_path}")
                 actual_base_model_path = local_base_model_path
             else:
-                print(f"    🌐 Base model not found locally, using Hub ID: {base_model_name_or_path}")
-                # If not found locally, use the Hub ID. This will fail gracefully if HF_HUB_OFFLINE=1
+                print(f"    ⚠️ Base model not found in adjacent directory ({local_base_model_path}).")
+                print(f"         Attempting to use Hub ID: {base_model_name_or_path}")
+                # If not found locally in the adjacent structure, use the Hub ID.
+                # This will fail gracefully if HF_HUB_OFFLINE=1 is set.
                 actual_base_model_path = base_model_name_or_path
     
-            # 4. Load base model config from the determined path
+            print(f"    DEBUG: Loading base model config from: {actual_base_model_path}") 
             config = AutoConfig.from_pretrained(
                 actual_base_model_path, # Use the local path or hub ID
                 num_labels=num_labels
             )
     
             # 5. Load base model from the determined path
+            print(f"    DEBUG: Loading base model weights from: {actual_base_model_path}")
             base_model = AutoModelForSequenceClassification.from_pretrained(
                 actual_base_model_path, # Use the local path or hub ID
                 config=config,
@@ -266,14 +270,10 @@ class CalibratedStrategicClassifier:
                 save_dict = pickle.load(f)
                 # Reconstruct calibrator (handles HybridCalibrator, VennAbers, etc.)
                 if isinstance(save_dict, dict) and 'method' in save_dict:
-                    # Assuming HybridCalibrator exists or adapting logic as needed
-                    # For VennAbersStrategicCalibrator, load directly if it's the type
+                    # Assuming VennAbersStrategicCalibrator or similar reconstruction logic
                     # This part might need adjustment based on how different calibrators are saved
                     calibrator = VennAbersStrategicCalibrator() # Or reconstruct HybridCalibrator
                     calibrator.__dict__.update(save_dict) # Example reconstruction
-                    # calibrator.method = save_dict['method']
-                    # calibrator.calibrator = save_dict['calibrator']
-                    # calibrator.calibrated = save_dict.get('calibrated', True)
                 else:
                     calibrator = save_dict  # direct instance (like VennAbersStrategicCalibrator)
             print("✅ Calibrator loaded")
