@@ -322,22 +322,142 @@ class DisinfoAnalysisChatbot:
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
         
-    def get_context_from_db(self, query):
-        # Filter out irrelevant topics before sending context to the AI
-        articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-        context = ""
-        for art in articles:
-            # Safety check for empty text fields
-            text_snippet = (art.article_text[:200] + "...") if art.article_text else "No text content."
-            context += f"Source: {art.media_outlet} | Country: {art.target_country} | Intent: {art.strategic_intent} | Text: {text_snippet}\n\n"
-        return context
+        def get_context_from_db(self, query):
+           AnalysisChatbot.get_context_from_db(query)
+            import re
+               from django.db.models import Count # Ensure Count is imported
+        
+            # Extract potential country and actor mentions from the query
+            # This is a simplified example, could be improved with fuzzy matching
+            query_lower = query.lower()
+            country_mapping = { # Renamed from 'country_map' for clarity if you want, but keep the name consistent
+                "côte d'ivoire": "CoteIvoire", "cote d'ivoire": "CoteIvoire", "ivory coast": "CoteIvoire",
+                "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia",
+                # Add other potential variations if needed, e.g.:
+                # "cote ivoire": "Côte d'Ivoire", "southafrica": "South Africa",
+            }
+            actor_mapping = { # Renamed from 'actor_map' for clarity if you want, but keep the name consistent
+                "uae": "UAE", "china": "China", "france": "France", "us": "UnitedStates",
+                "united states": "UnitedStates", "russia": "Russia", "saudi": "Saudi",
+                "saudi arabia": "Saudi", "turkey": "Turkey", "israel": "Israel", "iran": "Iran",
+                "rwanda": "Rwanda", "nonstate": "NonState"
+                # Add other potential variations if needed
+            }
+        
+            # Build the context based on found entities
+            context_parts = []
+        
+            # Use the CORRECT variable names here
+            found_countries for key, mapped_name in country_mapping.items() if key in query_lower]
+            found_actors = [mapped_name for key, mapped_name in actor_mapping.items() if key in query_lower]
+        
+            if found_countries and found_actors:
+                # Query for articles matching BOTH found countries and actors
+                for country in found_countries:
+                    for actor in found_actors:
+                        # Use the CORRECT database format names here (e.g., Senegal, France)
+                        # The mapping dictionaries above are for *finding* the entities in the query.
+                        # You need a reverse lookup or ensure the keys match the DB format.
+                        # Using iexact should handle case differences like 'senegal' -> 'Senegal'.
+                        relevant_articles = MediaNarrative.objects.filter(
+                            target_country__iexact=country, # Assumes DB format matches keys or is case-insensitive with iexact
+                            inferred_actor__iexact=actor   # Assumes DB format matches keys or is case-insensitive with iexact
+                        ).exclude(article_text__icontains='football').order_by('-posting_time')[:5] # Limit context size
+        
+                        if relevant_articles.exists():
+                            # Build context string from these specific articles
+                            for article in relevant_articles:
+                                text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                                context_parts.append(
+                                    f"Source: {article.media_outlet} | "
+                                    f"Target: {article.target_country} | " # Should now reflect the correct country
+                                    f"Actor: {article.inferred_actor} | " # Should now reflect the correct actor
+                                    f"Intent: {article.strategic_intent} | "
+                                    f"Tone: {article.tone} | "
+                                    f"Text Snippet: {text_snippet} | "
+                                    f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                                )
+                        else:
+                            # If no specific articles found for the pair, perhaps get top narratives for the country/actor combo
+                            # Or just return a message indicating lack of specific data
+                            top_narratives_for_pair = MediaNarrative.objects.filter(
+                                target_country__iexact=country, # Use the found country
+                                inferred_actor__iexact=actor   # Use the found actor
+                            ).exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(
+                                count=Count('id')
+                            ).order_by('-count')[:3]
+        
+                            if top_narratives_for_pair.exists():
+                                narratives_list = [f"{item['strategic_intent']}: {item['count']} articles" for item in top_narratives_for_pair]
+                                context_parts.append(f"Top Narratives for {country} by {actor}: " + ", ".join(narratives_list))
+                            else:
+                                context_parts.append(f"No specific articles or top narratives found for {country} involving {actor}.")
+        
+            elif found_countries:
+                # If only country is found, get recent articles for that country
+                for country in found_countries:
+                    relevant_articles = MediaNarrative.objects.filter(
+                        target_country__iexact=country # Use the found country
+                    ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                    # Build context similarly...
+                    for article in relevant_articles:
+                        text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                        context_parts.append(
+                            f"Source: {article.media_outlet} | "
+                            f"Target: {article.target_country} | " # Should reflect the found country
+                            f"Actor: {article.inferred_actor} | "
+                            f"Intent: {article.strategic_intent} | "
+                            f"Tone: {article.tone} | "
+                            f"Text Snippet: {text_snippet} | "
+                            f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                        )
+            elif found_actors:
+                # If only actor is articles for that actor
+                for actor in found_actors:
+                    relevant_articles = MediaNarrative.objects.filter(
+                        inferred_actor__iexact=actor # Use the found actor
+                    ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                    # Build context similarly...
+                    for article in relevant_articles:
+                        text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                        context_parts.append(
+                            f"Source: {article.media_outlet} | "
+                            f"Target: {article.target_country} | "
+                            f"Actor: {article.inferred_actor} | " # Should reflect the found actor
+                            f"Intent: {article.strategic_intent} | "
+                            f"Tone: {article.tone} | "
+                            f"Text Snippet: {text_snippet} | "
+                            f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                        )
+            else:
+                # Fallback if no specific country or actor is identified in the query
+                # Use the original logic (last 5 articles overall)
+                articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                for article in articles:
+                    text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                    context_parts.append(
+                        f"Source: {article.media_outlet} | "
+                        f"Target: {article.target_country} | "
+                        f"Actor: {article.inferred_actor} | "
+                        f"Intent: {article.strategic_intent} | "
+                        f"Tone: {article.tone} | "
+                        f"Text Snippet: {text_snippet} | "
+                        f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                    )
+        
+            context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
+            return context
 
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely. 
-        Focus strictly on foreign influence and strategic narratives.
+        Analyze the *specific* context provided and answer the user's query concisely.
+        Focus strictly on foreign influence and strategic narratives mentioned in the context.
+        If the context does not contain information relevant to the user's query (e.g., the query asks about Senegal/France but the context is about Ethiopia/US),
+        explicitly state: "The provided context does not contain information about [Country] and [Actor]. No specific narratives can be reported based on the current data."
+        Do not fabricate or infer narratives from unrelated context.
         """
+        # Rest of the method remains largely the same, using the improved context
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[
@@ -345,7 +465,7 @@ class DisinfoAnalysisChatbot:
                     {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
                 ],
                 model=self.model,
-                temperature=0.1,
+                temperature=0.1, # Low temperature for factualness
             )
             return chat_completion.choices[0].message.content
         except Exception as e:
