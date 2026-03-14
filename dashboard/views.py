@@ -323,142 +323,120 @@ class DisinfoAnalysisChatbot:
         return self.get_insights_from_ai(query, context)
         
     def get_context_from_db(self, query):
-        # Inside DisinfoAnalysisChatbot.get_context_from_db(query) - This comment should be at the same level as the imports below
         import re
-        from django.db.models import Count # Ensure Count is imported
-
-        # Extract potential country and actor mentions from the query
-        # This is a simplified example, could be improved with fuzzy matching
+        from django.db.models import Count
+    
         query_lower = query.lower()
-        country_mapping = { # Renamed from 'country_map' for clarity if you want, but keep the name consistent
-            "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", "ivory coast": "Côte d'Ivoire",
-            "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia",
-            "cote ivoire": "Côte d'Ivoire", "southafrica": "South Africa",
+        country_mapping = {
+            "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
+            "ivory coast": "Côte d'Ivoire", "south africa": "South Africa", 
+            "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia"
         }
-        actor_mapping = { # Renamed from 'actor_map' for clarity if you want, but keep the name consistent
+        actor_mapping = {
             "uae": "UAE", "china": "China", "france": "France", "us": "United States",
-            "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia",
-            "saudi arabia": "Saudi Arabia", "turkey": "Turkey", "israel": "Israel", "iran": "Iran",
-            "rwanda": "Rwanda", "nonstate": "NonState"
-            
+            "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia"
         }
-
-        # Build the context based on found entities
+    
         context_parts = []
-
-        # Use the CORRECT variable names here (these were the typo in the previous attempt)
-        found_countries = [mapped_name for key, mapped_name in country_mapping.items() if key in query_lower]
-        found_actors = [mapped_name for key, mapped_name in actor_mapping.items() if key in query_lower]
-
+        found_countries = [country_mapping[key] for key in country_mapping if key in query_lower]
+        found_actors = [actor_mapping[key] for key in actor_mapping if key in query_lower]
+    
         if found_countries and found_actors:
-            # Query for articles matching BOTH found countries and actors
             for country in found_countries:
                 for actor in found_actors:
-                    # Use the CORRECT database format names here (e.g., Senegal, France)
-                    # The mapping dictionaries above are for *finding* the entities in the query.
-                    # You need a reverse lookup or ensure the keys match the DB format.
-                    # Using iexact should handle case differences like 'senegal' -> 'Senegal'.
-                    # IMPORTANT: Update actor_mapping keys to match DB format for iexact to work well
-                    # e.g., use "us": "US" instead of "us": "United States" if DB stores "US"
-                    # Or adjust the actor lookup logic to map query terms to DB terms correctly.
                     relevant_articles = MediaNarrative.objects.filter(
-                        target_country__iexact=country, # Assumes DB format matches keys or is case-insensitive with iexact
-                        inferred_actor__iexact=actor   # Assumes DB format matches keys or is case-insensitive with iexact
-                    ).exclude(article_text__icontains='football').order_by('-posting_time')[:5] # Limit context size
-
+                        target_country__iexact=country,
+                        inferred_actor__iexact=actor
+                    ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+    
                     if relevant_articles.exists():
-                        # Build context string from these specific articles
                         for article in relevant_articles:
                             text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                            context_parts.append(
-                                f"Source: {article.media_outlet} | "
-                                f"Target: {article.target_country} | " # Should now reflect the correct country
-                                f"Actor: {article.inferred_actor} | " # Should now reflect the correct actor
-                                f"Intent: {article.strategic_intent} | "
-                                f"Tone: {article.tone} | "
-                                f"Text Snippet: {text_snippet} | "
-                                vi_score = article.vulnerability_index
-                                vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
-                                f"VI Score: {vi_str}"
-                            )
+                            
+                            # ✅ FIXED: Build line properly
+                            line_parts = [
+                                f"Source: {article.media_outlet or 'N/A'}",
+                                f"Target: {article.target_country or 'N/A'}",
+                                f"Actor: {article.inferred_actor or 'N/A'}",
+                                f"Intent: {article.strategic_intent or 'N/A'}",
+                                f"Tone: {article.tone or 'N/A'}",
+                                f"Text Snippet: {text_snippet}"
+                            ]
+                            
+                            vi_score = getattr(article, 'vulnerability_index', None)
+                            vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
+                            line_parts.append(f"VI Score: {vi_str}")
+                            
+                            context_parts.append(" | ".join(line_parts))
                     else:
-                        # If no specific articles found for the pair, perhaps get top narratives for the country/actor combo
-                        # Or just return a message indicating lack of specific data
-                        top_narratives_for_pair = MediaNarrative.objects.filter(
-                            target_country__iexact=country, # Use the found country
-                            inferred_actor__iexact=actor   # Use the found actor
-                        ).exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(
-                            count=Count('id')
-                        ).order_by('-count')[:3]
-
-                        if top_narratives_for_pair.exists():
-                            narratives_list = [f"{item['strategic_intent']}: {item['count']} articles" for item in top_narratives_for_pair]
-                            context_parts.append(f"Top Narratives for {country} by {actor}: " + ", ".join(narratives_list))
-                        else:
-                            context_parts.append(f"No specific articles or top narratives found for {country} involving {actor}.")
-
+                        context_parts.append(f"No articles found for {country} + {actor}")
+    
         elif found_countries:
-            # If only country is found, get recent articles for that country
             for country in found_countries:
                 relevant_articles = MediaNarrative.objects.filter(
-                    target_country__iexact=country # Use the found country
+                    target_country__iexact=country
                 ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-                # Build context similarly...
+                
                 for article in relevant_articles:
+                    # SAME FIXED LOGIC AS ABOVE
                     text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                    context_parts.append(
-                        f"Source: {article.media_outlet} | "
-                        f"Target: {article.target_country} | "
-                        f"Actor: {article.inferred_actor} | " # Should reflect the found actor
-                        f"Intent: {article.strategic_intent} | "
-                        f"Tone: {article.tone} | "
-                        f"Text Snippet: {text_snippet} | "
-                        vi_score = article.vulnerability_index
-                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
-                        f"VI Score: {vi_str}"
-                    )
+                    line_parts = [
+                        f"Source: {article.media_outlet or 'N/A'}",
+                        f"Target: {article.target_country or 'N/A'}",
+                        f"Actor: {article.inferred_actor or 'N/A'}",
+                        f"Intent: {article.strategic_intent or 'N/A'}",
+                        f"Tone: {article.tone or 'N/A'}",
+                        f"Text Snippet: {text_snippet}"
+                    ]
+                    vi_score = getattr(article, 'vulnerability_index', None)
+                    vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
+                    line_parts.append(f"VI Score: {vi_str}")
+                    context_parts.append(" | ".join(line_parts))
+    
         elif found_actors:
-            # If only actor is found, get recent articles for that actor
             for actor in found_actors:
                 relevant_articles = MediaNarrative.objects.filter(
-                    inferred_actor__iexact=actor # Use the found actor
+                    inferred_actor__iexact=actor
                 ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-                # Build context similarly...
+                
                 for article in relevant_articles:
+                    # SAME FIXED LOGIC
                     text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                    context_parts.append(
-                        f"Source: {article.media_outlet} | "
-                        f"Target: {article.target_country} | "
-                        f"Actor: {article.inferred_actor} | " # Should reflect the found actor
-                        f"Intent: {article.strategic_intent} | "
-                        f"Tone: {article.tone} | "
-                        f"Text Snippet: {text_snippet} | "
-                        vi_score = article.vulnerability_index
-                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
-                        f"VI Score: {vi_str}"
-                    )
-            else:
-                # Fallback if no specific country or actor is identified in the query
-                # Use the original logic (last 5 articles overall)
-                articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-                for article in articles:
-                    text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                    context_parts.append(
-                        f"Source: {article.media_outlet} | "
-                        f"Target: {article.target_country} | "
-                        f"Actor: {article.inferred_actor} | "
-                        f"Intent: {article.strategic_intent} | "
-                        f"Tone: {article.tone} | "
-                        f"Text Snippet: {text_snippet} | "
-                        # ✅ THESE 3 LINES MUST BE ALIGNED WITH f"Text Snippet..."
-                        vi_score = article.vulnerability_index
-                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
-                        f"VI Score: {vi_str}"
-                )
+                    line_parts = [
+                        f"Source: {article.media_outlet or 'N/A'}",
+                        f"Target: {article.target_country or 'N/A'}",
+                        f"Actor: {article.inferred_actor or 'N/A'}",
+                        f"Intent: {article.strategic_intent or 'N/A'}",
+                        f"Tone: {article.tone or 'N/A'}",
+                        f"Text Snippet: {text_snippet}"
+                    ]
+                    vi_score = getattr(article, 'vulnerability_index', None)
+                    vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
+                    line_parts.append(f"VI Score: {vi_str}")
+                    context_parts.append(" | ".join(line_parts))
     
-            context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
-            return context
-
+        else:
+            # FALLBACK - Last 5 articles
+            articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+            for article in articles:
+                # SAME FIXED LOGIC
+                text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                line_parts = [
+                    f"Source: {article.media_outlet or 'N/A'}",
+                    f"Target: {article.target_country or 'N/A'}",
+                    f"Actor: {article.inferred_actor or 'N/A'}",
+                    f"Intent: {article.strategic_intent or 'N/A'}",
+                    f"Tone: {article.tone or 'N/A'}",
+                    f"Text Snippet: {text_snippet}"
+                ]
+                vi_score = getattr(article, 'vulnerability_index', None)
+                vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
+                line_parts.append(f"VI Score: {vi_str}")
+                context_parts.append(" | ".join(line_parts))
+    
+        context = "\n".join(context_parts) if context_parts else "No relevant articles found."
+        return context
+    
     def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
