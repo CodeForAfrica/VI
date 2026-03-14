@@ -451,37 +451,66 @@ class DisinfoAnalysisChatbot:
         context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
         return context
 
-    def get_insights_from_ai(self, query, context):
+      def get_insights_from_ai(self, query, context):
         system_prompt = """
         You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely. 
+        Analyze the context provided and answer the query concisely.
         Focus strictly on foreign influence and strategic narratives.
         """
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"} # This should be fine even if context is None
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
                 ],
                 model=self.model,
                 temperature=0.1,
             )
-            # Add a check here to ensure the expected structure exists
-            if not chat_completion or not chat_completion.choices or len(chat_completion.choices) == 0:
-                 return "AI Error: Received an unexpected response from the model."
-            # Attempt to get the content
-            content = chat_completion.choices[0].message.content
-            # Add a check if content itself is None
+
+            # --- CRITICAL CHECKS ADDED HERE ---
+            # Check if the API response object itself is None (unlikely but possible if library fails)
+            if chat_completion is None:
+                print("DEBUG: chat_completion object is None") # Add logging
+                return "AI Error: The model returned an empty response object."
+
+            # Check if the 'choices' attribute exists and is not empty
+            if not hasattr(chat_completion, 'choices') or not chat_completion.choices:
+                print("DEBUG: chat_completion.choices is empty or missing") # Add logging
+                return "AI Error: The model returned an unexpected response format (no choices)."
+
+            # Check if the first choice exists
+            if len(chat_completion.choices) == 0:
+                print("DEBUG: chat_completion.choices list is empty") # Add logging
+                return "AI Error: The model returned an empty choices list."
+
+            first_choice = chat_completion.choices[0]
+
+            # Check if the 'message' attribute exists in the first choice
+            if not hasattr(first_choice, 'message'): # <--- ADDED 'if' and CORRECTED INDENTATION
+                 print("DEBUG: first_choice.message is missing") # <--- CORRECTED INDENTATION
+                 return "AI Error: The model returned an unexpected response format (no message in choice)." # <--- CORRECTED INDENTATION
+
+            # Check if the 'content' attribute exists in the message
+            if not hasattr(first_choice.message, 'content'): # <--- This line was correctly indented
+                 print("DEBUG: first_choice.message.content is missing") # <--- CORRECTED INDENTATION (aligns with 'if')
+                 return "AI Error: The model returned an unexpected response format (no content in message)." # <--- CORRECTED INDENTATION (aligns with 'if')
+
+            # Finally, get the content
+            content = first_choice.message.content
+
+            # Check if the content itself is None (possible if API processed but returned nothing)
             if content is None:
-                 return "AI Error: The model returned an empty response."
-            return content # Return the content
-        except AttributeError as e:
-            # This catches errors like 'NoneType' object has no attribute 'choices'
-            print(f"Groq API Attribute Error: {e}") # Log the error
-            return f"AI Error: Communication issue with the model ({e})."
-        except Exception as e: # Catch other potential exceptions (network, invalid key, etc.)
-            print(f"Groq API General Error: {e}") # Log the error
-            return f"AI Error: {str(e)}" # Return a safe error message
+                print("DEBUG: content within message is None") # <--- This line was correctly indented
+                return "AI Error: The model did not generate a response."
+
+            # If all checks pass, return the content
+            print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") # <--- ADDED CLOSING PARENTHESIS AND DEFAULT VALUE FOR LENGTH
+            return content
+
+        except Exception as e:
+            # Catch any exception during the API call or processing
+            print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") # <--- This line was correctly indented
+            return f"AI Error: {str(e)}"
             
     def get_actor_stats(self, country=None):
         """Get aggregated stats for actors"""
