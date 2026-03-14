@@ -323,9 +323,9 @@ class DisinfoAnalysisChatbot:
         return self.get_insights_from_ai(query, context)
         
     def get_context_from_db(self, query):
-        import re
+        """Generate clean, readable context for AI - NO formatting errors!"""
         from django.db.models import Count
-    
+        
         query_lower = query.lower()
         country_mapping = {
             "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
@@ -338,111 +338,102 @@ class DisinfoAnalysisChatbot:
         }
     
         context_parts = []
-        found_countries = [country_mapping[key] for key in country_mapping if key in query_lower]
-        found_actors = [actor_mapping[key] for key in actor_mapping if key in query_lower]
+        found_countries = [country_mapping.get(key) for key in country_mapping if key in query_lower]
+        found_actors = [actor_mapping.get(key) for key in actor_mapping if key in query_lower]
+        found_countries = [c for c in found_countries if c]  # Remove None
+        found_actors = [a for a in found_actors if a]        # Remove None
     
+        def safe_article_line(article):
+            """Safe line builder - handles ALL None values"""
+            text_snippet = (article.article_text[:150] + "...") if getattr(article, 'article_text', '') else "No content"
+            
+            # SAFE FIELD EXTRACTION
+            source = getattr(article, 'media_outlet', 'N/A')
+            target = getattr(article, 'target_country', 'N/A')
+            actor = getattr(article, 'inferred_actor', 'N/A')
+            intent = getattr(article, 'strategic_intent', 'N/A')
+            tone = getattr(article, 'tone', 'N/A')
+            
+            # ULTRA-SAFE VI SCORE
+            vi_raw = getattr(article, 'vulnerability_index', None)
+            vi_score = "N/A"
+            if vi_raw is not None and str(vi_raw).lower() != 'none':
+                try:
+                    vi_score = f"{float(vi_raw):.3f}"
+                except (ValueError, TypeError):
+                    vi_score = "N/A"
+            
+            # CLEAN, READABLE FORMAT
+            return f"{source} | {target} | {actor} | {intent} | {tone} | VI:{vi_score} | {text_snippet}"
+    
+        # PRIORITY 1: Country + Actor
         if found_countries and found_actors:
-            for country in found_countries:
-                for actor in found_actors:
-                    relevant_articles = MediaNarrative.objects.filter(
+            for country in found_countries[:2]:  # Limit for speed
+                for actor in found_actors[:2]:
+                    articles = MediaNarrative.objects.filter(
                         target_country__iexact=country,
                         inferred_actor__iexact=actor
-                    ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-    
-                    if relevant_articles.exists():
-                        for article in relevant_articles:
-                            text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                            
-                            # ✅ FIXED: Build line properly
-                            line_parts = [
-                                f"Source: {article.media_outlet or 'N/A'}",
-                                f"Target: {article.target_country or 'N/A'}",
-                                f"Actor: {article.inferred_actor or 'N/A'}",
-                                f"Intent: {article.strategic_intent or 'N/A'}",
-                                f"Tone: {article.tone or 'N/A'}",
-                                f"Text Snippet: {text_snippet}"
-                            ]
-                            
-                            vi_score = getattr(article, 'vulnerability_index', None)
-                            vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
-                            line_parts.append(f"VI Score: {vi_str}")
-                            
-                            context_parts.append(" | ".join(line_parts))
-                    else:
-                        context_parts.append(f"No articles found for {country} + {actor}")
-    
+                    ).exclude(article_text__icontains='football')[:3]
+                    
+                    for article in articles:
+                        context_parts.append(safe_article_line(article))
+        
+        # PRIORITY 2: Country only
         elif found_countries:
-            for country in found_countries:
-                relevant_articles = MediaNarrative.objects.filter(
+            for country in found_countries[:2]:
+                articles = MediaNarrative.objects.filter(
                     target_country__iexact=country
-                ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                ).exclude(article_text__icontains='football').order_by('-posting_time')[:3]
                 
-                for article in relevant_articles:
-                    # SAME FIXED LOGIC AS ABOVE
-                    text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                    line_parts = [
-                        f"Source: {article.media_outlet or 'N/A'}",
-                        f"Target: {article.target_country or 'N/A'}",
-                        f"Actor: {article.inferred_actor or 'N/A'}",
-                        f"Intent: {article.strategic_intent or 'N/A'}",
-                        f"Tone: {article.tone or 'N/A'}",
-                        f"Text Snippet: {text_snippet}"
-                    ]
-                    vi_score = getattr(article, 'vulnerability_index', None)
-                    vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
-                    line_parts.append(f"VI Score: {vi_str}")
-                    context_parts.append(" | ".join(line_parts))
-    
+                for article in articles:
+                    context_parts.append(safe_article_line(article))
+        
+        # PRIORITY 3: Actor only  
         elif found_actors:
-            for actor in found_actors:
-                relevant_articles = MediaNarrative.objects.filter(
+            for actor in found_actors[:2]:
+                articles = MediaNarrative.objects.filter(
                     inferred_actor__iexact=actor
-                ).exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                ).exclude(article_text__icontains='football').order_by('-posting_time')[:3]
                 
-                for article in relevant_articles:
-                    # SAME FIXED LOGIC
-                    text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                    line_parts = [
-                        f"Source: {article.media_outlet or 'N/A'}",
-                        f"Target: {article.target_country or 'N/A'}",
-                        f"Actor: {article.inferred_actor or 'N/A'}",
-                        f"Intent: {article.strategic_intent or 'N/A'}",
-                        f"Tone: {article.tone or 'N/A'}",
-                        f"Text Snippet: {text_snippet}"
-                    ]
-                    vi_score = getattr(article, 'vulnerability_index', None)
-                    vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
-                    line_parts.append(f"VI Score: {vi_str}")
-                    context_parts.append(" | ".join(line_parts))
-    
+                for article in articles:
+                    context_parts.append(safe_article_line(article))
+        
+        # FALLBACK: Recent articles
         else:
-            # FALLBACK - Last 5 articles
-            articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+            articles = MediaNarrative.objects.exclude(
+                article_text__icontains='football'
+            ).order_by('-posting_time')[:5]
+            
             for article in articles:
-                # SAME FIXED LOGIC
-                text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                line_parts = [
-                    f"Source: {article.media_outlet or 'N/A'}",
-                    f"Target: {article.target_country or 'N/A'}",
-                    f"Actor: {article.inferred_actor or 'N/A'}",
-                    f"Intent: {article.strategic_intent or 'N/A'}",
-                    f"Tone: {article.tone or 'N/A'}",
-                    f"Text Snippet: {text_snippet}"
-                ]
-                vi_score = getattr(article, 'vulnerability_index', None)
-                vi_str = f"{float(vi_score):.3f}" if vi_score is not None else "N/A"
-                line_parts.append(f"VI Score: {vi_str}")
-                context_parts.append(" | ".join(line_parts))
+                context_parts.append(safe_article_line(article))
     
-        context = "\n".join(context_parts) if context_parts else "No relevant articles found."
-        return context
+        return "\n\n---\n\n".join(context_parts[:10]) or "No relevant articles found."
     
     def get_insights_from_ai(self, query, context):
-        system_prompt = """
-        You are an expert analyst explaining media narratives and vulnerability indices in Africa.
-        Analyze the context provided and answer the query concisely.
-        Focus strictly on foreign influence and strategic narratives.
-        """
+    system_prompt = """
+    You are a professional media analyst. Answer CLEARLY and CONCISELY.
+    
+    RULES:
+    - NO markdown: No **bold**, no *italics*, no ### headers
+    - Use simple - dashes for bullets
+    - Short sentences
+    - Numbers where possible
+    - Country names in CAPS
+    
+    FORMAT:
+    1. SUMMARY (1 sentence)
+    2. KEY FINDINGS (3-5 bullets max)
+    3. RECOMMENDATION (1 sentence)
+    
+    EXAMPLE:
+    SUMMARY: France dominates Senegal coverage.
+    KEY FINDINGS:
+    - 45 articles vs China's 12
+    - France avg VI score: 0.67
+    - Senegal most vulnerable
+    RECOMMENDATION: Monitor France-Senegal relations closely.
+    """
+
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[
