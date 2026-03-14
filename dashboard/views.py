@@ -841,7 +841,8 @@ def overview(request):
         fallback = " ".join(words[:20])
         return f"{fallback}..." if len(words) > 20 else fallback
 
-    for article in page_obj.object_list:
+    # CORRECTLY INDENTED LOOP - aligned with ml_service, paginator, etc.
+    for article in page_obj.object_list: # <-- This should be at the same level as ml_service, paginator
         article.display_title = extract_title_from_text(article.article_text)
         if hasattr(article, 'ai_summary') and article.ai_summary:
             article.display_summary = article.ai_summary
@@ -867,10 +868,10 @@ def overview(request):
         #     article.vulnerability_index = float(vi_score) if vi_score else 0.0
         # else:
         #     article.vulnerability_index = float(article.vulnerability_index)
-    
-        # This ensures the displayed value matches the canonical form from INTENT_CHOICES
-      article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
 
+        # This ensures the displayed value matches the canonical form from INTENT_CHOICES
+        article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent) 
+        
     # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
