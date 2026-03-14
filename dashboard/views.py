@@ -34,6 +34,8 @@ import os
 import re
 import io
 from botocore.exceptions import ClientError, NoCredentialsError
+from dashboard.services.ml_inference_service import MLInferenceService
+from dashboard.services.ml_inference_service import map_to_canonical_intent
 
 logger = logging.getLogger(__name__)
 
