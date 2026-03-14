@@ -377,7 +377,9 @@ class DisinfoAnalysisChatbot:
                                 f"Intent: {article.strategic_intent} | "
                                 f"Tone: {article.tone} | "
                                 f"Text Snippet: {text_snippet} | "
-                                f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                                vi_score = article.vulnerability_index
+                                vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
+                                f"VI Score: {vi_str}"
                             )
                     else:
                         # If no specific articles found for the pair, perhaps get top narratives for the country/actor combo
@@ -406,12 +408,14 @@ class DisinfoAnalysisChatbot:
                     text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
                     context_parts.append(
                         f"Source: {article.media_outlet} | "
-                        f"Target: {article.target_country} | " # Should reflect the found country
-                        f"Actor: {article.inferred_actor} | "
+                        f"Target: {article.target_country} | "
+                        f"Actor: {article.inferred_actor} | " # Should reflect the found actor
                         f"Intent: {article.strategic_intent} | "
                         f"Tone: {article.tone} | "
                         f"Text Snippet: {text_snippet} | "
-                        f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                        vi_score = article.vulnerability_index
+                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
+                        f"VI Score: {vi_str}"
                     )
         elif found_actors:
             # If only actor is found, get recent articles for that actor
@@ -429,26 +433,31 @@ class DisinfoAnalysisChatbot:
                         f"Intent: {article.strategic_intent} | "
                         f"Tone: {article.tone} | "
                         f"Text Snippet: {text_snippet} | "
-                        f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+                        vi_score = article.vulnerability_index
+                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
+                        f"VI Score: {vi_str}"
                     )
-        else:
-            # Fallback if no specific country or actor is identified in the query
-            # Use the original logic (last 5 articles overall)
-            articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
-            for article in articles:
-                text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
-                context_parts.append(
-                    f"Source: {article.media_outlet} | "
-                    f"Target: {article.target_country} | "
-                    f"Actor: {article.inferred_actor} | "
-                    f"Intent: {article.strategic_intent} | "
-                    f"Tone: {article.tone} | "
-                    f"Text Snippet: {text_snippet} | "
-                    f"VI Score: {article.vulnerability_index:.3f if article.vulnerability_index else 'N/A'}"
+            else:
+                # Fallback if no specific country or actor is identified in the query
+                # Use the original logic (last 5 articles overall)
+                articles = MediaNarrative.objects.exclude(article_text__icontains='football').order_by('-posting_time')[:5]
+                for article in articles:
+                    text_snippet = (article.article_text[:200] + "...") if article.article_text else "No text content."
+                    context_parts.append(
+                        f"Source: {article.media_outlet} | "
+                        f"Target: {article.target_country} | "
+                        f"Actor: {article.inferred_actor} | "
+                        f"Intent: {article.strategic_intent} | "
+                        f"Tone: {article.tone} | "
+                        f"Text Snippet: {text_snippet} | "
+                        # ✅ THESE 3 LINES MUST BE ALIGNED WITH f"Text Snippet..."
+                        vi_score = article.vulnerability_index
+                        vi_str = f"{vi_score:.3f}" if vi_score is not None else "N/A"
+                        f"VI Score: {vi_str}"
                 )
-
-        context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
-        return context
+    
+            context = "\n".join(context_parts) if context_parts else "No relevant articles found in the database for the queried topic."
+            return context
 
     def get_insights_from_ai(self, query, context):
         system_prompt = """
@@ -485,30 +494,30 @@ class DisinfoAnalysisChatbot:
             first_choice = chat_completion.choices[0]
 
             # Check if the 'message' attribute exists in the first choice
-            if not hasattr(first_choice, 'message'): # <--- ADDED 'if' and CORRECTED INDENTATION
-                 print("DEBUG: first_choice.message is missing") # <--- CORRECTED INDENTATION
-                 return "AI Error: The model returned an unexpected response format (no message in choice)." # <--- CORRECTED INDENTATION
+            if not hasattr(first_choice, 'message'): 
+                 print("DEBUG: first_choice.message is missing") 
+                 return "AI Error: The model returned an unexpected response format (no message in choice)." 
 
             # Check if the 'content' attribute exists in the message
-            if not hasattr(first_choice.message, 'content'): # <--- This line was correctly indented
-                 print("DEBUG: first_choice.message.content is missing") # <--- CORRECTED INDENTATION (aligns with 'if')
-                 return "AI Error: The model returned an unexpected response format (no content in message)." # <--- CORRECTED INDENTATION (aligns with 'if')
+            if not hasattr(first_choice.message, 'content'): 
+                 print("DEBUG: first_choice.message.content is missing") # 
+                 return "AI Error: The model returned an unexpected response format (no content in message)." 
 
             # Finally, get the content
             content = first_choice.message.content
 
             # Check if the content itself is None (possible if API processed but returned nothing)
             if content is None:
-                print("DEBUG: content within message is None") # <--- This line was correctly indented
+                print("DEBUG: content within message is None") 
                 return "AI Error: The model did not generate a response."
 
             # If all checks pass, return the content
-            print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") # <--- ADDED CLOSING PARENTHESIS AND DEFAULT VALUE FOR LENGTH
+            print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") 
             return content
 
         except Exception as e:
             # Catch any exception during the API call or processing
-            print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") # <--- This line was correctly indented
+            print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") 
             return f"AI Error: {str(e)}"
             
     def get_actor_stats(self, country=None):
