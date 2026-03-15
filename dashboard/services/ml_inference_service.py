@@ -1058,7 +1058,7 @@ class MLInferenceService:
             except NameError:
                 # This block might be redundant now due to the above error handling,
                 # but added as a safeguard if si_confidence/tone_confidence somehow remain undefined despite the try blocks above.
-                logger calculation failed due to undefined si_confidence or tone_confidence.")
+                logger.error("SI confidence calculation failed due to undefined si_confidence or tone_confidence.")
                 confidence = 0.0
                 si_confidence = 0.0 # Ensure it's defined for the return dictionary
                 si_source = 'error_conf_calculation' # Update source if calculation failed
