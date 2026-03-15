@@ -153,7 +153,7 @@ class Command(BaseCommand):
                     self.stdout.write("   🤖 Performing ML inference...")
                     try:
                         # Call the method - it returns a DICTIONARY
-                        result_dict = ml_service.perform_inference(article)
+                        result_dict = ml_service.perform_inference(article.article_text)
 
                         # Extract values from the returned dictionary
                         strategic_intent = result_dict.get('strategic_intent')
