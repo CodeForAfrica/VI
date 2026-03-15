@@ -997,37 +997,82 @@ class MLInferenceService:
             logger.error(f"Error in tone inference: {e}")
             return 'neutral', 0.3
 
-    def perform_inference(self, article_text):
-        """Main inference method"""
-        processed_text = self.preprocess_text(article_text)
-        if not processed_text:
+        def perform_inference(self, article_text):
+            """Main inference method"""
+            processed_text = self.preprocess_text(article_text)
+            if not processed_text:
+                return {
+                    'strategic_intent': 'unknown',
+                    'tone': 'neutral',
+                    'confidence': 0.0,
+                    'lang_detect': 'und',
+                    'use_afrolm': False,
+                    'strategic_intent_conf': 0.0,
+                    'strategic_intent_source': 'model' # Still default for empty text if needed
+                }
+    
+            lang_code = self.detect_language(processed_text)
+            is_lowres = self.is_low_resource_lang(lang_code)
+    
+            # --- NEW: Wrap strategic intent call in try-except ---
+            try:
+                strategic_intent_result = self.perform_strategic_intent_inference(processed_text)
+                # Ensure the result is a tuple with 3 elements
+                if isinstance(strategic_intent_result, tuple) and len(strategic_intent_result) == 3:
+                    strategic_intent, si_confidence, si_source = strategic_intent_result
+                else:
+                    # Handle unexpected result from perform_strategic_intent_inference
+                    logger.error(f"perform_strategic_intent_inference returned unexpected result: {strategic_intent_result}")
+                    strategic_intent = 'unknown'
+                    si_confidence = 0.0
+                    si_source = 'error_perform_strategic_intent_inference'
+            except Exception as e_si:
+                logger.error(f"Error in perform_strategic_intent_inference: {e_si}")
+                import traceback
+                traceback.print_exc() # Print full traceback for debugging
+                strategic_intent = 'unknown'
+                si_confidence = 0.0
+                si_source = 'error_perform_strategic_intent_inference'
+    
+            # --- NEW: Wrap tone inference call in try-except (should already be done in perform_tone_inference, but good practice here too) ---
+            try:
+                tone_result = self.perform_tone_inference(processed_text)
+                # Ensure the result is a tuple with 2 elements
+                if isinstance(tone_result, tuple) and len(tone_result) == 2:
+                    tone, tone_confidence = tone_result
+                else:
+                    logger.error(f"perform_tone_inference returned unexpected result: {tone_result}")
+                    tone = 'neutral'
+                    tone_confidence = 0.3
+            except Exception as e_tone:
+                logger.error(f"Error in perform_tone_inference: {e_tone}")
+                import traceback
+                traceback.print_exc() # Print full traceback for debugging
+                tone = 'neutral'
+                tone_confidence = 0.3
+    
+            # --- NEW: Calculate confidence safely ---
+            try:
+                # Use the confidence values obtained, defaulting to 0.0 if they were set to 0.0 due to errors
+                confidence = max(si_confidence, tone_confidence)
+            except NameError:
+                # This block might be redundant now due to the above error handling,
+                # but added as a safeguard if si_confidence/tone_confidence somehow remain undefined despite the try blocks above.
+                logger calculation failed due to undefined si_confidence or tone_confidence.")
+                confidence = 0.0
+                si_confidence = 0.0 # Ensure it's defined for the return dictionary
+                si_source = 'error_conf_calculation' # Update source if calculation failed
+                tone_confidence = 0.3 # Ensure it's defined for the return dictionary
+    
             return {
-                'strategic_intent': 'unknown',
-                'tone': 'neutral',
-                'confidence': 0.0,
-                'lang_detect': 'und',
-                'use_afrolm': False,
-                'strategic_intent_conf': 0.0,
-                'strategic_intent_source': 'model' # Still default for empty text if needed
+                'strategic_intent': strategic_intent,
+                'tone': tone,
+                'confidence': confidence, # Use the calculated confidence
+                'lang_detect': lang_code,
+                'use_afrolm': is_lowres,
+                'strategic_intent_conf': si_confidence, # Use the SI-specific confidence
+                'strategic_intent_source': si_source # Use the determined source
             }
-
-        lang_code = self.detect_language(processed_text)
-        is_lowres = self.is_low_resource_lang(lang_code)
-
-        #strategic_intent, si_confidence, si_source = self.perform_strategic_intent_inference(processed_text)
-        tone, tone_confidence = self.perform_tone_inference(processed_text)
-
-        confidence = max(si_confidence, tone_confidence)
-
-        return {
-            'strategic_intent': strategic_intent,
-            'tone': tone,
-            'confidence': si_confidence, # Or max(si_confidence, tone_confidence) depending on your logic
-            'lang_detect': lang_code,
-            'use_afrolm': is_lowres,
-            'strategic_intent_conf': si_confidence,
-            'strategic_intent_source': si_source # <--- CORRECTED: Use the dynamic source
-        }
 
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """
