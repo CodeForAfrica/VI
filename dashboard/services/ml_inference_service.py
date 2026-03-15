@@ -345,15 +345,13 @@ class MLInferenceService:
         """
         # Get model prediction using existing logic
         # Call the underlying prediction method that returns pred_label and confidence
-        # This assumes your current logic inside the old perform_strategic_intent_inference
-        # can be isolated into a helper that returns (pred_label, confidence).
-        # If the current method already returns (intent, confidence), use that.
-        # Example adapted from your current file:
+        # This adapts the current logic inside the existing perform_strategic_intent_inference
+        # to return (pred_label, confidence).
         try:
             classifier = self._load_strategic_classifier() # Load the model (uses caching)
             if classifier is None:
                 logger.error("Failed to load strategic classifier.")
-                return "unknown", 0.0, "error"
+                return "unknown", 0.0, "error_loading_model"
 
             # Prepare input
             inputs = self.tokenizer(
@@ -372,7 +370,8 @@ class MLInferenceService:
                 predicted_class_id = torch.argmax(probabilities, dim=-1).item()
                 model_confidence = torch.max(probabilities).item() # Max probability as confidence
 
-            # try:
+            # Decode label
+            try:
                 model_intent = classifier.label_encoder.inverse_transform([predicted_class_id])[0]
             except (IndexError, AttributeError) as e:
                 logger.error(f"Error decoding model prediction: {e}")
@@ -394,27 +393,44 @@ class MLInferenceService:
         final_confidence = 0.0
         prediction_source = "unknown" # Default
 
+        # Define a threshold for trusting a match
+        CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6 # Example: Require at least 0.6 confidence even for a match
+
         if model_intent and llm_intent:
             # Both predictions available
             if model_intent.lower() == llm_intent.lower(): # Case-insensitive match check
-                # Predictions match - use the model prediction (as it might be faster/reliable for known patterns)
-                # Take the higher of the two confidences if they differ significantly, or just use the model's
-                final_intent = model_intent # Or llm_intent, they are the same semantically
-                final_confidence = max(model_confidence, llm_confidence)
-                prediction_source = "ensemble_matched"
-                logger.info("Model and LLM predictions MATCHED.")
+                max_conf_of_match = max(model_confidence, llm_confidence)
+                if max_conf_of_match >= CONFIDENCE_THRESHOLD_FOR_MATCH:
+                    # Predictions match AND confidence is sufficiently high
+                    final_intent = model_intent # Or llm_intent, they are the same semantically
+                    final_confidence = max_conf_of_match
+                    prediction_source = "ensemble_matched_confirmed" # Different source to indicate threshold met
+                    logger.info(f"Model and LLM predictions MATCHED with sufficient confidence (>={CONFIDENCE_THRESHOLD_FOR_MATCH}). Final Confidence: {final_confidence}")
+                else:
+                    # Predictions match BUT confidence is low - treat as disagreement, choose higher confidence
+                    # This prevents trusting low-confidence agreements
+                    if model_confidence >= llm_confidence:
+                        final_intent = model_intent
+                        final_confidence = model_confidence
+                        prediction_source = "model_selected_after_low_match"
+                        logger.info(f"Model and LLM predictions MATCHED but confidence was low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Choosing Model based on higher confidence ({model_confidence}).")
+                    else:
+                        final_intent = llm_intent
+                        final_confidence = llm_confidence
+                        prediction_source = "llm_selected_after_low_match"
+                        logger.info(f"Model and LLM predictions MATCHED but confidence was low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Choosing LLM based on higher confidence ({llm_confidence}).")
             else:
                 # Predictions differ - choose based on confidence
                 if model_confidence >= llm_confidence:
                     final_intent = model_intent
                     final_confidence = model_confidence
                     prediction_source = "model"
-                    logger.info("Model confidence higher, using MODEL prediction.")
+                    logger.info("Model and LLM predictions DIFFER. Model confidence higher, using MODEL prediction.")
                 else:
                     final_intent = llm_intent
                     final_confidence = llm_confidence
                     prediction_source = "llm"
-                    logger.info("LLM confidence higher, using LLM prediction.")
+                    logger.info("Model and LLM predictions DIFFER. LLM confidence higher, using LLM prediction.")
         elif model_intent:
             # Only model prediction available
             final_intent = model_intent
@@ -436,7 +452,7 @@ class MLInferenceService:
 
         logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
         return final_intent, final_confidence, prediction_source
-
+        
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
@@ -998,7 +1014,7 @@ class MLInferenceService:
         lang_code = self.detect_language(processed_text)
         is_lowres = self.is_low_resource_lang(lang_code)
 
-        strategic_intent, si_confidence = self.perform_strategic_intent_inference(processed_text)
+        strategic_intent, si_confidence, si_source = self.perform_strategic_intent_inference(processed_text)
         tone, tone_confidence = self.perform_tone_inference(processed_text)
 
         confidence = max(si_confidence, tone_confidence)
@@ -1006,7 +1022,7 @@ class MLInferenceService:
         return {
             'strategic_intent': strategic_intent,
             'tone': tone,
-            'confidence': confidence,
+            'confidence': si_confidence,
             'lang_detect': lang_code,
             'use_afrolm': is_lowres,
             'strategic_intent_conf': si_confidence,
