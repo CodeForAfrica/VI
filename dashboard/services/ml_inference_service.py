@@ -1014,7 +1014,7 @@ class MLInferenceService:
         lang_code = self.detect_language(processed_text)
         is_lowres = self.is_low_resource_lang(lang_code)
 
-        strategic_intent, si_confidence, si_source = self.perform_strategic_intent_inference(processed_text)
+        #strategic_intent, si_confidence, si_source = self.perform_strategic_intent_inference(processed_text)
         tone, tone_confidence = self.perform_tone_inference(processed_text)
 
         confidence = max(si_confidence, tone_confidence)
