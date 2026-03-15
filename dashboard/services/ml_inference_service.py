@@ -263,7 +263,180 @@ class MLInferenceService:
             print(f"⚠️ Archive cache path does not exist: {archive_model_path}")
         
         return False # Model not found in archive cache
-    
+        
+    def _get_llm_strategic_intent(self, text: str):
+        """
+        Calls the LLM (Groq) to predict strategic intent for a single text.
+
+        Args:
+            text (str): The article text.
+
+        Returns:
+            tuple: (predicted_intent: str, confidence: float, notes: str or None)
+                   Returns (None, 0.0, error_message) on failure.
+        """
+        groq_api_key = getattr(settings, 'GROQ_API_KEY', '')
+        if not groq_api_key:
+            logger.error("GROQ_API_KEY not found in settings.")
+            return None, 0.0, "API key not configured"
+
+        try:
+            client = Groq(api_key=groq_api_key)
+            system_message = {
+                "role": "system",
+                "content": (
+                    "Analyze the provided text to identify the primary strategic intent "
+                    "related to foreign influence on the target country mentioned in the text. "
+                    "Label options include: Economic, Sovereignty, LGBTQ, Religious, "
+                    "ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility. "
+                    "Respond ONLY with a JSON object containing the keys: "
+                    "'strategic_intent' (the label), 'strategic_intent_conf' (a float between 0 and 1 "
+                    "indicating your confidence in this label), and 'notes' (optional brief reasoning). "
+                    "If the text does not clearly relate to any of these intents, label it 'Neutral'."
+                )
+            }
+            user_message = {"role": "user", "content": text[:4000]} # Limit text length
+
+            GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama3-8b-8192') # Use a default or configurable model
+            response = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[system_message, user_message],
+                temperature=0.0 # Low temperature for consistency
+            )
+
+            text_response = response.choices[0].message.content.strip()
+            # Extract JSON from the response (in case it includes other text)
+            json_match = re.search(r'\{.*\}', text_response, re.DOTALL)
+            if not json_match:
+                logger.warning(f"Could not extract JSON from LLM response: {text_response}")
+                return None, 0.0, "Invalid JSON response from LLM"
+
+            js = json.loads(json_match.group(0))
+
+            intent = js.get('strategic_intent')
+            conf = js.get('strategic_intent_conf')
+            notes = js.get('notes')
+
+            # Validate confidence
+            if not isinstance(conf, (int, float)) or not (0.0 <= conf <= 1.0):
+                 logger.warning(f"Invalid confidence from LLM: {conf}. Defaulting to 0.0.")
+                 conf = 0.0
+
+            return intent, float(conf), notes
+
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON decode error from LLM: {je}, Response: {text_response}")
+            return None, 0.0, f"JSON decode error: {str(je)}"
+        except Exception as e:
+            logger.error(f"Error calling LLM for text: {str(e)[:100]}...") # Log first 100 chars of error
+            return None, 0.0, f"LLM API error: {str(e)}"
+
+    # Modify the main strategic intent method
+    def perform_strategic_intent_inference(self, article_text):
+        """
+        Performs strategic intent inference using both the calibrated model and LLM,
+        compares results, and returns the final intent, confidence, and source.
+
+        Args:
+            article_text (str): The article text.
+
+        Returns:
+            tuple: (final_intent: str, final_confidence: float, prediction_source: str)
+        """
+        # Get model prediction using existing logic
+        # Call the underlying prediction method that returns pred_label and confidence
+        # This assumes your current logic inside the old perform_strategic_intent_inference
+        # can be isolated into a helper that returns (pred_label, confidence).
+        # If the current method already returns (intent, confidence), use that.
+        # Example adapted from your current file:
+        try:
+            classifier = self._load_strategic_classifier() # Load the model (uses caching)
+            if classifier is None:
+                logger.error("Failed to load strategic classifier.")
+                return "unknown", 0.0, "error"
+
+            # Prepare input
+            inputs = self.tokenizer(
+                article_text,
+                truncation=True,
+                padding=True,
+                max_length=512,
+                return_tensors="pt"
+            ).to(classifier.device)
+
+            # Perform prediction
+            with torch.no_grad():
+                outputs = classifier(**inputs)
+                logits = outputs.logits
+                probabilities = torch.softmax(logits, dim=-1)
+                predicted_class_id = torch.argmax(probabilities, dim=-1).item()
+                model_confidence = torch.max(probabilities).item() # Max probability as confidence
+
+            # try:
+                model_intent = classifier.label_encoder.inverse_transform([predicted_class_id])[0]
+            except (IndexError, AttributeError) as e:
+                logger.error(f"Error decoding model prediction: {e}")
+                model_intent = "unknown"
+
+        except Exception as e_model:
+            logger.error(f"Error during model inference: {e_model}")
+            model_intent = "unknown"
+            model_confidence = 0.0
+
+        logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}")
+
+        # Get LLM prediction
+        llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
+        logger.info(f"LLM Prediction: {llm_intent}, Confidence: {llm_confidence}, Notes: {llm_notes}")
+
+        # --- COMPARISON AND DECISION LOGIC ---
+        final_intent = None
+        final_confidence = 0.0
+        prediction_source = "unknown" # Default
+
+        if model_intent and llm_intent:
+            # Both predictions available
+            if model_intent.lower() == llm_intent.lower(): # Case-insensitive match check
+                # Predictions match - use the model prediction (as it might be faster/reliable for known patterns)
+                # Take the higher of the two confidences if they differ significantly, or just use the model's
+                final_intent = model_intent # Or llm_intent, they are the same semantically
+                final_confidence = max(model_confidence, llm_confidence)
+                prediction_source = "ensemble_matched"
+                logger.info("Model and LLM predictions MATCHED.")
+            else:
+                # Predictions differ - choose based on confidence
+                if model_confidence >= llm_confidence:
+                    final_intent = model_intent
+                    final_confidence = model_confidence
+                    prediction_source = "model"
+                    logger.info("Model confidence higher, using MODEL prediction.")
+                else:
+                    final_intent = llm_intent
+                    final_confidence = llm_confidence
+                    prediction_source = "llm"
+                    logger.info("LLM confidence higher, using LLM prediction.")
+        elif model_intent:
+            # Only model prediction available
+            final_intent = model_intent
+            final_confidence = model_confidence
+            prediction_source = "model_only"
+            logger.info("Only model prediction available, using MODEL prediction.")
+        elif llm_intent:
+            # Only LLM prediction available
+            final_intent = llm_intent
+            final_confidence = llm_confidence
+            prediction_source = "llm_only"
+            logger.info("Only LLM prediction available, using LLM prediction.")
+        else:
+            # Neither prediction worked
+            final_intent = "unknown"
+            final_confidence = 0.0
+            prediction_source = "error"
+            logger.error("Both model and LLM failed to predict strategic intent.")
+
+        logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
+        return final_intent, final_confidence, prediction_source
+
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
