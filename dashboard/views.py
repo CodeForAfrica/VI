@@ -434,60 +434,60 @@ class DisinfoAnalysisChatbot:
             RECOMMENDATION: Monitor France-Senegal relations closely.
             """
     
-            try:
-                chat_completion = self.client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
-                    ],
-                    model=self.model,
-                    temperature=0.1,
-                )
-    
-                # --- CHECKS  ---
-                # Check if the API response object itself is None (unlikely but possible if library fails)
-                if chat_completion is None:
-                    print("DEBUG: chat_completion object is None") # Add logging
-                    return "AI Error: The model returned an empty response object."
-    
-                # Check if the 'choices' attribute exists and is not empty
-                if not hasattr(chat_completion, 'choices') or not chat_completion.choices:
-                    print("DEBUG: chat_completion.choices is empty or missing") # Add logging
-                    return "AI Error: The model returned an unexpected response format (no choices)."
-    
-                # Check if the first choice exists
-                if len(chat_completion.choices) == 0:
-                    print("DEBUG: chat_completion.choices list is empty") # Add logging
-                    return "AI Error: The model returned an empty choices list."
-    
-                first_choice = chat_completion.choices[0]
-    
-                # Check if the 'message' attribute exists in the first choice
-                if not hasattr(first_choice, 'message'): 
-                     print("DEBUG: first_choice.message is missing") 
-                     return "AI Error: The model returned an unexpected response format (no message in choice)." 
-    
-                # Check if the 'content' attribute exists in the message
-                if not hasattr(first_choice.message, 'content'): 
-                     print("DEBUG: first_choice.message.content is missing") # 
-                     return "AI Error: The model returned an unexpected response format (no content in message)." 
-    
-                # Finally, get the content
-                content = first_choice.message.content
-    
-                # Check if the content itself is None (possible if API processed but returned nothing)
-                if content is None:
-                    print("DEBUG: content within message is None") 
-                    return "AI Error: The model did not generate a response."
-    
-                # If all checks pass, return the content
-                print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") 
-                return content
-    
-            except Exception as e:
-                # Catch any exception during the API call or processing
-                print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") 
-                return f"AI Error: {str(e)}"
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuery: '{query}'"}
+                ],
+                model=self.model,
+                temperature=0.1,
+            )
+
+            # --- CHECKS  ---
+            # Check if the API response object itself is None (unlikely but possible if library fails)
+            if chat_completion is None:
+                print("DEBUG: chat_completion object is None") # Add logging
+                return "AI Error: The model returned an empty response object."
+
+            # Check if the 'choices' attribute exists and is not empty
+            if not hasattr(chat_completion, 'choices') or not chat_completion.choices:
+                print("DEBUG: chat_completion.choices is empty or missing") # Add logging
+                return "AI Error: The model returned an unexpected response format (no choices)."
+
+            # Check if the first choice exists
+            if len(chat_completion.choices) == 0:
+                print("DEBUG: chat_completion.choices list is empty") # Add logging
+                return "AI Error: The model returned an empty choices list."
+
+            first_choice = chat_completion.choices[0]
+
+            # Check if the 'message' attribute exists in the first choice
+            if not hasattr(first_choice, 'message'): 
+                 print("DEBUG: first_choice.message is missing") 
+                 return "AI Error: The model returned an unexpected response format (no message in choice)." 
+
+            # Check if the 'content' attribute exists in the message
+            if not hasattr(first_choice.message, 'content'): 
+                 print("DEBUG: first_choice.message.content is missing") # 
+                 return "AI Error: The model returned an unexpected response format (no content in message)." 
+
+            # Finally, get the content
+            content = first_choice.message.content
+
+            # Check if the content itself is None (possible if API processed but returned nothing)
+            if content is None:
+                print("DEBUG: content within message is None") 
+                return "AI Error: The model did not generate a response."
+
+            # If all checks pass, return the content
+            print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") 
+            return content
+
+        except Exception as e:
+            # Catch any exception during the API call or processing
+            print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") 
+            return f"AI Error: {str(e)}"
             
     def get_actor_stats(self, country=None):
         """Get aggregated stats for actors"""
