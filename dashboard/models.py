@@ -59,6 +59,10 @@ class MediaNarrative(Model):
     target_country = CharField(max_length=255, blank=True, null=True)
     url = URLField(max_length=500, blank=True, null=True)
     confidence = FloatField(null=True, blank=True)
+    prediction_source = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text="Source of the strategic intent prediction: model, llm, ensemble_matched, model_only, llm_only, error"
+    )
     lang_detect = CharField(max_length=10, blank=True, null=True)
     use_afrolm = BooleanField(default=False)
     llm_strat = CharField(max_length=255, blank=True, null=True)
