@@ -166,7 +166,9 @@ class Command(BaseCommand):
                         lang_detect = result_dict.get('lang_detect')
                         use_afrolm = result_dict.get('use_afrolm')
 
-                        self.stdout.write(f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {si_confidence:.2f} | Source: {si_source}")
+                        self.stdout.write(
+                            f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {si_confidence:.2f if si_confidence is not None else 'N/A'} | Source: {si_source}"
+                        )
 
                         # Calculate vulnerability index using the obtained values
                         # Using si_confidence as the confidence parameter for VI calculation
