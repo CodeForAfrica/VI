@@ -152,46 +152,26 @@ class Command(BaseCommand):
                 if not skip_ml:
                     self.stdout.write("   🤖 Performing ML inference...")
                     try:
-                        # Call the method - it returns a DICTIONARY
                         result_dict = ml_service.perform_inference(article.article_text)
-
-                        # Extract values from the returned dictionary
-                        strategic_intent = result_dict.get('strategic_intent')
-                        tone = result_dict.get('tone')
-                        # IMPORTANT: Use the correct key for the confidence derived from strategic intent
-                        si_confidence = result_dict.get('strategic_intent_conf') # Use 'strategic_intent_conf', not 'confidence' if you want the SI-specific confidence
-                        si_source = result_dict.get('strategic_intent_source')
-                        # Use the overall confidence if that's what's needed elsewhere in the VI calculation
-                        overall_confidence = result_dict.get('confidence') # This might be max(si_conf, tone_conf) depending on perform_inference logic
-                        lang_detect = result_dict.get('lang_detect')
-                        use_afrolm = result_dict.get('use_afrolm')
-
-                        self.stdout.write(
+                        
+                        # Extract ONLY what we need ✅
+                        strategic_intent = result_dict.get('strategic_intent', 'unknown')
+                        tone = result_dict.get('tone', 'neutral')
+                        confidence = result_dict.get('confidence', 0.0)
+                        vi_score = result_dict.get('vulnerability_index', 0.0)
+                    
+                        self.stdout.write(  # ✅ NO ERRORS!
                             f"   🧠 Intent: {strategic_intent} | Tone: {tone} | "
-                            f"Conf: {si_confidence:.2f if isinstance(si_confidence, (int, float)) else 'N/A'} | "
-                            f"Source: {si_source or 'N/A'}"
+                            f"Conf: {confidence:.2f} | VI: {vi_score:.3f}"
                         )
-                        # Calculate vulnerability index using the obtained values
-                        # Using si_confidence as the confidence parameter for VI calculation
-                        vi_score = ml_service.calculate_vulnerability_index(
-                            strategic_intent, tone, target_country, inferred_actor, si_confidence # or overall_confidence
-                        )
-                        self.stdout.write(f"   📊 Vulnerability Index: {vi_score}")
-
-                        # Assign the results to the article object
+                    
+                        # Save ✅
                         article.strategic_intent = strategic_intent
-                        article.confidence = si_confidence # Or overall_confidence, depending on your needs
-                        article.prediction_source = si_source
                         article.tone = tone
-                        article.lang_detect = lang_detect
-                        article.use_afrolm = use_afrolm
-                        article.vulnerability_index = vi_score # Update VI using the calculated value
-                        article.ml_processed_at = timezone.now() # Add timestamp if desired
-
-                        # Save the updated article
+                        article.confidence = confidence
+                        article.vulnerability_index = vi_score
                         article.save()
-
-                        self.stdout.write(f"   ✅ Saved: ID {article.id}")
+    
                         processed += 1
 
                     except Exception as e:
@@ -203,31 +183,16 @@ class Command(BaseCommand):
                         # For now, let's increment errors and continue processing other articles
                         continue
 
-                else: # Fallback values if ML is skipped
-                    # Use existing values or defaults if ML is skipped
-                    strategic_intent = article.strategic_intent or 'Unknown'
-                    tone = article.tone or 'neutral'
-                    si_confidence = article.confidence or 0.0 # Or article.confidence if you want to preserve it
-                    si_source = article.prediction_source or 'fallback' # Or article.prediction_source if you want to preserve it
-                    lang_detect = article.lang_detect or 'en'
-                    use_afrolm = article.use_afrolm or False
-
-                    # Calculate vulnerability index using the fallback values
-                    self.stdout.write("   📊 Calculating Vulnerability Index (fallback)...")
+                else:
+                    self.stdout.write("   📊 Skip ML - Calc VI only")
                     vi_score = ml_service.calculate_vulnerability_index(
-                        strategic_intent, tone, target_country, inferred_actor, si_confidence # or overall_confidence
+                        article.strategic_intent or 'unknown',
+                        article.tone or 'neutral',
+                        target_country, inferred_actor,
+                        getattr(article, 'confidence', 0.0)
                     )
-                    self.stdout.write(f"   📊 Vulnerability Index (fallback): {vi_score}")
-
-                    # Update only the vulnerability index if ML was skipped
-                    # Other fields remain unchanged unless explicitly set otherwise
                     article.vulnerability_index = vi_score
-                    article.ml_processed_at = timezone.now() # Optionally update timestamp even if ML was skipped
-
-                    # Save the updated article (only VI changed)
                     article.save()
-
-                    self.stdout.write(f"   ✅ Saved (fallback): ID {article.id}")
                     processed += 1
 
             except Exception as e:
