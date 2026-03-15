@@ -985,7 +985,7 @@ class MLInferenceService:
                 logger.warning("Tone classifier not available, returning neutral")
                 return 'neutral', 0.3
                 
-            probs = classifier.predict_proba([article_text],_size=1)
+            probs = classifier.predict_proba([article_text])
             pred_idx = np.argmax(probs[0])
             if self._tone_label_encoder:
                 pred_label = self._tone_label_encoder.inverse_transform([pred_idx])[0]
