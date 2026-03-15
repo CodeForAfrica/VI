@@ -57,6 +57,9 @@ class Command(BaseCommand):
         # Vulnerability index is calculated *after* other fields, so don't filter on it initially.
         # Focus on articles needing ML inference (strategic_intent, tone)
         # Also filter for articles that have the *prerequisites* for ML: article_text, target_country, inferred_actor
+        TARGET_COUNTRIES = ["Senegal", "DRC", "Ethiopia", "Côte d'Ivoire", "South Africa"]
+
+        # Then use this list in the filter query:
         articles = MediaNarrative.objects.filter(
             # Prerequisites must exist
             (Q(article_text__isnull=False) & ~Q(article_text='')) &
@@ -64,8 +67,8 @@ class Command(BaseCommand):
             (Q(inferred_actor__isnull=False) & ~Q(inferred_actor=''))
             # AND target country is one of the desired ones
             &
-            (Q(target_country__in=COUNTRIES)) # <-- ADD THIS LINE
-            # AND at least one ML-derived field is missing
+            (Q(target_country__in=TARGET_COUNTRIES)) # <-- Use the canonical names list
+            # AND at least one ML-derived field is missing (or remove this if re-processing all)
             &
             (
                 (Q(strategic_intent__isnull=True) | Q(strategic_intent='')) # Needs ML
@@ -75,7 +78,6 @@ class Command(BaseCommand):
                 # | (Q(vulnerability_index__isnull=True) | Q(vulnerability_index='')) # Calculated later
             )
         )
-
 
         # Get unique articles and limit if specified
         articles = articles.distinct().order_by('id') # Order consistently
