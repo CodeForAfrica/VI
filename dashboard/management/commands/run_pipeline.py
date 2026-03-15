@@ -148,75 +148,83 @@ class Command(BaseCommand):
                     continue
                 self.stdout.write(f"   ✅ Valid: {target_country} | Actor: {inferred_actor}")
 
-                # --- ML INFERENCE (using the SINGLE instance created earlier) ---
+                # --- ML INFERENCE, VI CALCULATION, and SAVING (handling the dictionary result) ---
                 if not skip_ml:
-                    # The ml_service instance will use its internal caching
-                    # to avoid re-downloading models if they were already loaded
-                    # during the processing of a previous article in this loop.
-                    # It should prioritize local models over S3 downloads.
                     self.stdout.write("   🤖 Performing ML inference...")
-                    results = ml_service.perform_inference(article_text)
+                    try:
+                        # Call the method - it returns a DICTIONARY
+                        result_dict = ml_service.perform_inference(article)
 
-                    strategic_intent = results['strategic_intent']
-                    tone = results['tone']
-                    confidence = results['confidence']
-                    lang_detect = results['lang_detect']
-                    # use_afrolm, strategic_intent_conf, strategic_intent_source are also available
+                        # Extract values from the returned dictionary
+                        strategic_intent = result_dict.get('strategic_intent')
+                        tone = result_dict.get('tone')
+                        # IMPORTANT: Use the correct key for the confidence derived from strategic intent
+                        si_confidence = result_dict.get('strategic_intent_conf') # Use 'strategic_intent_conf', not 'confidence' if you want the SI-specific confidence
+                        si_source = result_dict.get('strategic_intent_source')
+                        # Use the overall confidence if that's what's needed elsewhere in the VI calculation
+                        overall_confidence = result_dict.get('confidence') # This might be max(si_conf, tone_conf) depending on perform_inference logic
+                        lang_detect = result_dict.get('lang_detect')
+                        use_afrolm = result_dict.get('use_afrolm')
 
-                    self.stdout.write(f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {confidence:.2f}")
-                else:
-                    # Fallback values if ML is skipped
+                        self.stdout.write(f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {si_confidence:.2f} | Source: {si_source}")
+
+                        # Calculate vulnerability index using the obtained values
+                        # Using si_confidence as the confidence parameter for VI calculation
+                        vi_score = ml_service.calculate_vulnerability_index(
+                            strategic_intent, tone, target_country, inferred_actor, si_confidence # or overall_confidence
+                        )
+                        self.stdout.write(f"   📊 Vulnerability Index: {vi_score}")
+
+                        # Assign the results to the article object
+                        article.strategic_intent = strategic_intent
+                        article.confidence = si_confidence # Or overall_confidence, depending on your needs
+                        article.prediction_source = si_source
+                        article.tone = tone
+                        article.lang_detect = lang_detect
+                        article.use_afrolm = use_afrolm
+                        article.vulnerability_index = vi_score # Update VI using the calculated value
+                        article.ml_processed_at = timezone.now() # Add timestamp if desired
+
+                        # Save the updated article
+                        article.save()
+
+                        self.stdout.write(f"   ✅ Saved: ID {article.id}")
+                        processed += 1
+
+                    except Exception as e:
+                        self.stderr.write(f"   ❌ Error during ML/Vulnerability Index processing for article ID {article.id}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        errors += 1
+                        # Decide whether to continue with the next article or stop
+                        # For now, let's increment errors and continue processing other articles
+                        continue
+
+                else: # Fallback values if ML is skipped
+                    # Use existing values or defaults if ML is skipped
                     strategic_intent = article.strategic_intent or 'Unknown'
                     tone = article.tone or 'neutral'
-                    confidence = 0.0
+                    si_confidence = article.confidence or 0.0 # Or article.confidence if you want to preserve it
+                    si_source = article.prediction_source or 'fallback' # Or article.prediction_source if you want to preserve it
                     lang_detect = article.lang_detect or 'en'
-                    self.stdout.write(f"   🧠 ML Skipped, using fallbacks: Intent: {strategic_intent}, Tone: {tone}")
+                    use_afrolm = article.use_afrolm or False
 
-                # --- CALCULATE VULNERABILITY INDEX (using the SINGLE instance's cached methods) ---
-                if not skip_ml:
-                    self.stdout.write("   📊 Calculating Vulnerability Index...")
-                    vulnerability_index = ml_service.calculate_vulnerability_index(
-                        strategic_intent,
-                        tone,
-                        target_country,
-                        inferred_actor,
-                        confidence
+                    # Calculate vulnerability index using the fallback values
+                    self.stdout.write("   📊 Calculating Vulnerability Index (fallback)...")
+                    vi_score = ml_service.calculate_vulnerability_index(
+                        strategic_intent, tone, target_country, inferred_actor, si_confidence # or overall_confidence
                     )
-                    self.stdout.write(f"   📊 Vulnerability Index: {vulnerability_index}")
-                else:
-                    vulnerability_index = article.vulnerability_index or 0.0
-                    self.stdout.write(f"   📊 VI Skipped, using fallback: {vulnerability_index}")
+                    self.stdout.write(f"   📊 Vulnerability Index (fallback): {vi_score}")
 
-                                # --- SAVE TO DATABASE (or dry run) ---
-                if dry_run:
-                    self.stdout.write(self.style.WARNING(f"   [DRY RUN] Would save:"))
-                    self.stdout.write(f"       - article_text: {len(article_text)} chars")
-                    self.stdout.write(f"       - target_country: {target_country}")
-                    self.stdout.write(f"       - inferred_actor: {inferred_actor}")
-                    self.stdout.write(f"       - strategic_intent: {strategic_intent}")
-                    self.stdout.write(f"       - tone: {tone}")
-                    self.stdout.write(f"       - vulnerability_index: {vulnerability_index}")
-                    # Simulate saving logic
-                    processed += 1
-                    # CORRECTED LINE: Removed the extra ')'
-                    self.stdout.write(self.style.WARNING(f"   [DRY RUN] Processed ID {article.id}"))
-                else:
-                    # Update the article object with results
-                    # article_text was already present or derived, no need to update here
-                    # Update target_country and inferred_actor if they were derived in this loop (they weren't in this version, taken from DB)
-                    # article.target_country = target_country # Already in DB
-                    # article.inferred_actor = inferred_actor # Already in DB
-                    article.strategic_intent = strategic_intent
-                    article.tone = tone
-                    article.confidence = confidence
-                    article.lang_detect = lang_detect
-                    article.vulnerability_index = vulnerability_index
-                    article.ml_processed_at = timezone.now() # Add timestamp if desired
+                    # Update only the vulnerability index if ML was skipped
+                    # Other fields remain unchanged unless explicitly set otherwise
+                    article.vulnerability_index = vi_score
+                    article.ml_processed_at = timezone.now() # Optionally update timestamp even if ML was skipped
 
-                    # Save the updated article to the database
+                    # Save the updated article (only VI changed)
                     article.save()
 
-                    self.stdout.write(f"   ✅ Saved: ID {article.id}")
+                    self.stdout.write(f"   ✅ Saved (fallback): ID {article.id}")
                     processed += 1
 
             except Exception as e:
