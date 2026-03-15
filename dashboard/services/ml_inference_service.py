@@ -1002,12 +1002,14 @@ class MLInferenceService:
         processed_text = self.preprocess_text(article_text)
         if not processed_text:
             return {
-                'strategic_intent': 'unknown',
-                'tone': 'neutral', 
-                'confidence': 0.0,
-                'vulnerability_index': 0.0,
-                'inferred_actor': 'Unknown',
-                'target_country': 'Unknown'
+                'strategic_intent': strategic_intent,
+                'strategic_intent_conf': si_confidence,      # ✅ NEW
+                'strategic_intent_source': 'model',          # ✅ NEW  
+                'confidence': max(si_confidence, tone_confidence),
+                'tone': tone,
+                'vulnerability_index': float(vi_score),
+                'inferred_actor': inferred_actor,
+                'target_country': target_country
             }
 
         try:
