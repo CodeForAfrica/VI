@@ -794,18 +794,27 @@ def overview(request):
     full_stats_qs = cache.get(filtered_qs_cache_key)
     if full_stats_qs is None:
         logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
-        # Rebuild the base queryset excluding sports (could be optimized further if cached efficiently)
+        # Rebuild the base queryset excluding sports AND applying target country filter
+        # (could be optimized further if cached efficiently)
         exclude_keywords = [
             'football', 'soccer', 'sport', 'sports', 'match', 'game',
             'tournament', 'championship', 'olympic', 'cricket', 'basketball',
             'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
             'league', 'team', 'player', 'coach', 'stadium'
         ]
+        # Start with all articles
         temp_base_qs = MediaNarrative.objects.all()
+        # Apply the sports exclusion
         for word in exclude_keywords:
              temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
 
-        # Apply user filters
+        # --- ADD TARGET COUNTRY FILTER HERE ---
+        # Filter to only include articles for the specified target countries
+        # Use the COUNTRIES constant defined at the top of the file
+        temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
+        # ----------------------------------------
+
+        # Apply user filters (from the calculator panel)
         if calc_target_country:
             temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
         if calc_foreign_actor:
