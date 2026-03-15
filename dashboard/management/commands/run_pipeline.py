@@ -153,26 +153,67 @@ class Command(BaseCommand):
                     self.stdout.write("   🤖 Performing ML inference...")
                     try:
                         result_dict = ml_service.perform_inference(article.article_text)
-                        
+
                         # Extract ONLY what we need ✅
                         strategic_intent = result_dict.get('strategic_intent', 'unknown')
                         tone = result_dict.get('tone', 'neutral')
                         confidence = result_dict.get('confidence', 0.0)
-                        vi_score = result_dict.get('vulnerability_index', 0.0)
-                    
+                        # Note: perform_inference returns 'strategic_intent_conf' and 'strategic_intent_source'
+                        # but calculate_vulnerability_index likely needs the overall 'confidence' or 'strategic_intent_conf'
+                        # and the other fields like strategic_intent, tone.
+                        # The result_dict doesn't usually contain 'vulnerability_index' directly from perform_inference.
+                        # It's calculated separately.
+                        # Let's use the confidence from the result_dict for VI calculation
+                        si_confidence = result_dict.get('strategic_intent_conf', 0.0)
+                        si_source = result_dict.get('strategic_intent_source', 'unknown')
+
+                        # Calculate VI using the freshly obtained values
+                        vi_score = ml_service.calculate_vulnerability_index(
+                            strategic_intent, tone, target_country, inferred_actor, si_confidence # or 'confidence' from result_dict
+                        )
+
                         self.stdout.write(  # ✅ NO ERRORS!
                             f"   🧠 Intent: {strategic_intent} | Tone: {tone} | "
-                            f"Conf: {confidence:.2f} | VI: {vi_score:.3f}"
+                            f"Conf: {si_confidence:.2f} | VI: {vi_score:.3f} | Source: {si_source}" # Include source if needed
                         )
-                    
-                        # Save ✅
+
+                        # Assign results to the article object
                         article.strategic_intent = strategic_intent
                         article.tone = tone
-                        article.confidence = confidence
-                        article.vulnerability_index = vi_score
-                        article.save()
-    
-                        processed += 1
+                        article.confidence = si_confidence # Or overall confidence from result_dict.get('confidence')
+                        article.prediction_source = si_source # Assign the source
+                        # article.vulnerability_index is calculated above
+
+                        # --- NEW: Save with retry logic ---
+                        save_success = False
+                        max_retries = 3
+                        retry_count = 0
+                        while not save_success and retry_count < max_retries:
+                            try:
+                                # Save the updated article
+                                article.save()
+                                save_success = True
+                                self.stdout.write(f"   ✅ Saved: ID {article.id}")
+                                # ONLY increment processed counter HERE, upon successful save
+                                processed += 1
+                            except (django.db.utils.InterfaceError, django.db.utils.OperationalError) as db_err:
+                                # Catch connection-related errors
+                                retry_count += 1
+                                self.stderr.write(f"   ⚠️ Save failed for article {article.id} (Attempt {retry_count}/{max_retries}): {db_err}. Retrying...")
+                                if retry_count < max_retries:
+                                    # Optional: Add a small delay before retrying
+                                    import time
+                                    time.sleep(2) # Wait 2 seconds before retrying
+                                else:
+                                    # Out of retries, log the error and move to the next article
+                                    self.stderr.write(f"   ❌ Failed to save article {article.id} after {max_retries} attempts: {db_err}")
+                                    errors += 1
+                                    # Decide whether to continue or stop here based on your tolerance for data loss
+                                    # For now, we'll count it as an error and continue to the next article
+                                    # Do NOT increment 'processed' here as the save failed.
+                                    break
+                        # --- END NEW BLOCK ---
+                        # The 'processed += 1' is now handled inside the retry loop only on success.
 
                     except Exception as e:
                         self.stderr.write(f"   ❌ Error during ML/Vulnerability Index processing for article ID {article.id}: {e}")
@@ -181,9 +222,9 @@ class Command(BaseCommand):
                         errors += 1
                         # Decide whether to continue with the next article or stop
                         # For now, let's increment errors and continue processing other articles
-                        continue
+                        continue # This 'continue' belongs to the main loop's try block
 
-                else:
+                else: # Fallback if skip_ml is True - This block should appear only once, after the 'if not skip_ml' block
                     self.stdout.write("   📊 Skip ML - Calc VI only")
                     vi_score = ml_service.calculate_vulnerability_index(
                         article.strategic_intent or 'unknown',
@@ -192,10 +233,10 @@ class Command(BaseCommand):
                         getattr(article, 'confidence', 0.0)
                     )
                     article.vulnerability_index = vi_score
-                    article.save()
-                    processed += 1
+                    article.save() # This save might also benefit from retry logic, but keeping it simple for now if ML is skipped
+                    processed += 1 # Increment here for the skip_ml case
 
-            except Exception as e:
+            except Exception as e: # This is the main loop's try-except block
                 logger.error(f"❌ Error processing article ID {article.id}: {e}")
                 self.stdout.write(self.style.ERROR(f"   ❌ Error: {str(e)[:100]}"))
                 errors += 1
