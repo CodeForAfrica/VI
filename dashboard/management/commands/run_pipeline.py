@@ -167,9 +167,10 @@ class Command(BaseCommand):
                         use_afrolm = result_dict.get('use_afrolm')
 
                         self.stdout.write(
-                            f"   🧠 Intent: {strategic_intent} | Tone: {tone} | Conf: {si_confidence:.2f if si_confidence is not None else 'N/A'} | Source: {si_source}"
+                            f"   🧠 Intent: {strategic_intent} | Tone: {tone} | "
+                            f"Conf: {si_confidence:.2f if isinstance(si_confidence, (int, float)) else 'N/A'} | "
+                            f"Source: {si_source or 'N/A'}"
                         )
-
                         # Calculate vulnerability index using the obtained values
                         # Using si_confidence as the confidence parameter for VI calculation
                         vi_score = ml_service.calculate_vulnerability_index(
