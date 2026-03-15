@@ -1008,7 +1008,7 @@ class MLInferenceService:
                 'lang_detect': 'und',
                 'use_afrolm': False,
                 'strategic_intent_conf': 0.0,
-                'strategic_intent_source': 'model'
+                'strategic_intent_source': 'model' # Still default for empty text if needed
             }
 
         lang_code = self.detect_language(processed_text)
@@ -1022,11 +1022,11 @@ class MLInferenceService:
         return {
             'strategic_intent': strategic_intent,
             'tone': tone,
-            'confidence': si_confidence,
+            'confidence': si_confidence, # Or max(si_confidence, tone_confidence) depending on your logic
             'lang_detect': lang_code,
             'use_afrolm': is_lowres,
             'strategic_intent_conf': si_confidence,
-            'strategic_intent_source': 'model'
+            'strategic_intent_source': si_source # <--- CORRECTED: Use the dynamic source
         }
 
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
