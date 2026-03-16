@@ -355,137 +355,107 @@ class MLInferenceService:
             return None, 0.0, f"LLM API error: {str(e)}"
 
     # Modify the main strategic intent method
-    def perform_strategic_intent_inference(self, article_text):
+    def perform_strategic_intent_batch(self, article_texts):
         """
-        Performs strategic intent inference using both the calibrated model and LLM.
+        FAST BATCH INFERENCE
+        Used by the pipeline loop to process 20 articles at a time.
         """
-        # 1. SILENCE HTTP LOGS (Place this here or in your __init__)
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-        model_intent = "unknown"
-        model_confidence = 0.0
-        predicted_class_id = None
-        
         try:
             classifier = self._load_strategic_classifier()
             if not classifier:
-                return [("unknown", 0.0)] * len(article_texts)
-    
-            # Send all 20 texts to the model at once
+                return "unknown", 0.0
+
+            # Ensemble prediction on the whole batch
             predictions, probabilities = classifier.predict(
                 article_texts, 
                 batch_size=len(article_texts), 
                 calibrated=True, 
                 return_probs=True
             )
-    
+
             results = []
             for i in range(len(predictions)):
                 intent = self._decode_label(predictions[i])
                 conf = float(np.max(probabilities[i]))
                 results.append((intent, conf))
             return results
+            
         except Exception as e:
-            logger.error(f"Batch inference failed: {e}")
+            logger.error(f"❌ Batch inference failed: {e}")
             return [("unknown", 0.0)] * len(article_texts)
 
+    def perform_strategic_intent_inference(self, article_text):
+        """
+        SINGLE INFERENCE WITH LLM FALLBACK
+        Used when batch confidence is low (< 0.6) or for single-article processing.
+        Includes full logging and decision logic.
+        """
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-        # --- LOGGING ADDED: After model prediction ---
-        logger.debug(f"perform_strategic_intent_inference: Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
-        # logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}") # Optional: Keep or remove original info log
-    
-        # Get LLM prediction
+        model_intent = "unknown"
+        model_confidence = 0.0
+        
+        # 1. Get Model Prediction
+        try:
+            classifier = self._load_strategic_classifier()
+            if classifier:
+                predictions, probabilities = classifier.predict(
+                    [article_text], 
+                    batch_size=1, 
+                    calibrated=True, 
+                    return_probs=True
+                )
+                model_intent = self._decode_label(predictions[0])
+                model_confidence = float(np.max(probabilities[0]))
+        except Exception as e:
+            logger.error(f"Model inference failed: {e}")
+
+        # 2. Get LLM Prediction
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
-        # --- LOGGING ADDED: After LLM prediction ---
-        logger.debug(f"perform_strategic_intent_inference: LLM prediction - Intent: '{llm_intent}', Confidence: {llm_confidence}, Notes: '{llm_notes}'")
-        # logger.info(f"LLM Prediction: {llm_intent}, Confidence: {llm_confidence}, Notes: {llm_notes}") # Optional: Keep or remove original info log
-    
-        # --- COMPARISON AND DECISION LOGIC ---
-        final_intent = None
+        
+        # 3. Decision Logic (Your exact logic)
+        final_intent = "unknown"
         final_confidence = 0.0
-        prediction_source = "unknown" # Default
-    
-        # Define a threshold for trusting a match
-        CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6 # Example: Require at least 0.6 confidence even for a match
-    
-        # --- LOGGING ADDED: Before comparison logic ---
-        logger.debug(f"perform_strategic_intent_inference: Entering comparison. Model (Intent: '{model_intent}', Conf: {model_confidence}), LLM (Intent: '{llm_intent}', Conf: {llm_confidence}), Threshold: {CONFIDENCE_THRESHOLD_FOR_MATCH}")
-    
+        prediction_source = "unknown"
+        CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6
+
         if model_intent and llm_intent:
-            # Both predictions available
-            # --- LOGGING ADDED: Inside 'both available' block ---
-            logger.debug(f"perform_strategic_intent_inference: Both predictions available. Checking match. Model Intent: '{model_intent}', LLM Intent: '{llm_intent}'")
-            if model_intent.lower() == llm_intent.lower(): # Case-insensitive match check
-                max_conf_of_match = max(model_confidence, llm_confidence)
-                # --- LOGGING ADDED: Inside 'match' block ---
-                logger.debug(f"perform_strategic_intent_inference: Predictions MATCH. Max Confidence of Match: {max_conf_of_match}, Threshold: {CONFIDENCE_THRESHOLD_FOR_MATCH}")
-                if max_conf_of_match >= CONFIDENCE_THRESHOLD_FOR_MATCH:
-                    # Predictions match AND confidence is sufficiently high
-                    final_intent = model_intent # Or llm_intent, they are the same semantically
-                    final_confidence = max_conf_of_match
-                    prediction_source = "ensemble_matched_confirmed" # Different source to indicate threshold met
-                    logger.info(f"Model and LLM predictions MATCHED with sufficient confidence (>={CONFIDENCE_THRESHOLD_FOR_MATCH}). Final Confidence: {final_confidence}")
+            if model_intent.lower() == llm_intent.lower():
+                max_conf = max(model_confidence, llm_confidence)
+                if max_conf >= CONFIDENCE_THRESHOLD_FOR_MATCH:
+                    final_intent, final_confidence = model_intent, max_conf
+                    prediction_source = "ensemble_matched_confirmed"
                 else:
-                    # Predictions match BUT confidence is low - treat as disagreement, choose higher confidence
-                    # This prevents trusting low-confidence agreements
-                    # --- LOGGING ADDED: Inside 'match but low conf' block ---
-                    logger.debug(f"perform_strategic_intent_inference: Predictions MATCH but confidence is low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Comparing confidences: Model ({model_confidence}) vs LLM ({llm_confidence})")
+                    # Low confidence match - pick higher
                     if model_confidence >= llm_confidence:
-                        final_intent = model_intent
-                        final_confidence = model_confidence
+                        final_intent, final_confidence = model_intent, model_confidence
                         prediction_source = "model_selected_after_low_match"
-                        logger.info(f"Model and LLM predictions MATCHED but confidence was low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Choosing Model based on higher confidence ({model_confidence}).")
                     else:
-                        final_intent = llm_intent
-                        final_confidence = llm_confidence
+                        final_intent, final_confidence = llm_intent, llm_confidence
                         prediction_source = "llm_selected_after_low_match"
-                        logger.info(f"Model and LLM predictions MATCHED but confidence was low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Choosing LLM based on higher confidence ({llm_confidence}).")
             else:
-                # Predictions differ - choose based on confidence
-                # --- LOGGING ADDED: Inside 'disagree' block ---
-                logger.debug(f"perform_strategic_intent_inference: Predictions DIFFER. Comparing confidences: Model ({model_confidence}) vs LLM ({llm_confidence})")
+                # Disagreement - pick higher
                 if model_confidence >= llm_confidence:
-                    final_intent = model_intent
-                    final_confidence = model_confidence
+                    final_intent, final_confidence = model_intent, model_confidence
                     prediction_source = "model"
-                    logger.info("Model and LLM predictions DIFFER. Model confidence higher, using MODEL prediction.")
                 else:
-                    final_intent = llm_intent
-                    final_confidence = llm_confidence
+                    final_intent, final_confidence = llm_intent, llm_confidence
                     prediction_source = "llm"
-                    logger.info("Model and LLM predictions DIFFER. LLM confidence higher, using LLM prediction.")
-        elif model_intent:
-            # Only model prediction available
-            # --- LOGGING ADDED: Inside 'model only' block ---
-            logger.debug(f"perform_strategic_intent_inference: Only Model prediction available. Intent: '{model_intent}', Conf: {model_confidence}")
-            final_intent = model_intent
-            final_confidence = model_confidence
-            prediction_source = "model_only"
-            logger.info("Only model prediction available, using MODEL prediction.")
-        elif llm_intent:
-            # Only LLM prediction available
-            # --- LOGGING ADDED: Inside 'llm only' block ---
-            logger.debug(f"perform_strategic_intent_inference: Only LLM prediction available. Intent: '{llm_intent}', Conf: {llm_confidence}")
-            final_intent = llm_intent
-            final_confidence = llm_confidence
-            prediction_source = "llm_only"
-            logger.info("Only LLM prediction available, using LLM prediction.")
-        else:
-            # Neither prediction worked
-            # --- LOGGING ADDED: Inside 'neither worked' block ---
-            logger.debug(f"perform_strategic_intent_inference: NEITHER model nor LLM prediction worked. Model Intent: '{model_intent}', LLM Intent: '{llm_intent}'")
-            final_intent = "unknown"
-            final_confidence = 0.0
-            prediction_source = "error"
-            logger.error("Both model and LLM failed to predict strategic intent.")
-    
-        # --- LOGGING ADDED: Before final return ---
-        logger.debug(f"perform_strategic_intent_inference: Final - Intent: '{final_intent}', Confidence: {final_confidence}, Source: '{prediction_source}'")
-    
+        
         logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
-        # Only return the 2 values your pipeline is looking for
-        return final_intent, final_confidence 
+        return final_intent, final_confidence
+
+    def _decode_label(self, label):
+        """Helper to convert model class IDs to string labels."""
+        if self._strategic_label_encoder:
+            try:
+                if isinstance(label, (int, np.integer)):
+                    return self._strategic_label_encoder.inverse_transform([label])[0]
+                return label
+            except:
+                return str(label)
+        return str(label)
         
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
