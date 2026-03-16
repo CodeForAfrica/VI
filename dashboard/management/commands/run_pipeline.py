@@ -102,15 +102,18 @@ class Command(BaseCommand):
         articles_list = list(articles) 
 
         for i in range(0, len(articles_list), batch_size):
+            # 1. Slice the articles into a chunk
             chunk = articles_list[i : i + batch_size]
+            
+            # 2. Extract the text from the current chunk
             article_texts = [a.article_text for a in chunk]
-            ml_results = ml_service.perform_strategic_intent_batch(article_texts)
             
             self.stdout.write(f"\n📦 Processing Batch: {i//batch_size + 1} ({len(chunk)} articles)")
 
-            # --- 1. THE BIG SPEED BOOST ---
+            # 3. THE BIG SPEED BOOST (Call the model ONCE inside the try block)
             try:
-                ml_results = ml_service.perform_strategic_intent_batch(chunk_texts)
+                # Use 'article_texts' here to match your list above
+                ml_results = ml_service.perform_strategic_intent_batch(article_texts)
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f"❌ Batch inference failed: {e}"))
                 errors += len(chunk)
