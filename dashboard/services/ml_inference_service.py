@@ -343,35 +343,28 @@ class MLInferenceService:
     # Modify the main strategic intent method
     def perform_strategic_intent_inference(self, article_text):
         """
-        Performs strategic intent inference using both the calibrated model and LLM,
-        compares results, and returns the final intent, confidence, and source.
-    
-        Args:
-            article_text (str): The article text.
-    
-        Returns:
-            tuple: (final_intent: str, final_confidence: float, prediction_source: str)
+        Performs strategic intent inference using both the calibrated model and LLM.
         """
-        # Get model prediction using existing logic
-        # Call the underlying prediction method that returns pred_label and confidence
-        # This adapts the current logic inside the existing perform_strategic_intent_inference
-        # to return (pred_label, confidence).
+        # 1. SILENCE HTTP LOGS (Place this here or in your __init__)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+        model_intent = "unknown"
+        model_confidence = 0.0
+        
         try:
-            classifier = self._load_strategic_classifier() # Load the model (uses caching)
-            if classifier is None:
-                logger.error("Failed to load strategic classifier.")
-                return "unknown", 0.0, "error_loading_model"
-            # Determine device manually since classifier wrapper doesn't have .device
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-            # Prepare input
-            inputs = self.tokenizer(
-                article_text,
-                truncation=True,
-                padding=True,
-                max_length=512,
-                return_tensors="pt"
-            ).to(classifier.device)
+            classifier = self._load_strategic_classifier()
+            if classifier is not None:
+                # FIX: Determine device manually since the wrapper doesn't have a .device attr
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+                inputs = self.tokenizer(
+                    article_text,
+                    truncation=True,
+                    padding=True,
+                    max_length=512,
+                    return_tensors="pt"
+                ).to(device)
     
             # Perform prediction
             with torch.no_grad():
