@@ -22,10 +22,21 @@ import sys
 from groq import Groq
 from transformers import AutoTokenizer
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx").propagate = False
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpcore").propagate = False
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+# Silence Transformers loading bars and shard messages
+logging.getLogger("transformers").setLevel(logging.ERROR)
+os.environ["TQDM_DISABLE"] = "True" 
+
+# Standard logger for your service
+logger = logging.getLogger(__name__)
+
 TransferConfig = None
 DetectorFactory.seed = 0
-
-logger = logging.getLogger(__name__)
 
 class MLInferenceService:
     def __init__(self):
