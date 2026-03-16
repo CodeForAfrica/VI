@@ -101,7 +101,7 @@ class MLInferenceService:
         if not intent or str(intent).lower() in ['neutral', 'unknown', 'none']:
             return 0.0
 
-        # 2. Intent Mapping Dictionary
+        # 2. Comprehensive Intent Mapping
         intent_mapping = {
             "economic": "Economic",
             "sovereignty": "Sovereignty",
@@ -111,38 +111,47 @@ class MLInferenceService:
             "militarypresence": "MilitaryPresence", 
             "resourcedependency": "ResourceDependency", 
             "socialfragility": "SocialFragility", 
+            
+            # Variations from Model/LLM
             "economic dependency": "Economic",
             "sovereignty erosion": "Sovereignty",
             "sovereignty threat": "Sovereignty",
+            "cultural hegemony": "Sovereignty",
+            "reputation damage": "Sovereignty", # Matches your current log behavior
+            "centralization of power": "Sovereignty",
+            "diplomatic influence": "Sovereignty",
+            
             "lgbtq rights": "LGBTQ",
             "lgbt advocacy": "LGBTQ",
+            
             "religious influence": "Religious",
             "religious polarisation": "Religious",
+            
             "election influence": "ElectionInfluence", 
             "election interference": "ElectionInfluence",
             "electoral interference": "ElectionInfluence",
+            "democratic interference": "ElectionInfluence",
+            
             "military presence": "MilitaryPresence", 
             "military base": "MilitaryPresence",
+            
             "resource dependency": "ResourceDependency", 
             "resource control": "ResourceDependency",
+            
             "social fragility": "SocialFragility", 
             "social unrest": "SocialFragility",
             "information warfare": "SocialFragility", 
             "human rights advocacy": "SocialFragility", 
+            "cultural influence": "SocialFragility",
+            
             "debt trap diplomacy": "Economic", 
-            "cultural influence": "SocialFragility", 
-            "centralization of power": "Sovereignty",
             "cultural exchange": "Economic",
-            "cultural hegemony": "Sovereignty",
-            "democratic interference": "ElectionInfluence",
             "diplomatic cooperation": "Economic",
-            "diplomatic influence": "Sovereignty",
         }
 
         # 3. Apply Mapping
-        # Normalize input to lowercase and strip whitespace for matching
         normalized_intent = str(intent).lower().strip()
-        mapped_intent = intent_mapping.get(normalized_intent, intent) # Default to original if not in map
+        mapped_intent = intent_mapping.get(normalized_intent, intent) 
 
         try:
             df = self._csv_risk_df
