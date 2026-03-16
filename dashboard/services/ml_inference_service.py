@@ -290,38 +290,49 @@ class MLInferenceService:
     def _get_tone(self, article_text):
         """
         Internal helper for the pipeline to get tone prediction.
+        Falls back to 'Factual' on any error.
         """
         try:
-            # 1. Load the classifier (uses the cache logic we built)
+            # 1. Load the classifier
             classifier = self._load_tone_classifier()
             if not classifier:
-                logger.warning("Tone classifier not loaded, defaulting to Factual")
                 return "Factual", 0.0
 
-            # 2. Run Inference
-            # The ensemble returns (predictions, probabilities)
-            predictions, probabilities = classifier.predict(
-                [article_text], 
-                return_probs=True
-            )
-
-            # 3. Decode the Label
-            predicted_idx = predictions[0]
+            # 2. Get the prediction (removing return_probs to fix the previous error)
+            predictions = classifier.predict([article_text])
             
-            # Check if encoder exists, otherwise use fallback classes from your log
+            # 3. Attempt to get confidence, but don't crash if it fails
+            confidence = 0.0
+            try:
+                if hasattr(classifier, 'predict_proba'):
+                    probs = classifier.predict_proba([article_text])
+                    confidence = float(np.max(probs[0]))
+            except Exception:
+                pass # Keep confidence at 0.0
+
+            # 4. Decode Label
+            predicted_val = predictions[0]
+            
+            # If it's already a string (like 'Alarmist'), use it
+            if isinstance(predicted_val, str):
+                return predicted_val, confidence
+                
+            # If it's an index, try to decode it
             if self._tone_label_encoder:
-                tone_label = self._tone_label_encoder.inverse_transform([predicted_idx])[0]
-            else:
-                classes = ['Alarmist', 'Cynical', 'Factual', 'Sensationalist']
-                tone_label = classes[predicted_idx] if predicted_idx < len(classes) else "Factual"
-
-            confidence = float(np.max(probabilities[0]))
+                tone_label = self._tone_label_encoder.inverse_transform([predicted_val])[0]
+                return str(tone_label), confidence
             
-            return tone_label, confidence
+            # Manual fallback map if encoder is missing
+            classes = ['Alarmist', 'Cynical', 'Factual', 'Sensationalist']
+            if isinstance(predicted_val, (int, np.integer)) and predicted_val < len(classes):
+                return classes[predicted_val], confidence
+
+            return "Factual", confidence
 
         except Exception as e:
-            logger.error(f"❌ Tone inference execution failed: {e}")
+            logger.error(f"❌ Tone inference failed, falling back to Factual: {e}")
             return "Factual", 0.0
+            
             
     def _get_llm_strategic_intent(self, text: str):
         """
