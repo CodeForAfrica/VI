@@ -287,6 +287,42 @@ class MLInferenceService:
         
         return False # Model not found in archive cache
         
+    def _get_tone(self, article_text):
+        """
+        Internal helper for the pipeline to get tone prediction.
+        """
+        try:
+            # 1. Load the classifier (uses the cache logic we built)
+            classifier = self._load_tone_classifier()
+            if not classifier:
+                logger.warning("Tone classifier not loaded, defaulting to Factual")
+                return "Factual", 0.0
+
+            # 2. Run Inference
+            # The ensemble returns (predictions, probabilities)
+            predictions, probabilities = classifier.predict(
+                [article_text], 
+                return_probs=True
+            )
+
+            # 3. Decode the Label
+            predicted_idx = predictions[0]
+            
+            # Check if encoder exists, otherwise use fallback classes from your log
+            if self._tone_label_encoder:
+                tone_label = self._tone_label_encoder.inverse_transform([predicted_idx])[0]
+            else:
+                classes = ['Alarmist', 'Cynical', 'Factual', 'Sensationalist']
+                tone_label = classes[predicted_idx] if predicted_idx < len(classes) else "Factual"
+
+            confidence = float(np.max(probabilities[0]))
+            
+            return tone_label, confidence
+
+        except Exception as e:
+            logger.error(f"❌ Tone inference execution failed: {e}")
+            return "Factual", 0.0
+            
     def _get_llm_strategic_intent(self, text: str):
         """
         Calls the LLM (Groq) to predict strategic intent for a single text.
