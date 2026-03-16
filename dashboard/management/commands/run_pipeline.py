@@ -116,17 +116,36 @@ class Command(BaseCommand):
                 target_country = article.target_country # Should be present due to filter
                 inferred_actor = article.inferred_actor # Should be present due to filter
 
-                # --- VALIDATE DERIVED VALUES (Optional but good practice) ---
-                # Check if the retrieved values are in the expected lists.
-                target_country_valid = target_country and any(tc.lower() in target_country.lower() for tc in valid_countries)
-                inferred_actor_valid = inferred_actor and any(ia.lower() in inferred_actor.lower() for ia in valid_actors)
+                # Define the normalization function locally or use a helper if it exists elsewhere
+                def normalize_country_name(country_name):
+                    if not country_name:
+                        return ""
+                    # Convert to lowercase
+                    lower_name = country_name.lower()
+                    # Standardize common representations
+                    # This mirrors the logic in the country_mapping within views.py or the filter logic if applicable
+                    # Add more mappings if necessary based on your data
+                    standardized = lower_name.replace("côte d'ivoire", "cote d'ivoire").replace("côte d’ivoire", "cote d'ivoire") # Standardize accented 'ô' and different quote types
+                    # You might also want to remove other special characters if present in your data
+                    # standardized = re.sub(r'[^\w\s]', ' ', standardized).strip() # Example: replace non-word chars with space
+                    return standardized
+
+                # Normalize the country retrieved from the database record
+                normalized_db_country = normalize_country_name(target_country)
+                # Check if the normalized database country is in the valid list (which is already normalized)
+                target_country_valid = normalized_db_country in valid_countries
+
+                # Similarly, normalize the actor retrieved from the database record if needed for consistency
+                # (Although valid_actors list seems to be used directly for filtering, ensure consistency here too)
+                normalized_db_actor = inferred_actor.lower() if inferred_actor else ""
+                inferred_actor_valid = normalized_db_actor in valid_actors
 
                 if not target_country_valid:
                     # Log why it might be missing or not standard
                     if not target_country:
                         self.stdout.write(self.style.ERROR(f"   ❌ Target country is unexpectedly empty for {article.id} despite filter."))
                     else:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved target country '{target_country}' for {article.id} is not in the standard list: {valid_countries}."))
+                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved target country '{target_country}' for {article.id} (normalized to '{normalized_db_country}') is not in the standard list: {valid_countries}."))
                     # Decide: Skip, Continue, or Log - Here we continue but log
                     # skipped += 1 # Uncomment if skipping is desired for invalid country
                     # continue
@@ -184,7 +203,7 @@ class Command(BaseCommand):
                         article.prediction_source = si_source # Assign the source
                         # article.vulnerability_index is calculated above
 
-                        # --- NEW: Save with retry logic ---
+                        # ---Save with retry logic ---
                         save_success = False
                         max_retries = 3
                         retry_count = 0
@@ -212,8 +231,8 @@ class Command(BaseCommand):
                                     # For now, we'll count it as an error and continue to the next article
                                     # Do NOT increment 'processed' here as the save failed.
                                     break
-                        # --- END NEW BLOCK ---
-                        # The 'processed += 1' is now handled inside the retry loop only on success.
+                      
+                        
 
                     except Exception as e:
                         self.stderr.write(f"   ❌ Error during ML/Vulnerability Index processing for article ID {article.id}: {e}")
