@@ -94,17 +94,30 @@ class MLInferenceService:
             self.tokenizer = None # Or handle the error as appropriate
             
     def lookup_risk(self, country, intent):
-        # 1. Immediate guard for non-strategic intents
+        # 1. Immediate guard: 0.0 risk for non-strategic content
         if not intent or str(intent).lower() in ['neutral', 'unknown', 'none']:
             return 0.0
             
-        # 2. Proceed with your CSV mapping
         try:
-            # Your existing logic to find the score in the CSV
-            # score = self.risk_data.get(...) 
-            return score
-        except Exception:
-            return 0.0       
+            df = self._csv_risk_df
+            
+            # 2. Strict Matching
+            # Use .str.strip() to avoid errors from hidden spaces in the CSV
+            match = df[
+                (df['country'].str.strip() == country) & 
+                (df['intent'].str.strip() == intent)
+            ]
+            
+            if not match.empty:
+                return float(match.iloc[0]['risk_score'])
+            
+            # 3. Log if we are missing a specific intent in the CSV
+            logger.warning(f"⚠️ No exact CSV match for {country} | {intent}. Defaulting to 0.0")
+            return 0.0
+            
+        except Exception as e:
+            logger.error(f"Error during risk lookup: {e}")
+            return 0.0 
             
     def _load_csv_risks(self):
         """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
@@ -349,12 +362,13 @@ class MLInferenceService:
             
     def _get_llm_strategic_intent(self, text: str):
         """
-        Robustly extracts intent from LLM responses even if chatty or multiple JSONs are present.
+        Robustly extracts intent from LLM responses silently.
+        Fixes JSON errors without logging the recovery steps.
         """
         groq_api_key = getattr(settings, 'GROQ_API_KEY', '')
         if not groq_api_key:
             return "unknown", 0.0, "API key missing"
-    
+
         try:
             client = Groq(api_key=groq_api_key)
             system_msg = (
@@ -371,40 +385,49 @@ class MLInferenceService:
                 ],
                 temperature=0.0 
             )
-    
+
             raw_content = response.choices[0].message.content.strip()
             
-            # Regex to find JSON blocks. 
-            # Non-greedy .*? avoids merging two separate JSON blocks into one.
+            # 1. Extract all JSON-like blocks
             json_blocks = re.findall(r'\{.*?\}', raw_content, re.DOTALL)
             
             if not json_blocks:
-                # Last ditch effort: try to strip markdown code blocks
                 clean_text = re.sub(r'```json|```', '', raw_content).strip()
                 js = json.loads(clean_text)
             else:
-                # Take the last block (LLM corrections usually come last)
+                last_block = json_blocks[-1]
                 try:
-                    js = json.loads(json_blocks[-1])
+                    js = json.loads(last_block)
                 except json.JSONDecodeError:
-                    js = json.loads(json_blocks[0])
-    
-            # Safely extract with fallbacks
+                    # Attempt silent fix for unescaped quotes
+                    try:
+                        fixed_block = re.sub(r'(?<!\\)"', r'\"', last_block) 
+                        fixed_block = fixed_block.replace('\"strategic_intent\"', '"strategic_intent"')
+                        fixed_block = fixed_block.replace('\"strategic_intent_conf\"', '"strategic_intent_conf"')
+                        fixed_block = fixed_block.replace('\"notes\"', '"notes"')
+                        
+                        if fixed_block.startswith('\"'): fixed_block = '{' + fixed_block[2:]
+                        if fixed_block.endswith('\"'): fixed_block = fixed_block[:-2] + '}'
+                        
+                        js = json.loads(fixed_block)
+                    except:
+                        js = json.loads(json_blocks[0])
+
+            # 2. Extract values
             intent = js.get('strategic_intent', 'Neutral')
             conf = js.get('strategic_intent_conf', 0.0)
             notes = js.get('notes', '')
-    
-            # Ensure confidence is a float
+
             try:
                 conf = float(conf)
             except (TypeError, ValueError):
                 conf = 0.0
-    
+
             return intent, conf, notes
-    
+
         except Exception as e:
-            logger.error(f"❌ LLM Parse Failure: {str(e)}")
-            # Defaulting to Neutral so the pipeline doesn't stop
+            # We only log if it fails COMPLETELY after all recovery attempts
+            logger.error(f"❌ LLM Final Parse Failure: {str(e)}")
             return "Neutral", 0.0, f"Error: {str(e)}"
         
     # Modify the main strategic intent method
