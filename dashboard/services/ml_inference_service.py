@@ -369,30 +369,28 @@ class MLInferenceService:
         
         try:
             classifier = self._load_strategic_classifier()
-            if classifier is not None:
-                # 1. Run the ensemble prediction
-                predictions, probabilities = classifier.predict(
-                    [article_text], 
-                    batch_size=1, 
-                    calibrated=True, 
-                    return_probs=True
-                )
+            if not classifier:
+                return [("unknown", 0.0)] * len(article_texts)
+    
+            # Send all 20 texts to the model at once
+            predictions, probabilities = classifier.predict(
+                article_texts, 
+                batch_size=len(article_texts), 
+                calibrated=True, 
+                return_probs=True
+            )
+    
+            results = []
+            for i in range(len(predictions)):
+                intent = self._decode_label(predictions[i])
+                conf = float(np.max(probabilities[i]))
+                results.append((intent, conf))
+            return results
+        except Exception as e:
+            logger.error(f"Batch inference failed: {e}")
+            return [("unknown", 0.0)] * len(article_texts)
 
-                # 2. Extract values
-                predicted_class_id = predictions[0]
-                model_confidence = float(np.max(probabilities[0]))
-                
-                # 3. Decode the label using the encoder INSIDE the classifier
-                # This replaces the need for self._strategic_label_encoder
-                model_intent = classifier.ensemble.label_encoder.inverse_transform([predicted_class_id])[0]
-                
-                print(f"Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
 
-        except Exception as e_model:
-            logger.error(f"Error during model inference: {e_model}")
-            model_intent = "unknown"
-            model_confidence = 0.0
-            
         # --- LOGGING ADDED: After model prediction ---
         logger.debug(f"perform_strategic_intent_inference: Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
         # logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}") # Optional: Keep or remove original info log
