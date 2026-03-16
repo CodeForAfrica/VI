@@ -114,6 +114,7 @@ class MLInferenceService:
             
             # Variations from Model/LLM
             "economic dependency": "Economic",
+            "trade dominance": "Economic",
             "sovereignty erosion": "Sovereignty",
             "sovereignty threat": "Sovereignty",
             "cultural hegemony": "Sovereignty",
