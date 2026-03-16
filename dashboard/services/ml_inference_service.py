@@ -476,7 +476,8 @@ class MLInferenceService:
         logger.debug(f"perform_strategic_intent_inference: Final - Intent: '{final_intent}', Confidence: {final_confidence}, Source: '{prediction_source}'")
     
         logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
-        return final_intent, final_confidence, prediction_source        
+        return final_intent, final_confidence, prediction_source  
+        
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
@@ -981,27 +982,6 @@ class MLInferenceService:
             logger.error(f"Error extracting actor from content: {e}")
             return 'Unknown'
             
-    def perform_strategic_intent_inference(self, article_text):
-        """Perform strategic intent inference"""
-        try:
-            classifier = self._load_strategic_classifier()
-            predictions, probabilities = classifier.predict(
-                texts=[article_text],
-                batch_size=1,
-                calibrated=False,
-                return_probs=True
-            )
-            pred_idx = predictions[0]
-            if self._strategic_label_encoder:
-                pred_label = self._strategic_label_encoder.inverse_transform([pred_idx])[0]
-            else:
-                pred_label = str(pred_idx)
-            confidence = float(np.max(probabilities[0]))
-            return str(pred_label), confidence
-        except Exception as e:
-            logger.error(f"Error in strategic intent inference: {e}")
-            return "unknown", 0.0
-
     def perform_tone_inference(self, article_text):
         """Perform tone inference"""
         try:
