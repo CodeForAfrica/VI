@@ -337,10 +337,10 @@ class MLInferenceService:
         """
         Performs strategic intent inference using both the calibrated model and LLM,
         compares results, and returns the final intent, confidence, and source.
-
+    
         Args:
             article_text (str): The article text.
-
+    
         Returns:
             tuple: (final_intent: str, final_confidence: float, prediction_source: str)
         """
@@ -353,7 +353,7 @@ class MLInferenceService:
             if classifier is None:
                 logger.error("Failed to load strategic classifier.")
                 return "unknown", 0.0, "error_loading_model"
-
+    
             # Prepare input
             inputs = self.tokenizer(
                 article_text,
@@ -362,7 +362,7 @@ class MLInferenceService:
                 max_length=512,
                 return_tensors="pt"
             ).to(classifier.device)
-
+    
             # Perform prediction
             with torch.no_grad():
                 outputs = classifier(**inputs)
@@ -370,37 +370,48 @@ class MLInferenceService:
                 probabilities = torch.softmax(logits, dim=-1)
                 predicted_class_id = torch.argmax(probabilities, dim=-1).item()
                 model_confidence = torch.max(probabilities).item() # Max probability as confidence
-
+    
             # Decode label
             try:
                 model_intent = classifier.label_encoder.inverse_transform([predicted_class_id])[0]
             except (IndexError, AttributeError) as e:
                 logger.error(f"Error decoding model prediction: {e}")
                 model_intent = "unknown"
-
+    
         except Exception as e_model:
             logger.error(f"Error during model inference: {e_model}")
             model_intent = "unknown"
             model_confidence = 0.0
-
-        logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}")
-
+    
+        # --- LOGGING ADDED: After model prediction ---
+        logger.debug(f"perform_strategic_intent_inference: Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
+        # logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}") # Optional: Keep or remove original info log
+    
         # Get LLM prediction
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
-        logger.info(f"LLM Prediction: {llm_intent}, Confidence: {llm_confidence}, Notes: {llm_notes}")
-
+        # --- LOGGING ADDED: After LLM prediction ---
+        logger.debug(f"perform_strategic_intent_inference: LLM prediction - Intent: '{llm_intent}', Confidence: {llm_confidence}, Notes: '{llm_notes}'")
+        # logger.info(f"LLM Prediction: {llm_intent}, Confidence: {llm_confidence}, Notes: {llm_notes}") # Optional: Keep or remove original info log
+    
         # --- COMPARISON AND DECISION LOGIC ---
         final_intent = None
         final_confidence = 0.0
         prediction_source = "unknown" # Default
-
+    
         # Define a threshold for trusting a match
         CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6 # Example: Require at least 0.6 confidence even for a match
-
+    
+        # --- LOGGING ADDED: Before comparison logic ---
+        logger.debug(f"perform_strategic_intent_inference: Entering comparison. Model (Intent: '{model_intent}', Conf: {model_confidence}), LLM (Intent: '{llm_intent}', Conf: {llm_confidence}), Threshold: {CONFIDENCE_THRESHOLD_FOR_MATCH}")
+    
         if model_intent and llm_intent:
             # Both predictions available
+            # --- LOGGING ADDED: Inside 'both available' block ---
+            logger.debug(f"perform_strategic_intent_inference: Both predictions available. Checking match. Model Intent: '{model_intent}', LLM Intent: '{llm_intent}'")
             if model_intent.lower() == llm_intent.lower(): # Case-insensitive match check
                 max_conf_of_match = max(model_confidence, llm_confidence)
+                # --- LOGGING ADDED: Inside 'match' block ---
+                logger.debug(f"perform_strategic_intent_inference: Predictions MATCH. Max Confidence of Match: {max_conf_of_match}, Threshold: {CONFIDENCE_THRESHOLD_FOR_MATCH}")
                 if max_conf_of_match >= CONFIDENCE_THRESHOLD_FOR_MATCH:
                     # Predictions match AND confidence is sufficiently high
                     final_intent = model_intent # Or llm_intent, they are the same semantically
@@ -410,6 +421,8 @@ class MLInferenceService:
                 else:
                     # Predictions match BUT confidence is low - treat as disagreement, choose higher confidence
                     # This prevents trusting low-confidence agreements
+                    # --- LOGGING ADDED: Inside 'match but low conf' block ---
+                    logger.debug(f"perform_strategic_intent_inference: Predictions MATCH but confidence is low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Comparing confidences: Model ({model_confidence}) vs LLM ({llm_confidence})")
                     if model_confidence >= llm_confidence:
                         final_intent = model_intent
                         final_confidence = model_confidence
@@ -422,6 +435,8 @@ class MLInferenceService:
                         logger.info(f"Model and LLM predictions MATCHED but confidence was low (< {CONFIDENCE_THRESHOLD_FOR_MATCH}). Choosing LLM based on higher confidence ({llm_confidence}).")
             else:
                 # Predictions differ - choose based on confidence
+                # --- LOGGING ADDED: Inside 'disagree' block ---
+                logger.debug(f"perform_strategic_intent_inference: Predictions DIFFER. Comparing confidences: Model ({model_confidence}) vs LLM ({llm_confidence})")
                 if model_confidence >= llm_confidence:
                     final_intent = model_intent
                     final_confidence = model_confidence
@@ -434,26 +449,34 @@ class MLInferenceService:
                     logger.info("Model and LLM predictions DIFFER. LLM confidence higher, using LLM prediction.")
         elif model_intent:
             # Only model prediction available
+            # --- LOGGING ADDED: Inside 'model only' block ---
+            logger.debug(f"perform_strategic_intent_inference: Only Model prediction available. Intent: '{model_intent}', Conf: {model_confidence}")
             final_intent = model_intent
             final_confidence = model_confidence
             prediction_source = "model_only"
             logger.info("Only model prediction available, using MODEL prediction.")
         elif llm_intent:
             # Only LLM prediction available
+            # --- LOGGING ADDED: Inside 'llm only' block ---
+            logger.debug(f"perform_strategic_intent_inference: Only LLM prediction available. Intent: '{llm_intent}', Conf: {llm_confidence}")
             final_intent = llm_intent
             final_confidence = llm_confidence
             prediction_source = "llm_only"
             logger.info("Only LLM prediction available, using LLM prediction.")
         else:
             # Neither prediction worked
+            # --- LOGGING ADDED: Inside 'neither worked' block ---
+            logger.debug(f"perform_strategic_intent_inference: NEITHER model nor LLM prediction worked. Model Intent: '{model_intent}', LLM Intent: '{llm_intent}'")
             final_intent = "unknown"
             final_confidence = 0.0
             prediction_source = "error"
             logger.error("Both model and LLM failed to predict strategic intent.")
-
+    
+        # --- LOGGING ADDED: Before final return ---
+        logger.debug(f"perform_strategic_intent_inference: Final - Intent: '{final_intent}', Confidence: {final_confidence}, Source: '{prediction_source}'")
+    
         logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
-        return final_intent, final_confidence, prediction_source
-        
+        return final_intent, final_confidence, prediction_source        
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
         cache_path = self.model_cache_dir / f'{model_type}_model'
