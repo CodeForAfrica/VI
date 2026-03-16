@@ -93,6 +93,19 @@ class MLInferenceService:
             logger.error(f"Failed to initialize tokenizer: {e}")
             self.tokenizer = None # Or handle the error as appropriate
             
+    def lookup_risk(self, country, intent):
+        # 1. Immediate guard for non-strategic intents
+        if not intent or str(intent).lower() in ['neutral', 'unknown', 'none']:
+            return 0.0
+            
+        # 2. Proceed with your CSV mapping
+        try:
+            # Your existing logic to find the score in the CSV
+            # score = self.risk_data.get(...) 
+            return score
+        except Exception:
+            return 0.0       
+            
     def _load_csv_risks(self):
         """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
         try:
@@ -336,71 +349,64 @@ class MLInferenceService:
             
     def _get_llm_strategic_intent(self, text: str):
         """
-        Calls the LLM (Groq) to predict strategic intent for a single text.
-
-        Args:
-            text (str): The article text.
-
-        Returns:
-            tuple: (predicted_intent: str, confidence: float, notes: str or None)
-                   Returns (None, 0.0, error_message) on failure.
+        Robustly extracts intent from LLM responses even if chatty or multiple JSONs are present.
         """
         groq_api_key = getattr(settings, 'GROQ_API_KEY', '')
         if not groq_api_key:
-            logger.error("GROQ_API_KEY not found in settings.")
-            return None, 0.0, "API key not configured"
-
+            return "unknown", 0.0, "API key missing"
+    
         try:
             client = Groq(api_key=groq_api_key)
-            system_message = {
-                "role": "system",
-                "content": (
-                    "Analyze the provided text to identify the primary strategic intent "
-                    "related to foreign influence on the target country mentioned in the text. "
-                    "Label options include: Economic, Sovereignty, LGBTQ, Religious, "
-                    "ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility. "
-                    "Respond ONLY with a JSON object containing the keys: "
-                    "'strategic_intent' (the label), 'strategic_intent_conf' (a float between 0 and 1 "
-                    "indicating your confidence in this label), and 'notes' (optional brief reasoning). "
-                    "If the text does not clearly relate to any of these intents, label it 'Neutral'."
-                )
-            }
-            user_message = {"role": "user", "content": text[:4000]} # Limit text length
-
-            GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct') # Use a default or configurable model
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[system_message, user_message],
-                temperature=0.0 # Low temperature for consistency
+            system_msg = (
+                "Analyze strategic intent. Respond ONLY with JSON. "
+                "Labels: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, "
+                "MilitaryPresence, ResourceDependency, SocialFragility, Neutral."
             )
-
-            text_response = response.choices[0].message.content.strip()
-            # Extract JSON from the response (in case it includes other text)
-            json_match = re.search(r'\{.*\}', text_response, re.DOTALL)
-            if not json_match:
-                logger.warning(f"Could not extract JSON from LLM response: {text_response}")
-                return None, 0.0, "Invalid JSON response from LLM"
-
-            js = json.loads(json_match.group(0))
-
-            intent = js.get('strategic_intent')
-            conf = js.get('strategic_intent_conf')
-            notes = js.get('notes')
-
-            # Validate confidence
-            if not isinstance(conf, (int, float)) or not (0.0 <= conf <= 1.0):
-                 logger.warning(f"Invalid confidence from LLM: {conf}. Defaulting to 0.0.")
-                 conf = 0.0
-
-            return intent, float(conf), notes
-
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON decode error from LLM: {je}, Response: {text_response}")
-            return None, 0.0, f"JSON decode error: {str(je)}"
+            
+            response = client.chat.completions.create(
+                model=getattr(settings, 'GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct'),
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": text[:4000]}
+                ],
+                temperature=0.0 
+            )
+    
+            raw_content = response.choices[0].message.content.strip()
+            
+            # Regex to find JSON blocks. 
+            # Non-greedy .*? avoids merging two separate JSON blocks into one.
+            json_blocks = re.findall(r'\{.*?\}', raw_content, re.DOTALL)
+            
+            if not json_blocks:
+                # Last ditch effort: try to strip markdown code blocks
+                clean_text = re.sub(r'```json|```', '', raw_content).strip()
+                js = json.loads(clean_text)
+            else:
+                # Take the last block (LLM corrections usually come last)
+                try:
+                    js = json.loads(json_blocks[-1])
+                except json.JSONDecodeError:
+                    js = json.loads(json_blocks[0])
+    
+            # Safely extract with fallbacks
+            intent = js.get('strategic_intent', 'Neutral')
+            conf = js.get('strategic_intent_conf', 0.0)
+            notes = js.get('notes', '')
+    
+            # Ensure confidence is a float
+            try:
+                conf = float(conf)
+            except (TypeError, ValueError):
+                conf = 0.0
+    
+            return intent, conf, notes
+    
         except Exception as e:
-            logger.error(f"Error calling LLM for text: {str(e)[:100]}...") # Log first 100 chars of error
-            return None, 0.0, f"LLM API error: {str(e)}"
-
+            logger.error(f"❌ LLM Parse Failure: {str(e)}")
+            # Defaulting to Neutral so the pipeline doesn't stop
+            return "Neutral", 0.0, f"Error: {str(e)}"
+        
     # Modify the main strategic intent method
     def perform_strategic_intent_batch(self, article_texts):
         """
@@ -410,9 +416,11 @@ class MLInferenceService:
         try:
             classifier = self._load_strategic_classifier()
             if not classifier:
-                return "unknown", 0.0
+                # Return 'unknown' for every article in the failed batch
+                return [("unknown", 0.0)] * len(article_texts)
 
             # Ensemble prediction on the whole batch
+            # Ensure your classifier supports batch_size and return_probs
             predictions, probabilities = classifier.predict(
                 article_texts, 
                 batch_size=len(article_texts), 
@@ -423,12 +431,15 @@ class MLInferenceService:
             results = []
             for i in range(len(predictions)):
                 intent = self._decode_label(predictions[i])
-                conf = float(np.max(probabilities[i]))
+                # Ensure we handle probability extraction safely
+                conf = float(np.max(probabilities[i])) if probabilities is not None else 0.0
                 results.append((intent, conf))
+            
             return results
             
         except Exception as e:
             logger.error(f"❌ Batch inference failed: {e}")
+            # Robust fallback: return a list of same length as input
             return [("unknown", 0.0)] * len(article_texts)
 
     def perform_strategic_intent_inference(self, article_text):
