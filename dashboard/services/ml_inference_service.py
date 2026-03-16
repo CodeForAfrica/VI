@@ -479,7 +479,8 @@ class MLInferenceService:
         logger.debug(f"perform_strategic_intent_inference: Final - Intent: '{final_intent}', Confidence: {final_confidence}, Source: '{prediction_source}'")
     
         logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
-        return final_intent, final_confidence, prediction_source  
+        # Only return the 2 values your pipeline is looking for
+        return final_intent, final_confidence 
         
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
