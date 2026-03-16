@@ -103,7 +103,8 @@ class Command(BaseCommand):
 
         for i in range(0, len(articles_list), batch_size):
             chunk = articles_list[i : i + batch_size]
-            chunk_texts = [a.article_text for a in chunk]
+            article_texts = [a.article_text for a in chunk]
+            ml_results = ml_service.perform_strategic_intent_batch(article_texts)
             
             self.stdout.write(f"\n📦 Processing Batch: {i//batch_size + 1} ({len(chunk)} articles)")
 
