@@ -97,178 +97,79 @@ class Command(BaseCommand):
         skipped = 0
         errors = 0
 
-        # --- MAIN PROCESSING LOOP ---
-        for article in articles:
+        # --- BATCH PROCESSING LOOP ---
+        batch_size = 20
+        articles_list = list(articles) 
+
+        for i in range(0, len(articles_list), batch_size):
+            chunk = articles_list[i : i + batch_size]
+            chunk_texts = [a.article_text for a in chunk]
+            
+            self.stdout.write(f"\n📦 Processing Batch: {i//batch_size + 1} ({len(chunk)} articles)")
+
+            # --- 1. THE BIG SPEED BOOST ---
             try:
-                self.stdout.write(f"\n📄 Processing ID: {article.id}")
-                self.stdout.write(f"   URL: {article.url[:60]}...")
+                ml_results = ml_service.perform_strategic_intent_batch(chunk_texts)
+            except Exception as e:
+                self.stderr.write(self.style.ERROR(f"❌ Batch inference failed: {e}"))
+                errors += len(chunk)
+                continue
 
-                # --- ARTICLE TEXT EXTRACTION (Using trafilatura) ---
-                # Determine the article text to use
-                # Since the filter guarantees article_text exists and is not empty, we can use it directly
-                # unless --skip-extraction is True and it's still needed for some reason (unlikely given filter).
-                # The filter above ensures article_text is present.
-                article_text = article.article_text # Should be present due to filter
-                self.stdout.write(f"   📝 Using {len(article_text)} char text from DB.")
+            # --- 2. INDIVIDUAL ARTICLE PROCESSING ---
+            for article, (ml_intent, ml_conf) in zip(chunk, ml_results):
+                try:
+                    self.stdout.write(f"📄 Processing ID: {article.id}")
+                    
+                    target_country = article.target_country
+                    inferred_actor = article.inferred_actor
+                    
+                    # Normalization
+                    normalized_db_country = target_country.lower().replace("côte d'ivoire", "cote d'ivoire") if target_country else ""
+                    
+                    if normalized_db_country not in valid_countries:
+                         self.stdout.write(self.style.WARNING(f"⚠️ Invalid country {target_country}"))
+                         skipped += 1
+                         continue
 
-                # --- TARGET COUNTRY & INFERRED ACTOR DERIVATION & VALIDATION ---
-                # These fields should now be available based on the filter
-                target_country = article.target_country # Should be present due to filter
-                inferred_actor = article.inferred_actor # Should be present due to filter
-
-                # Define the normalization function locally or use a helper if it exists elsewhere
-                def normalize_country_name(country_name):
-                    if not country_name:
-                        return ""
-                    # Convert to lowercase
-                    lower_name = country_name.lower()
-                    # Standardize common representations
-                    # This mirrors the logic in the country_mapping within views.py or the filter logic if applicable
-                    # Add more mappings if necessary based on your data
-                    standardized = lower_name.replace("côte d'ivoire", "cote d'ivoire").replace("côte d’ivoire", "cote d'ivoire") # Standardize accented 'ô' and different quote types
-                    # You might also want to remove other special characters if present in your data
-                    # standardized = re.sub(r'[^\w\s]', ' ', standardized).strip() # Example: replace non-word chars with space
-                    return standardized
-
-                # Normalize the country retrieved from the database record
-                normalized_db_country = normalize_country_name(target_country)
-                # Check if the normalized database country is in the valid list (which is already normalized)
-                target_country_valid = normalized_db_country in valid_countries
-
-                # Similarly, normalize the actor retrieved from the database record if needed for consistency
-                # (Although valid_actors list seems to be used directly for filtering, ensure consistency here too)
-                normalized_db_actor = inferred_actor.lower() if inferred_actor else ""
-                inferred_actor_valid = normalized_db_actor in valid_actors
-
-                if not target_country_valid:
-                    # Log why it might be missing or not standard
-                    if not target_country:
-                        self.stdout.write(self.style.ERROR(f"   ❌ Target country is unexpectedly empty for {article.id} despite filter."))
-                    else:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved target country '{target_country}' for {article.id} (normalized to '{normalized_db_country}') is not in the standard list: {valid_countries}."))
-                    # Decide: Skip, Continue, or Log - Here we continue but log
-                    # skipped += 1 # Uncomment if skipping is desired for invalid country
-                    # continue
-                if not inferred_actor_valid:
-                    # Log why it might be missing or not standard
-                    if not inferred_actor:
-                        self.stdout.write(self.style.ERROR(f"   ❌ Inferred actor is unexpectedly empty for {article.id} despite filter."))
-                    else:
-                        self.stdout.write(self.style.WARNING(f"   ⚠️ Retrieved inferred actor '{inferred_actor}' for {article.id} is not in the standard list: {valid_actors}."))
-                    # Decide: Skip, Continue, or Log - Here we continue but log
-                    # skipped += 1 # Uncomment if skipping is desired for invalid actor
-                    # continue
-
-                # Final check if required fields are available after retrieval/filtering
-                # This is mostly redundant now due to the filter, but acts as a safety net.
-                if not target_country or not inferred_actor:
-                    self.stdout.write(self.style.ERROR(f"⚠️ Skipping {article.id}: Missing required target_country ({target_country}) or inferred_actor ({inferred_actor}) after retrieval."))
-                    skipped += 1
-                    continue
-                self.stdout.write(f"   ✅ Valid: {target_country} | Actor: {inferred_actor}")
-
-                # --- ML INFERENCE, VI CALCULATION, and SAVING (handling the dictionary result) ---
-                if not skip_ml:
-                    self.stdout.write("   🤖 Performing ML inference...")
-                    try:
+                    # --- 3. DECIDE: BATCH OR LLM FALLBACK ---
+                    # We use 0.6 as a threshold for the model's confidence
+                    if ml_conf < 0.6:
                         result_dict = ml_service.perform_inference(article.article_text)
-
-                        # Extract ONLY what we need ✅
                         strategic_intent = result_dict.get('strategic_intent', 'unknown')
-                        tone = result_dict.get('tone', 'neutral')
-                        confidence = result_dict.get('confidence', 0.0)
-                        # Note: perform_inference returns 'strategic_intent_conf' and 'strategic_intent_source'
-                        # but calculate_vulnerability_index likely needs the overall 'confidence' or 'strategic_intent_conf'
-                        # and the other fields like strategic_intent, tone.
-                        # The result_dict doesn't usually contain 'vulnerability_index' directly from perform_inference.
-                        # It's calculated separately.
-                        # Let's use the confidence from the result_dict for VI calculation
                         si_confidence = result_dict.get('strategic_intent_conf', 0.0)
-                        si_source = result_dict.get('strategic_intent_source', 'unknown')
+                        si_source = "llm"
+                    else:
+                        strategic_intent = ml_intent
+                        si_confidence = ml_conf
+                        si_source = "model"
 
-                        # Calculate VI using the freshly obtained values
-                        vi_score = ml_service.calculate_vulnerability_index(
-                            strategic_intent, tone, target_country, inferred_actor, si_confidence # or 'confidence' from result_dict
-                        )
+                    # --- 4. SCORING & SAVING ---
+                    tone = ml_service._get_tone(article.article_text)
+                    vi_score = ml_service.calculate_vulnerability_index(
+                        strategic_intent, tone, target_country, inferred_actor, si_confidence
+                    )
 
-                        self.stdout.write(  # ✅ NO ERRORS!
-                            f"   🧠 Intent: {strategic_intent} | Tone: {tone} | "
-                            f"Conf: {si_confidence:.2f} | VI: {vi_score:.3f} | Source: {si_source}" # Include source if needed
-                        )
-
-                        # Assign results to the article object
+                    if not dry_run:
                         article.strategic_intent = strategic_intent
                         article.tone = tone
-                        article.confidence = si_confidence # Or overall confidence from result_dict.get('confidence')
-                        article.prediction_source = si_source # Assign the source
-                        # article.vulnerability_index is calculated above
+                        article.confidence = si_confidence
+                        article.prediction_source = si_source
+                        article.vulnerability_index = vi_score
+                        article.save()
+                        processed += 1
+                        self.stdout.write(self.style.SUCCESS(f"   ✅ Saved: ID {article.id} (Source: {si_source})"))
+                    else:
+                        self.stdout.write(f"   🧪 Dry Run: Would save ID {article.id}")
 
-                        # ---Save with retry logic ---
-                        save_success = False
-                        max_retries = 3
-                        retry_count = 0
-                        while not save_success and retry_count < max_retries:
-                            try:
-                                # Save the updated article
-                                article.save()
-                                save_success = True
-                                self.stdout.write(f"   ✅ Saved: ID {article.id}")
-                                # ONLY increment processed counter HERE, upon successful save
-                                processed += 1
-                            except (django.db.utils.InterfaceError, django.db.utils.OperationalError) as db_err:
-                                # Catch connection-related errors
-                                retry_count += 1
-                                self.stderr.write(f"   ⚠️ Save failed for article {article.id} (Attempt {retry_count}/{max_retries}): {db_err}. Retrying...")
-                                if retry_count < max_retries:
-                                    # Optional: Add a small delay before retrying
-                                    import time
-                                    time.sleep(2) # Wait 2 seconds before retrying
-                                else:
-                                    # Out of retries, log the error and move to the next article
-                                    self.stderr.write(f"   ❌ Failed to save article {article.id} after {max_retries} attempts: {db_err}")
-                                    errors += 1
-                                    # Decide whether to continue or stop here based on your tolerance for data loss
-                                    # For now, we'll count it as an error and continue to the next article
-                                    # Do NOT increment 'processed' here as the save failed.
-                                    break
-                      
-                        
+                except Exception as e:
+                    self.stderr.write(f"   ❌ Error on ID {article.id}: {e}")
+                    errors += 1
 
-                    except Exception as e:
-                        self.stderr.write(f"   ❌ Error during ML/Vulnerability Index processing for article ID {article.id}: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        errors += 1
-                        # Decide whether to continue with the next article or stop
-                        # For now, let's increment errors and continue processing other articles
-                        continue # This 'continue' belongs to the main loop's try block
-
-                else: # Fallback if skip_ml is True - This block should appear only once, after the 'if not skip_ml' block
-                    self.stdout.write("   📊 Skip ML - Calc VI only")
-                    vi_score = ml_service.calculate_vulnerability_index(
-                        article.strategic_intent or 'unknown',
-                        article.tone or 'neutral',
-                        target_country, inferred_actor,
-                        getattr(article, 'confidence', 0.0)
-                    )
-                    article.vulnerability_index = vi_score
-                    article.save() # This save might also benefit from retry logic, but keeping it simple for now if ML is skipped
-                    processed += 1 # Increment here for the skip_ml case
-
-            except Exception as e: # This is the main loop's try-except block
-                logger.error(f"❌ Error processing article ID {article.id}: {e}")
-                self.stdout.write(self.style.ERROR(f"   ❌ Error: {str(e)[:100]}"))
-                errors += 1
-
-        # --- CRITICAL CHANGE: Cleanup AFTER the loop ---
-        # Call cleanup once at the very end of the command execution
-        # This ensures any temporary files or resources held by the service are released.
-        self.stdout.write("Cleaning up ML Inference Service resources...")
+        # --- 5. CLEANUP & SUMMARY (CRITICAL) ---
+        self.stdout.write("\nCleaning up ML Inference Service resources...")
         ml_service.cleanup()
-        self.stdout.write("Cleanup complete.")
-
-        # Summary
+        
         self.stdout.write(self.style.SUCCESS(f"\n--- Pipeline Complete ---"))
         self.stdout.write(f"Processed: {processed}")
-        self.stdout.write(f"Skipped: {skipped}")
-        self.stdout.write(f"Errors: {errors}")
+        self.stdout.write(f"Skipped:   {skipped}")
+        self.stdout.write(f"Errors:    {errors}")
