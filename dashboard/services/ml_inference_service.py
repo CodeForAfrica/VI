@@ -306,7 +306,7 @@ class MLInferenceService:
             }
             user_message = {"role": "user", "content": text[:4000]} # Limit text length
 
-            GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama3-8b-8192') # Use a default or configurable model
+            GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct') # Use a default or configurable model
             response = client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[system_message, user_message],
