@@ -41,6 +41,9 @@ DetectorFactory.seed = 0
 class MLInferenceService:
     def __init__(self):
         print("MLInferenceService.__init__ called")
+        # GPU SUPPORT
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"🚀 ML Service detected device: {self.device}")
         # Only initialize S3 client if AWS credentials are available
         # Check Django settings first, then fall back to environment variables
         aws_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None) or os.environ.get('AWS_ACCESS_KEY_ID')
