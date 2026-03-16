@@ -368,8 +368,20 @@ class MLInferenceService:
     
             # Perform prediction
             with torch.no_grad():
-                outputs = classifier(**inputs)
-                logits = outputs.logits
+                if hasattr(classifier, 'model'):
+                    outputs = classifier.model(**inputs)
+                    logits = outputs.logits
+                elif hasattr(classifier, 'base_model'):
+                    outputs = classifier.base_model(**inputs)
+                    logits = outputs.logits
+                elif hasattr(classifier, 'predict_logits'):
+                    # Some wrappers have a specific method for this
+                    logits = classifier.predict_logits(inputs)
+                else:
+                    # Fallback: try calling it directly if the above fails, 
+                    # but this is likely where your 'not callable' error is
+                    outputs = classifier(**inputs) 
+                    logits = outputs.logits
                 probabilities = torch.softmax(logits, dim=-1)
                 predicted_class_id = torch.argmax(probabilities, dim=-1).item()
                 model_confidence = torch.max(probabilities).item() # Max probability as confidence
