@@ -18,6 +18,7 @@ import botocore
 from dashboard.services.tone_ensemble import ProbabilitiesEstimator
 from pathlib import Path
 import re
+import sys
 
 TransferConfig = None
 DetectorFactory.seed = 0
@@ -764,26 +765,28 @@ class MLInferenceService:
         """
         try:
             import spacy
+            import sys # Ensure sys is imported
             # Load spaCy model
             try:
                 nlp = spacy.load("en_core_web_sm")
-            except:
+            except OSError: # It's more specific than a generic 'except'
                 # Download if not exists
                 import subprocess
-                subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+                # Use sys.executable instead of "python"
+                subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=True)
                 nlp = spacy.load("en_core_web_sm")
-            
+    
             doc = nlp(text[:5000])  # Limit text length for performance
-            
+    
             # Extract GPE (countries/cities)
             gpe_entities = [ent.text for ent in doc.ents if ent.label_ in ['GPE', 'LOC', 'FAC']]
-            
+    
             # Extract ORG (organizations)
             org_entities = [ent.text for ent in doc.ents if ent.label_ == 'ORG']
-            
+    
             # Extract PERSON
             person_entities = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
-            
+    
             return {
                 'countries': gpe_entities,
                 'organizations': org_entities,
@@ -791,6 +794,7 @@ class MLInferenceService:
             }
         except Exception as e:
             logger.error(f"Error in entity extraction: {e}")
+            # Return empty lists on failure, as the calling code likely expects a dictionary
             return {'countries': [], 'organizations': [], 'persons': []}
 
     def is_low_resource_lang(self, lang_code):
