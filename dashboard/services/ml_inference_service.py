@@ -19,6 +19,8 @@ from dashboard.services.tone_ensemble import ProbabilitiesEstimator
 from pathlib import Path
 import re
 import sys
+from groq import Groq
+from transformers import AutoTokenizer
 
 TransferConfig = None
 DetectorFactory.seed = 0
@@ -70,7 +72,13 @@ class MLInferenceService:
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
-
+        # ✅ Initialize tokenizer here
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained("microsoft/mdeberta-v3-base") # Or the correct base model path
+        except Exception as e:
+            logger.error(f"Failed to initialize tokenizer: {e}")
+            self.tokenizer = None # Or handle the error as appropriate
+            
     def _load_csv_risks(self):
         """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
         try:
