@@ -94,30 +94,78 @@ class MLInferenceService:
             self.tokenizer = None # Or handle the error as appropriate
             
     def lookup_risk(self, country, intent):
-        # 1. Immediate guard: 0.0 risk for non-strategic content
+        """
+        Maps model/LLM outputs to canonical labels and looks up risk scores.
+        """
+        # 1. Immediate guard for non-strategic content
         if not intent or str(intent).lower() in ['neutral', 'unknown', 'none']:
             return 0.0
-            
+
+        # 2. Intent Mapping Dictionary
+        intent_mapping = {
+            "economic": "Economic",
+            "sovereignty": "Sovereignty",
+            "lgbtq": "LGBTQ",
+            "religious": "Religious",
+            "electioninfluence": "ElectionInfluence", 
+            "militarypresence": "MilitaryPresence", 
+            "resourcedependency": "ResourceDependency", 
+            "socialfragility": "SocialFragility", 
+            "economic dependency": "Economic",
+            "sovereignty erosion": "Sovereignty",
+            "sovereignty threat": "Sovereignty",
+            "lgbtq rights": "LGBTQ",
+            "lgbt advocacy": "LGBTQ",
+            "religious influence": "Religious",
+            "religious polarisation": "Religious",
+            "election influence": "ElectionInfluence", 
+            "election interference": "ElectionInfluence",
+            "electoral interference": "ElectionInfluence",
+            "military presence": "MilitaryPresence", 
+            "military base": "MilitaryPresence",
+            "resource dependency": "ResourceDependency", 
+            "resource control": "ResourceDependency",
+            "social fragility": "SocialFragility", 
+            "social unrest": "SocialFragility",
+            "information warfare": "SocialFragility", 
+            "human rights advocacy": "SocialFragility", 
+            "debt trap diplomacy": "Economic", 
+            "cultural influence": "SocialFragility", 
+            "centralization of power": "Sovereignty",
+            "cultural exchange": "Economic",
+            "cultural hegemony": "Sovereignty",
+            "democratic interference": "ElectionInfluence",
+            "diplomatic cooperation": "Economic",
+            "diplomatic influence": "Sovereignty",
+        }
+
+        # 3. Apply Mapping
+        # Normalize input to lowercase and strip whitespace for matching
+        normalized_intent = str(intent).lower().strip()
+        mapped_intent = intent_mapping.get(normalized_intent, intent) # Default to original if not in map
+
         try:
             df = self._csv_risk_df
             
-            # 2. Strict Matching
-            # Use .str.strip() to avoid errors from hidden spaces in the CSV
+            # Use the mapped_intent for the CSV search
             match = df[
                 (df['country'].str.strip() == country) & 
-                (df['intent'].str.strip() == intent)
+                (df['intent'].str.strip() == mapped_intent)
             ]
             
             if not match.empty:
-                return float(match.iloc[0]['risk_score'])
+                score = float(match.iloc[0]['risk_score'])
+                # Log the mapping for transparency
+                if mapped_intent != intent:
+                    logger.info(f"🔄 Mapped '{intent}' -> '{mapped_intent}' | Score: {score}")
+                return score
             
-            # 3. Log if we are missing a specific intent in the CSV
-            logger.warning(f"⚠️ No exact CSV match for {country} | {intent}. Defaulting to 0.0")
+            logger.warning(f"⚠️ No CSV match for {country} | {mapped_intent} (Original: {intent})")
             return 0.0
             
         except Exception as e:
             logger.error(f"Error during risk lookup: {e}")
-            return 0.0 
+            return 0.0
             
     def _load_csv_risks(self):
         """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
