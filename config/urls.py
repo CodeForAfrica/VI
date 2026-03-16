@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
-from dashboard import views  # Make sure this import exists
+from dashboard import views  
+from dashboard.views import clear_cache_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
