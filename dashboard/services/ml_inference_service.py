@@ -362,13 +362,12 @@ class MLInferenceService:
 
         model_intent = "unknown"
         model_confidence = 0.0
+        predicted_class_id = None
         
         try:
             classifier = self._load_strategic_classifier()
             if classifier is not None:
-                # The ensemble's .predict() handles tokenization, 
-                # multi-model averaging, and calibration internally.
-                # We pass [article_text] because it expects a list.
+                # 1. Run the ensemble prediction
                 predictions, probabilities = classifier.predict(
                     [article_text], 
                     batch_size=1, 
@@ -376,30 +375,21 @@ class MLInferenceService:
                     return_probs=True
                 )
 
-                # Extract first result from the returned arrays
+                # 2. Extract values
                 predicted_class_id = predictions[0]
                 model_confidence = float(np.max(probabilities[0]))
                 
-                model_intent = self._decode_label(predicted_class_id)
+                # 3. Decode the label using the encoder INSIDE the classifier
+                # This replaces the need for self._strategic_label_encoder
+                model_intent = classifier.ensemble.label_encoder.inverse_transform([predicted_class_id])[0]
+                
                 print(f"Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
-    
-            # Decode label
-            try:
-                # Assuming self._strategic_label_encoder was correctly loaded before this method runs
-                if self._strategic_label_encoder:
-                    model_intent = self._strategic_label_encoder.inverse_transform([predicted_class_id])[0]
-                else:
-                    logger.error("Label encoder not available for strategic classifier.")
-                    model_intent = "unknown"
-            except (IndexError, AttributeError) as e:
-                logger.error(f"Error decoding model prediction: {e}")
-                model_intent = "unknown"
-    
+
         except Exception as e_model:
             logger.error(f"Error during model inference: {e_model}")
             model_intent = "unknown"
             model_confidence = 0.0
-    
+            
         # --- LOGGING ADDED: After model prediction ---
         logger.debug(f"perform_strategic_intent_inference: Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
         # logger.info(f"Model Prediction: {model_intent}, Confidence: {model_confidence}") # Optional: Keep or remove original info log
