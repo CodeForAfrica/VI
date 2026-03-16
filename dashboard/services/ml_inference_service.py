@@ -361,6 +361,8 @@ class MLInferenceService:
             if classifier is None:
                 logger.error("Failed to load strategic classifier.")
                 return "unknown", 0.0, "error_loading_model"
+            # Determine device manually since classifier wrapper doesn't have .device
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
             # Prepare input
             inputs = self.tokenizer(
