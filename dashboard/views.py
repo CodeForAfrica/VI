@@ -46,13 +46,13 @@ print(f"FILES VISIBLE HERE: {os.listdir(os.getcwd())}")
 print("---------------------------------------------")
 
 
-#def clear_cache_view(request):
-#    """
- #   Clears the Django cache to ensure the 821 new articles 
-  #  from the data migration show up on the dashboard.
-  #  """
-  #  cache.clear()
-  #  return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
+def clear_cache_view(request):
+    """
+    Clears the Django cache to ensure the 821 new articles 
+    from the data migration show up on the dashboard.
+    """
+    cache.clear()
+    return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
 
 
 # =========================
