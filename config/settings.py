@@ -124,7 +124,28 @@ CACHES = {
         }
     }
 }
-
+#Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': { # Or specify the app logger more specifically
+        'handlers': ['console'],
+        'level': 'INFO', # Set root level to INFO or lower
+    },
+    'loggers': {
+        'dashboard.services.ml_inference_service': { # Target the specific logger
+            'handlers': ['console'],
+            'level': 'DEBUG', # Set this to DEBUG for detailed logs from this service
+            'propagate': False, # Prevent propagation to root if you want only this handler
+        },
+       
+    },
+}
 # Optional: Use Redis for sessions too
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
