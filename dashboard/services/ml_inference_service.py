@@ -385,7 +385,12 @@ class MLInferenceService:
     
             # Decode label
             try:
-                model_intent = classifier.label_encoder.inverse_transform([predicted_class_id])[0]
+                # Assuming self._strategic_label_encoder was correctly loaded before this method runs
+                if self._strategic_label_encoder:
+                    model_intent = self._strategic_label_encoder.inverse_transform([predicted_class_id])[0]
+                else:
+                    logger.error("Label encoder not available for strategic classifier.")
+                    model_intent = "unknown"
             except (IndexError, AttributeError) as e:
                 logger.error(f"Error decoding model prediction: {e}")
                 model_intent = "unknown"
