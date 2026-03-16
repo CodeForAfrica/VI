@@ -366,36 +366,22 @@ class MLInferenceService:
         try:
             classifier = self._load_strategic_classifier()
             if classifier is not None:
-                # FIX: Determine device manually since the wrapper doesn't have a .device attr
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                # The ensemble's .predict() handles tokenization, 
+                # multi-model averaging, and calibration internally.
+                # We pass [article_text] because it expects a list.
+                predictions, probabilities = classifier.predict(
+                    [article_text], 
+                    batch_size=1, 
+                    calibrated=True, 
+                    return_probs=True
+                )
 
-                inputs = self.tokenizer(
-                    article_text,
-                    truncation=True,
-                    padding=True,
-                    max_length=512,
-                    return_tensors="pt"
-                ).to(device)
-    
-            # Perform prediction
-            with torch.no_grad():
-                if hasattr(classifier, 'model'):
-                    outputs = classifier.model(**inputs)
-                    logits = outputs.logits
-                elif hasattr(classifier, 'base_model'):
-                    outputs = classifier.base_model(**inputs)
-                    logits = outputs.logits
-                elif hasattr(classifier, 'predict_logits'):
-                    # Some wrappers have a specific method for this
-                    logits = classifier.predict_logits(inputs)
-                else:
-                    # Fallback: try calling it directly if the above fails, 
-                    # but this is likely where your 'not callable' error is
-                    outputs = classifier(**inputs) 
-                    logits = outputs.logits
-                probabilities = torch.softmax(logits, dim=-1)
-                predicted_class_id = torch.argmax(probabilities, dim=-1).item()
-                model_confidence = torch.max(probabilities).item() # Max probability as confidence
+                # Extract first result from the returned arrays
+                predicted_class_id = predictions[0]
+                model_confidence = float(np.max(probabilities[0]))
+                
+                model_intent = self._decode_label(predicted_class_id)
+                print(f"Model prediction - Intent: '{model_intent}', Confidence: {model_confidence}")
     
             # Decode label
             try:
