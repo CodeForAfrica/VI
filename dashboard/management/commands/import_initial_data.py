@@ -89,7 +89,7 @@ class Command(BaseCommand):
         articles_path = None
         if options['articles_s3_key']:
             articles_path = self.download_from_s3(options['articles_s3_key'], 'articles CSV')
-        elif options['articles_csv']:  # <--- Changed to match the argument name
+        elif options['articles_csv']:  
             articles_path = options['articles_csv']
         else:
             self.stderr.write(self.style.ERROR("Either --articles-csv or --articles-s3-key must be provided."))
@@ -153,7 +153,7 @@ class Command(BaseCommand):
                     confidence=float(row.get('confidence', 0)) if row.get('confidence') else 0.0,
                     lang_detect=row.get('lang_detect', ''),
                     use_afrolm=row.get('use_afrolm', '').lower() in ('true', '1', 'yes'),
-                    # is_anchor=is_anchor_val  <-- REMOVED TO PREVENT RDS ERROR
+                    # is_anchor=is_anchor_val  
                 ))
             return objs
 
