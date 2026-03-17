@@ -47,6 +47,16 @@ class MediaOutlet(Model):
     class Meta:
         ordering = ['name']
 
+class VulnerabilityIndex(models.Model):
+    actor = models.CharField(max_length=50)
+    country = models.CharField(max_length=50)
+    intent = models.CharField(max_length=50)
+    final_risk = models.FloatField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('actor', 'country', 'intent')
+        ordering = ['actor', 'country', 'intent']
 
 class MediaNarrative(Model):
     article_text = TextField()
