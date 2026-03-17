@@ -85,7 +85,7 @@ class MediaNarrative(Model):
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     ml_processed_at = models.DateTimeField(null=True, blank=True)
-    is_anchor = models.BooleanField(default=False)
+    #is_anchor = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-posting_time']
