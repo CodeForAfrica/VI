@@ -89,8 +89,8 @@ class Command(BaseCommand):
         articles_path = None
         if options['articles_s3_key']:
             articles_path = self.download_from_s3(options['articles_s3_key'], 'articles CSV')
-        elif options['articles_csv']:
-            articles_path = options['articles_csv']
+        elif options['Human_labeled.csv']:
+            articles_path = options['Human_labeled.csv']
         else:
             self.stderr.write(self.style.ERROR("Either --articles-csv or --articles-s3-key must be provided."))
             return
