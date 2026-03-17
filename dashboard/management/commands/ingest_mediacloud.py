@@ -61,7 +61,15 @@ TARGET_COLLECTION_IDS = {
 }
 
 QUERY_BY_COUNTRY = {
-    "Ethiopia": "(Ethiopia OR 'Addis Ababa' OR 'Abiy Ahmed') AND (investment OR infrastructure OR security OR military OR drone OR deplomacy OR economy)",
+    "Ethiopia": "(Ethiopia OR 'Addis Ababa' OR 'Abiy Ahmed') AND (investment OR infrastructure OR security OR military OR drone OR diplomacy OR economy OR health)",
+    
+    "Senegal": "(Sénégal OR Dakar OR 'Bassirou Diomaye Faye' OR 'Ousmane Sonko') AND (investissement OR infrastructure OR sécurité OR militaire OR économie OR diplomatie OR ressources OR health)",
+    
+    "DRC": "('République Démocratique du Congo' OR RDC OR Kinshasa OR 'Felix Tshisekedi') AND (investissement OR infrastructure OR sécurité OR militaire OR 'matières premières' OR mines OR économie OR diplomatie OR health)",
+    
+    "South_Africa": "('South Africa' OR Pretoria OR Johannesburg OR 'Cyril Ramaphosa') AND (investment OR infrastructure OR security OR military OR economy OR diplomacy OR energy OR eskom OR health)",
+    
+    "Côte d'Ivoire": "('Côte d'Ivoire' OR Abidjan OR 'Alassane Ouattara') AND (investissement OR infrastructure OR sécurité OR militaire OR économie OR diplomatie OR cacao OR 'matières premières' OR health)",
 }
 
 scraper = cloudscraper.create_scraper()
@@ -106,16 +114,16 @@ def main():
         base_query = QUERY_BY_COUNTRY.get(country)
         if not base_query: continue
             
-        for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-            try:
-                # The 2026 Gateway uses standard GET params
-                params = {
-                    "q": f"({base_query}) AND tags_id_media:{actor_coll_id}",
-                    "start_date": START_DATE.isoformat(),
-                    "end_date": END_DATE.isoformat(),
-                    "rows": 50,
-                    "api_key": API_KEY
-                }
+        for country, country_id in TARGETS.items():
+            for actor, actor_id in ACTORS.items():
+                try:
+                    current_params = {
+                        "q": f"({QUERY}) AND tags_id_media:{actor_id}",
+                        "start_date": START_DATE.isoformat(),
+                        "end_date": END_DATE.isoformat(),
+                        "rows": 50,
+                        "api_key": API_KEY,
+                    }
                 
                 headers = {"Authorization": f"Token {API_KEY}"}
 
