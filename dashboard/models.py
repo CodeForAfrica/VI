@@ -10,6 +10,7 @@ from urllib.parse import urljoin, urlparse
 import re
 from django.db import models 
 
+
 class Journalist(Model):
     name = CharField(max_length=255, unique=True)
     city = CharField(max_length=100, blank=True, null=True)
