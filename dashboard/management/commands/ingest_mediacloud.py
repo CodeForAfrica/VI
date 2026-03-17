@@ -48,6 +48,7 @@ END_DATE = date.today()
 # ────────────────────────────────────────────────
 # COLLECTIONS & QUERIES
 # ────────────────────────────────────────────────
+
 ACTOR_COLLECTION_IDS = {
     "USA": 34412234, "France": 34412146, "China": 34412193,
     "Russia": 34412232, "Turkey": 34412131, "Saudi Arabia": 34412050,
@@ -112,7 +113,7 @@ def main():
                     "q": f"({base_query}) AND tags_id_media:{actor_coll_id}",
                     "start_date": START_DATE.isoformat(),
                     "end_date": END_DATE.isoformat(),
-                    "rows": 50
+                    "rows": 50,
                     "api_key": API_KEY
                 }
                 
