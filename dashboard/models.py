@@ -75,7 +75,7 @@ class MediaNarrative(Model):
     llm_strat = CharField(max_length=255, blank=True, null=True)
     llm_strat_conf = FloatField(blank=True, null=True)
     llm_strat_notes = TextField(blank=True, null=True)
-    pseudo_kept = Boolean_Field = BooleanField(default=False)
+    pseudo_kept = BooleanField(default=False)
     pseudo_weight = FloatField(default=0.0)
     llm_strat_id = IntegerField(blank=True, null=True)
     strategic_intent_id = IntegerField(blank=True, null=True)
