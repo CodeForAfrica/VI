@@ -9,20 +9,20 @@ class Command(BaseCommand):
     help = 'Run the full pipeline: import data, update strategic intent, update vulnerability indexes.'
 
     def add_arguments(self, parser):
-            # Step 1: Import Arguments
-            parser.add_argument('--articles-s3-key', type=str, help='S3 key for articles CSV')
-            parser.add_argument('--articles-csv', type=str, help='Local path to articles CSV')
-            parser.add_argument('--risk-table-s3-key', type=str, help='S3 key for risk table CSV')
-            parser.add_argument('--risk-table-csv', type=str, default='./final_risk_by_actor_intent_country.csv')
-            
-            # Step 2: ML/Intent Arguments
-            parser.add_argument('--llm-only', action='store_true')
-            parser.add_argument('--model-only', action='store_true')
-            parser.add_argument('--batch-size', type=int, default=500)
-    
-            # Control Flags
-            parser.add_argument('--skip-import', action='store_true')
-            parser.add_argument('--anchor-size', type=int)
+        # Step 1: Import Arguments
+        parser.add_argument('--articles-s3-key', type=str, help='S3 key for articles CSV')
+        parser.add_argument('--articles-csv', type=str, help='Local path to articles CSV')
+        parser.add_argument('--risk-table-s3-key', type=str, help='S3 key for risk table CSV')
+        parser.add_argument('--risk-table-csv', type=str, default='./final_risk_by_actor_intent_country.csv')
+        
+        # Step 2: ML/Intent Arguments
+        parser.add_argument('--llm-only', action='store_true')
+        parser.add_argument('--model-only', action='store_true')
+        parser.add_argument('--batch-size', type=int, default=500)
+
+        # Control Flags
+        parser.add_argument('--skip-import', action='store_true')
+        # parser.add_argument('--anchor-size', type=int) # Commented out
         
     def handle(self, *args, **options):
         self.stdout.write("=== Starting Full Pipeline ===")
@@ -37,16 +37,16 @@ class Command(BaseCommand):
                 import_args.extend(['--articles-s3-key', options['articles_s3_key']])
             if options['articles_csv']:
                 import_args.extend(['--articles-csv', options['articles_csv']])
-            if options['anchor_size']:
-                import_args.extend(['--anchor-size', str(options['anchor_size'])])
+            #if options['anchor_size']:
+                #import_args.extend(['--anchor-size', str(options['anchor_size'])])
             if options['risk_table_s3_key']:
                 import_args.extend(['--risk-table-s3-key', options['risk_table_s3_key']])
             if options['risk_table_csv']:
                 import_args.extend(['--risk-table-csv', options['risk_table_csv']])
-            if options['anchor_ids_s3_key']:
-                import_args.extend(['--anchor-ids-s3-key', options['anchor_ids_s3_key']])
-            if options['anchor_ids_csv']:
-                import_args.extend(['--anchor-ids-csv', options['anchor_ids_csv']])
+            #if options['anchor_ids_s3_key']:
+                #import_args.extend(['--anchor-ids-s3-key', options['anchor_ids_s3_key']])
+            #if options['anchor_ids_csv']:
+                #import_args.extend(['--anchor-ids-csv', options['anchor_ids_csv']])
 
             if not import_args:
                 self.stderr.write(
