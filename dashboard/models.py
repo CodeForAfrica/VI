@@ -1,15 +1,14 @@
+# dashboard/models.py
 from django.db.models import (
     Model, TextField, DateTimeField, CharField, URLField,
     FloatField, BooleanField, IntegerField, ForeignKey, SET_NULL
 )
-
 from django.utils.safestring import mark_safe
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
 from django.db import models 
-from django.db.models import SET_NULL
 
 class Journalist(Model):
     name = CharField(max_length=255, unique=True)
@@ -27,9 +26,7 @@ class Journalist(Model):
     class Meta:
         ordering = ['name']
 
-
 class MediaOutlet(Model):
-    #name = CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255, unique=True)
     parent_organisation = CharField(max_length=255, blank=True, null=True)
     website = URLField(blank=True, null=True)
@@ -48,15 +45,15 @@ class MediaOutlet(Model):
         ordering = ['name']
 
 class VulnerabilityIndex(models.Model):
-    actor = models.CharField(max_length=50)
-    country = models.CharField(max_length=50)
-    intent = models.CharField(max_length=50)
-    final_risk = models.FloatField()
-    updated_at = models.DateTimeField(auto_now=True)
+    actor = models.CharField(max_length=50)
+    country = models.CharField(max_length=50)
+    intent = models.CharField(max_length=50)
+    final_risk = models.FloatField()
+    updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        unique_together = ('actor', 'country', 'intent')
-        ordering = ['actor', 'country', 'intent']
+    class Meta:
+        unique_together = ('actor', 'country', 'intent')
+        ordering = ['actor', 'country', 'intent']
 
 class MediaNarrative(Model):
     article_text = TextField()
@@ -78,20 +75,16 @@ class MediaNarrative(Model):
     llm_strat = CharField(max_length=255, blank=True, null=True)
     llm_strat_conf = FloatField(blank=True, null=True)
     llm_strat_notes = TextField(blank=True, null=True)
-    pseudo_kept = BooleanField(default=False)
+    pseudo_kept = Boolean_Field = BooleanField(default=False)
     pseudo_weight = FloatField(default=0.0)
     llm_strat_id = IntegerField(blank=True, null=True)
     strategic_intent_id = IntegerField(blank=True, null=True)
     author = CharField(max_length=255, blank=True, null=True, default="Unknown")
-    # Add back if removed
-
+    
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
-    #vulnerability_index = FloatField(null=True, blank=True)
     ml_processed_at = models.DateTimeField(null=True, blank=True)
-
-    # NEW FIELD for anchor articles (human‑labeled subset)
-    is_anchor = models.BooleanField(default=False)
+    is_anchor = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-posting_time']
