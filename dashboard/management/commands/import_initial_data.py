@@ -23,8 +23,10 @@ class Command(BaseCommand):
         parser.add_argument(
             '--anchor-size',
             type=int,
-            help='Number of first articles to mark as anchors (e.g., 15000)'
+            default=15000, # <--- Added default here
+            help='Number of first articles to mark as anchors'
         )
+        
         parser.add_argument(
             '--anchor-ids-csv',
             help='Local path to anchor IDs CSV (one ID per line) – overrides --anchor-size'
@@ -136,7 +138,7 @@ class Command(BaseCommand):
                 non_anchor_rows = all_rows
 
         # Helper to create article objects from rows, with given is_anchor value
-        def create_articles_from_rows(rows):
+        def create_articles_from_rows(rows, is_anchor_val):
             objs = []
             for row in rows:
                 objs.append(MediaNarrative(
