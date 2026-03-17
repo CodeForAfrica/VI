@@ -9,21 +9,36 @@ class Command(BaseCommand):
     help = 'Run the full pipeline: import data, update strategic intent, update vulnerability indexes.'
 
     def add_arguments(self, parser):
-        # Step 1: Import Arguments
-        parser.add_argument('--articles-s3-key', type=str, help='S3 key for articles CSV')
-        parser.add_argument('--articles-csv', type=str, help='Local path to articles CSV')
-        parser.add_argument('--risk-table-s3-key', type=str, help='S3 key for risk table CSV')
-        parser.add_argument('--risk-table-csv', type=str, default='./final_risk_by_actor_intent_country.csv')
-        
-        # Step 2: ML/Intent Arguments
-        parser.add_argument('--llm-only', action='store_true')
-        parser.add_argument('--model-only', action='store_true')
-        parser.add_argument('--batch-size', type=int, default=500)
+        # Arguments for import_initial_data
+        parser.add_argument('--articles-s3-key', help='S3 key for articles CSV')
+        parser.add_argument('--articles-csv', help='Local path to articles CSV')
+        parser.add_argument('--anchor-size', type=int, help='Number of first articles to mark as anchors')
+        parser.add_argument('--risk-table-s3-key', help='S3 key for risk table CSV')
+        parser.add_argument(
+            '--risk-table-csv',
+            default='./final_risk_by_actor_intent_country.csv',
+            help='Local path to risk table CSV (default: ./final_risk_by_actor_intent_country.csv)'
+        )
+        parser.add_argument('--anchor-ids-s3-key', help='S3 key for anchor IDs file (overrides anchor-size)')
+        parser.add_argument('--anchor-ids-csv', help='Local path to anchor IDs file (overrides anchor-size)')
 
-        # Control Flags
-        parser.add_argument('--skip-import', action='store_true')
-        # parser.add_argument('--anchor-size', type=int) # Commented out
-        
+        # Arguments for update_strategic_intent
+        parser.add_argument('--llm-only', action='store_true', help='Only run LLM (skip model)')
+        parser.add_argument('--model-only', action='store_true', help='Only run model (skip LLM)')
+        parser.add_argument(
+            '--batch-size',
+            type=int,
+            default=500,
+            help='Batch size for database updates (used in update_strategic_intent)'
+        )
+
+        # Control flags
+        parser.add_argument(
+            '--skip-import',
+            action='store_true',
+            help='Skip the import step (if data already loaded)'
+        )
+
     def handle(self, *args, **options):
         self.stdout.write("=== Starting Full Pipeline ===")
 
@@ -38,15 +53,15 @@ class Command(BaseCommand):
             if options['articles_csv']:
                 import_args.extend(['--articles-csv', options['articles_csv']])
             if options['anchor_size']:
-                #import_args.extend(['--anchor-size', str(options['anchor_size'])])
+                import_args.extend(['--anchor-size', str(options['anchor_size'])])
             if options['risk_table_s3_key']:
                 import_args.extend(['--risk-table-s3-key', options['risk_table_s3_key']])
             if options['risk_table_csv']:
                 import_args.extend(['--risk-table-csv', options['risk_table_csv']])
             if options['anchor_ids_s3_key']:
-                #import_args.extend(['--anchor-ids-s3-key', options['anchor_ids_s3_key']])
+                import_args.extend(['--anchor-ids-s3-key', options['anchor_ids_s3_key']])
             if options['anchor_ids_csv']:
-                #import_args.extend(['--anchor-ids-csv', options['anchor_ids_csv']])
+                import_args.extend(['--anchor-ids-csv', options['anchor_ids_csv']])
 
             if not import_args:
                 self.stderr.write(
