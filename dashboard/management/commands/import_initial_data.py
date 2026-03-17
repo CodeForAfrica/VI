@@ -89,8 +89,8 @@ class Command(BaseCommand):
         articles_path = None
         if options['articles_s3_key']:
             articles_path = self.download_from_s3(options['articles_s3_key'], 'articles CSV')
-        elif options['Human_labeled.csv']:
-            articles_path = options['Human_labeled.csv']
+        elif options['articles_csv']:  # <--- Changed to match the argument name
+            articles_path = options['articles_csv']
         else:
             self.stderr.write(self.style.ERROR("Either --articles-csv or --articles-s3-key must be provided."))
             return
@@ -136,6 +136,7 @@ class Command(BaseCommand):
                 non_anchor_rows = all_rows
 
         # Helper to create article objects from rows, with given is_anchor value
+        # Helper to create article objects without the missing 'is_anchor' column
         def create_articles_from_rows(rows, is_anchor_val):
             objs = []
             for row in rows:
@@ -149,10 +150,10 @@ class Command(BaseCommand):
                     tone=row.get('tone', ''),
                     target_country=row.get('target_country', ''),
                     url=row.get('URL', ''),
-                    confidence=float(row.get('confidence', 0)),
+                    confidence=float(row.get('confidence', 0)) if row.get('confidence') else 0.0,
                     lang_detect=row.get('lang_detect', ''),
-                    use_afrolm=row.get('use_aflom', '').lower() in ('true', '1', 'yes'),
-                    is_anchor=is_anchor_val
+                    use_afrolm=row.get('use_afrolm', '').lower() in ('true', '1', 'yes'),
+                    # is_anchor=is_anchor_val  <-- REMOVED TO PREVENT RDS ERROR
                 ))
             return objs
 
