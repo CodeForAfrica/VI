@@ -137,7 +137,7 @@ class Command(BaseCommand):
 
         # Helper to create article objects from rows, with given is_anchor value
         # Helper to create article objects without the missing 'is_anchor' column
-        def create_articles_from_rows(rows, is_anchor_val):
+        def create_articles_from_rows(rows):
             objs = []
             for row in rows:
                 objs.append(MediaNarrative(
@@ -157,43 +157,23 @@ class Command(BaseCommand):
                 ))
             return objs
 
-        # Create and bulk insert anchor articles first (to get lower IDs, optional)
         if anchor_rows:
-            anchor_objs = create_articles_from_rows(anchor_rows, True)
+            anchor_objs = create_articles_from_rows(anchor_rows) 
             MediaNarrative.objects.bulk_create(anchor_objs, batch_size=1000)
             self.stdout.write(f"Inserted {len(anchor_objs)} anchor articles.")
 
-        # Insert non-anchor articles
         if non_anchor_rows:
-            non_anchor_objs = create_articles_from_rows(non_anchor_rows, False)
+            non_anchor_objs = create_articles_from_rows(non_anchor_rows) 
+            # UNCOMMENTED THIS so data actually saves:
             MediaNarrative.objects.bulk_create(non_anchor_objs, batch_size=1000)
             self.stdout.write(f"Inserted {len(non_anchor_objs)} non-anchor articles.")
 
         total_imported = len(anchor_rows) + len(non_anchor_rows)
         self.stdout.write(self.style.SUCCESS(f"Imported {total_imported} articles total."))
 
-        # ----- Mark anchor articles using anchor-ids file (if provided and not using anchor-size) -----
-        if not use_anchor_size and (options['anchor_ids_csv'] or options['anchor_ids_s3_key']):
-            self.stdout.write("Marking anchor articles from IDs file...")
-            with open(anchor_path) as f:
-                reader = csv.reader(f)
-                header = next(reader, None)
-                if header and header[0].lower() == 'id':
-                    pass
-                else:
-                    f.seek(0)
-                    reader = csv.reader(f)
-                for row in reader:
-                    if row:
-                        anchor_ids.add(int(row[0]))
-            updated = MediaNarrative.objects.filter(id__in=anchor_ids).update(is_anchor=True)
-            self.stdout.write(self.style.SUCCESS(f"Marked {updated} articles as anchors."))
-        elif use_anchor_size:
-            # Already marked during creation
-            pass
-        else:
-            self.stdout.write("No anchor marking performed; is_anchor remains False for all.")
-
+        # 2. Skip anchor marking entirely to avoid the RDS column error
+        self.stdout.write("Skipping anchor marking (column 'is_anchor' missing in DB).")
+        
         # ----- Import VulnerabilityIndex -----
         self.stdout.write(f"Importing vulnerability index table from {risk_path}...")
         with open(risk_path, encoding='utf-8') as f:
