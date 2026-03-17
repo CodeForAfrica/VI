@@ -42,7 +42,12 @@ class MLInferenceService:
     def __init__(self):
         print("MLInferenceService.__init__ called")
         # GPU SUPPORT
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         print(f"🚀 ML Service detected device: {self.device}")
         # Only initialize S3 client if AWS credentials are available
         # Check Django settings first, then fall back to environment variables
@@ -348,6 +353,9 @@ class MLInferenceService:
                     # Load tone classifier from the archive path
                     from dashboard.services.tone_ensemble import CalibratedStackedEnsemble
                     classifier = CalibratedStackedEnsemble.load(str(archive_model_path))
+                    if hasattr(classifier, 'base_models'):
+                        for model in classifier.base_models:
+                            model.to(self.device)
                     self._model_cache['tone'] = classifier
                     
                     # Load label encoder info - assume it's in the archive model path
@@ -634,8 +642,13 @@ class MLInferenceService:
         
         # ✅ CRITICAL: Check in-memory cache FIRST
         if 'strategic' in self._model_cache:
-            print("   ✅ Found strategic model in memory cache, returning.")
-            return self._model_cache['strategic']
+            classifier = self._model_cache['strategic']
+            # Double check it is on the right device
+            if hasattr(classifier, 'models'):
+                for model in classifier.models:
+                    if next(model.parameters()).device.type != self.device:
+                        model.to(self.device)
+            return classifier
     
         # ✅ NEW: Check ARCHIVE cache FIRST (Priority 1) - This path should contain BOTH base model and adapters
         # Expected path: /home/ubuntu/Vulnerability_index_tool/app/models/model_cache/strategic_model/
@@ -648,7 +661,11 @@ class MLInferenceService:
                 # This assumes the directory contains the base model (e.g., microsoft_mdeberta-v3-base)
                 # and the adapter components (e.g., ensemble_model_0, label_encoder.pkl) within it.
                 classifier = CalibratedStrategicClassifier.load(str(archive_strategic_model_path))
-                
+                if hasattr(classifier, 'models'):
+                    print(f"🚀 Moving {len(classifier.models)} ensemble models to {self.device}...")
+                    for model in classifier.models:
+                        model.to(self.device)
+                    
                 self._model_cache['strategic'] = classifier
                 
                 # Load label encoder
