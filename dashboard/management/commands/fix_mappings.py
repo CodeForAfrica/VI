@@ -15,6 +15,8 @@ class Command(BaseCommand):
             "trade dominance": "Economic",
             "economic impact": "Economic",
             "debt trap diplomacy": "Economic",
+            "health project": "Economic",
+            "medical": "Economic",
             # Sovereignty
             "sovereignty": "Sovereignty",
             "sovereignty erosion": "Sovereignty",
@@ -25,8 +27,7 @@ class Command(BaseCommand):
             "destabilization": "SocialFragility",
             "migration control": "SocialFragility",
             "political destabilization": "SocialFragility",
-            "health project": "SocialFragility",
-            "medical": "SocialFragility",
+        
             # Others
             "lgbtq": "LGBTQ",
             "religious": "Religious",
