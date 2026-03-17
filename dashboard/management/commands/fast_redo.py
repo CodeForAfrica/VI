@@ -31,7 +31,10 @@ class Command(BaseCommand):
             try:
                 # The service handles the 5 models, the label_encoder, and the device (MPS/CPU)
                 inference_result = ml_service.perform_inference(article.article_text)
-                
+
+                if i % 10 == 0:
+                    self.stdout.write(f"🔍 Processing ID: {article.id} ({i+1}/{total})")
+                    
                 # Get the raw intent from the ensemble/LLM
                 raw_intent = inference_result.get('strategic_intent', 'SocialFragility')
                 
