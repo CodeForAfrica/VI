@@ -37,15 +37,15 @@ class Command(BaseCommand):
                 import_args.extend(['--articles-s3-key', options['articles_s3_key']])
             if options['articles_csv']:
                 import_args.extend(['--articles-csv', options['articles_csv']])
-            #if options['anchor_size']:
+            if options['anchor_size']:
                 #import_args.extend(['--anchor-size', str(options['anchor_size'])])
             if options['risk_table_s3_key']:
                 import_args.extend(['--risk-table-s3-key', options['risk_table_s3_key']])
             if options['risk_table_csv']:
                 import_args.extend(['--risk-table-csv', options['risk_table_csv']])
-            #if options['anchor_ids_s3_key']:
+            if options['anchor_ids_s3_key']:
                 #import_args.extend(['--anchor-ids-s3-key', options['anchor_ids_s3_key']])
-            #if options['anchor_ids_csv']:
+            if options['anchor_ids_csv']:
                 #import_args.extend(['--anchor-ids-csv', options['anchor_ids_csv']])
 
             if not import_args:
