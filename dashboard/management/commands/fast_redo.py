@@ -34,11 +34,51 @@ class Command(BaseCommand):
         
         # Intent Mapping for cleaning labels
         intent_mapping = {
+            "economic": "Economic",
+            "sovereignty": "Sovereignty",
+            "lgbtq": "LGBTQ",
+            "religious": "Religious",
+            "electioninfluence": "ElectionInfluence", 
+            "militarypresence": "MilitaryPresence", 
+            "resourcedependency": "ResourceDependency", 
+            "socialfragility": "SocialFragility", 
+            
+            # Variations from Model/LLM
+            "economic dependency": "Economic",
             "trade dominance": "Economic",
+            "sovereignty erosion": "Sovereignty",
+            "sovereignty threat": "Sovereignty",
             "cultural hegemony": "Sovereignty",
-            "reputation damage": "Sovereignty",
-            "political influence": "Sovereignty",
-            "economic dependency": "Economic"
+            "reputation damage": "Sovereignty", # Matches your current log behavior
+            "centralization of power": "Sovereignty",
+            "diplomatic influence": "Sovereignty",
+            
+            "lgbtq rights": "LGBTQ",
+            "lgbt advocacy": "LGBTQ",
+            
+            "religious influence": "Religious",
+            "religious polarisation": "Religious",
+            
+            "election influence": "ElectionInfluence", 
+            "election interference": "ElectionInfluence",
+            "electoral interference": "ElectionInfluence",
+            "democratic interference": "ElectionInfluence",
+            
+            "military presence": "MilitaryPresence", 
+            "military base": "MilitaryPresence",
+            
+            "resource dependency": "ResourceDependency", 
+            "resource control": "ResourceDependency",
+            
+            "social fragility": "SocialFragility", 
+            "social unrest": "SocialFragility",
+            "information warfare": "SocialFragility", 
+            "human rights advocacy": "SocialFragility", 
+            "cultural influence": "SocialFragility",
+            
+            "debt trap diplomacy": "Economic", 
+            "cultural exchange": "Economic",
+            "diplomatic cooperation": "Economic",
         }
 
         # 4. The Loop
