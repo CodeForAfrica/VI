@@ -136,7 +136,6 @@ class Command(BaseCommand):
                 non_anchor_rows = all_rows
 
         # Helper to create article objects from rows, with given is_anchor value
-        # Helper to create article objects without the missing 'is_anchor' column
         def create_articles_from_rows(rows):
             objs = []
             for row in rows:
@@ -153,7 +152,7 @@ class Command(BaseCommand):
                     confidence=float(row.get('confidence', 0)) if row.get('confidence') else 0.0,
                     lang_detect=row.get('lang_detect', ''),
                     use_afrolm=row.get('use_afrolm', '').lower() in ('true', '1', 'yes'),
-                    # is_anchor=is_anchor_val  
+                    is_anchor=is_anchor_val  
                 ))
             return objs
 
@@ -164,7 +163,6 @@ class Command(BaseCommand):
 
         if non_anchor_rows:
             non_anchor_objs = create_articles_from_rows(non_anchor_rows) 
-            # UNCOMMENTED THIS so data actually saves:
             MediaNarrative.objects.bulk_create(non_anchor_objs, batch_size=1000)
             self.stdout.write(f"Inserted {len(non_anchor_objs)} non-anchor articles.")
 
