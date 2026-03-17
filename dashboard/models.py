@@ -77,8 +77,11 @@ class MediaNarrative(Model):
 
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
-    vulnerability_index = FloatField(null=True, blank=True)
+    #vulnerability_index = FloatField(null=True, blank=True)
     ml_processed_at = models.DateTimeField(null=True, blank=True)
+
+    # NEW FIELD for anchor articles (human‑labeled subset)
+    is_anchor = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-posting_time']
