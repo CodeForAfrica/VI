@@ -11,13 +11,11 @@ class Command(BaseCommand):
     help = 'Ultra-fast local inference using the Ensemble ML Service (MPS Optimized)'
 
     def handle(self, *args, **options):
-        # 1. Initialize the Service
-        # Note: Speed boost depends on the .to(self.device) changes in your MLInferenceService
+        import pandas as pd # Ensure pandas is available
         self.stdout.write("📦 Initializing Ensemble ML Service...")
         start_time = time.time()
         ml_service = get_ml_service() 
         
-        # 2. Get Pending Articles (Wipe intent in shell first to redo all)
         articles_query = MediaNarrative.objects.filter(
             strategic_intent__isnull=True,
             article_text__isnull=False
@@ -26,68 +24,67 @@ class Command(BaseCommand):
         total = articles_query.count()
         self.stdout.write(self.style.SUCCESS(f"🧐 Found {total} articles to process."))
 
-        if total == 0:
-            self.stdout.write(self.style.WARNING("⚠️ No pending articles. If redoing all, wipe the intent field first."))
-            return
-
+        # Storage for the final run
         results_to_update = []
-        batch_size = 50 
+        backup_data = []
+        backup_file = "inference_backup_15k.csv"
 
         # 3. Processing Loop
         for i, article in enumerate(articles_query):
             try:
-                # The service handles the 5 models, the label_encoder, and the device (MPS/CPU)
                 inference_result = ml_service.perform_inference(article.article_text)
 
-                # TRACKING: Print ID every 10 articles
                 if i % 10 == 0:
                     elapsed = time.time() - start_time
                     avg_speed = (i + 1) / elapsed
                     remaining = (total - (i + 1)) / avg_speed if i > 0 else 0
-                    
-                    self.stdout.write(
-                        f"🔍 Processing ID: {article.id} | Progress: {i+1}/{total} "
-                        f"({(i+1)/total*100:.1f}%) | Est. Remaining: {remaining/60:.1f} mins"
-                    )
-                    
-                # Get the raw intent from the ensemble/LLM
-                raw_intent = inference_result.get('strategic_intent', 'Unknown')
+                    self.stdout.write(f"🔍 ID: {article.id} | Progress: {i+1}/{total} | Est. Remaining: {remaining/60:.1f} mins")
                 
-                # Use our finalized Contextual Mapping logic
+                raw_intent = inference_result.get('strategic_intent', 'Unknown')
                 final_intent = map_raw_intent_to_contextual(raw_intent) or "Other"
 
-                # Update the article object in memory
+                # Update memory object
                 article.strategic_intent = final_intent
                 article.tone = inference_result.get('tone', 'Factual')
                 article.confidence = inference_result.get('confidence', 0.5)
-                # Mark source so you know it was processed via the local MPS run
                 article.prediction_source = inference_result.get('source', 'ensemble_mps_local')
+                article.is_anchor = True # Setting your 15k anchor baseline
 
                 results_to_update.append(article)
+                
+                # Update Backup List
+                backup_data.append({
+                    'id': article.id,
+                    'intent': final_intent,
+                    'tone': article.tone,
+                    'conf': article.confidence
+                })
 
-                # 4. Batch Save to RDS
-                if len(results_to_update) >= batch_size:
-                    with transaction.atomic():
-                        MediaNarrative.objects.bulk_update(
-                            results_to_update, 
-                            ['strategic_intent', 'tone', 'confidence', 'prediction_source']
-                        )
-                    self.stdout.write(self.style.SUCCESS(f"📈 Batch Saved: {i+1} articles synced to RDS."))
-                    results_to_update = []
-                    # Keep RDS connection healthy across long processing runs
-                    connection.close_if_unusable_or_obsolete()
+                # LOCAL BACKUP ONLY (Every 500) - No RDS call here
+                if (i + 1) % 500 == 0:
+                    pd.DataFrame(backup_data).to_csv(backup_file, index=False)
+                    self.stdout.write(self.style.WARNING(f"💾 Safety Backup saved to {backup_file}"))
 
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f"❌ ID {article.id} failed: {e}"))
 
-        # Final Save for remaining records
+        # 4. FINAL MASSIVE SAVE (Outside the loop)
         if results_to_update:
-            with transaction.atomic():
-                MediaNarrative.objects.bulk_update(
-                    results_to_update, 
-                    ['strategic_intent', 'tone', 'confidence', 'prediction_source']
-                )
+            self.stdout.write(self.style.SUCCESS(f"🏁 Inference complete. Syncing {len(results_to_update)} articles to RDS..."))
+            
+            # Final CSV save
+            pd.DataFrame(backup_data).to_csv(backup_file, index=False)
+
+            # Chunked save to avoid RDS timeouts
+            chunk_size = 1000
+            for j in range(0, len(results_to_update), chunk_size):
+                chunk = results_to_update[j : j + chunk_size]
+                with transaction.atomic():
+                    MediaNarrative.objects.bulk_update(
+                        chunk, 
+                        ['strategic_intent', 'tone', 'confidence', 'prediction_source', 'is_anchor']
+                    )
+                self.stdout.write(f"✅ Synced chunk {j//chunk_size + 1}")
         
         end_time = time.time()
-        total_duration = (end_time - start_time) / 60
-        self.stdout.write(self.style.SUCCESS(f"🎉 Finished! {total} articles processed in {total_duration:.2f} minutes."))
+        self.stdout.write(self.style.SUCCESS(f"🎉 Done in {(end_time - start_time) / 60:.2f} mins."))
