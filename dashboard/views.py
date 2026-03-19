@@ -1367,7 +1367,7 @@ def countries(request):
 def authors(request):
     # 1. Capture the selected journalist name from URL
     journalist_name = request.GET.get('journalist', '').strip()
-    
+
     # 2. CACHE logic for the Sidebar and Chart (The "Heavy" Data)
     # We use a unique key to store the top journalists and the chart HTML
     cache_key = "authors_sidebar_and_chart"
@@ -1378,21 +1378,33 @@ def authors(request):
         authors_chart = cached_data['authors_chart']
     else:
         # If no cache, calculate the data
-        top_journalists = Journalist.objects.annotate(
-            article_count=Count('articles')
-        ).filter(article_count__gt=0).order_by('-article_count')[:10]
+        # *** REVISED LOGIC: Removed avg_vulnerability_index calculation ***
+        top_journalists = Journalist.objects.filter(
+            articles__isnull=False # Only journalists with linked articles
+        ).annotate(
+            article_count=Count('articles'),
+            # avg_strategic_confidence=Avg('articles__confidence'), # Assuming confidence relates to strategic intent
+            # avg_vulnerability_index=Avg('articles__vulnerability_index'), # REMOVED - VI not calculated per article contextually here
+            # Add other averages like avg_tone_score if applicable
+        ).filter(article_count__gt=0).order_by('-article_count', '-avg_strategic_confidence')[:10] # Order by article count first, then potentially by avg confidence
 
-        # Generate the Plotly Chart HTML
+        # Generate the Plotly Chart HTML - Adapted for article count focus
         authors_chart = None
         if top_journalists:
-            df = pd.DataFrame(list(top_journalists.values('name', 'article_count')))
+            df = pd.DataFrame(list(top_journalists.values(
+                'name',
+                'article_count',
+                # 'avg_strategic_confidence' # Include if you decide to order by or use this metric
+            )))
+            # Bar chart using article count as the primary metric
             fig = px.bar(
-                df, x='article_count', y='name', orientation='h',
-                color='article_count', color_continuous_scale='Blues',
-                labels={'article_count': 'Articles', 'name': 'Journalist'}
+                df, x='article_count', y='name', orientation='h', # Use article_count for x-axis
+                color='article_count', color_continuous_scale='Blues', # Color based on article count
+                labels={'article_count': 'Number of Articles', 'name': 'Journalist'},
+                title="Top Journalists by Number of Articles" # Update title
             )
             fig.update_layout(
-                height=350, margin=dict(l=10, r=10, t=10, b=10),
+                height=350, margin=dict(l=10, r=10, t=30, b=10), # Increased top margin for title
                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                 yaxis={'categoryorder': 'total ascending'}
             )
@@ -1406,9 +1418,62 @@ def authors(request):
     qs = MediaNarrative.objects.all().order_by('-posting_time')
     selected_journalist = None
 
+    # Initialize variables for selected journalist stats
+    journalist_stats = None
+    common_intents = []
+    common_countries = []
+    common_actors = []
+    journalist_intent_chart = None # Optional: mini chart for selected journalist
+
     if journalist_name:
         qs = qs.filter(journalist_fk__name__iexact=journalist_name)
         selected_journalist = Journalist.objects.filter(name__iexact=journalist_name).first()
+
+        # *** ENHANCED LOGIC: Calculate stats for the selected journalist ***
+        if selected_journalist:
+            journalist_stats = MediaNarrative.objects.filter(journalist_fk=selected_journalist).aggregate(
+                total_articles=Count('id'),
+                # avg_vulnerability=Avg('vulnerability_index'), # REMOVED - VI not calculated per article contextually here
+                avg_confidence=Avg('confidence'),
+                # Potentially get most common intents/countries/actors via separate queries
+            )
+            # Get most common intents
+            common_intents = MediaNarrative.objects.filter(
+                journalist_fk=selected_journalist
+            ).exclude(
+                strategic_intent__in=['', 'Unknown', None]
+            ).values('strategic_intent').annotate(
+                count=Count('id')
+            ).order_by('-count')[:5]
+
+            # Get most common target countries
+            common_countries = MediaNarrative.objects.filter(
+                journalist_fk=selected_journalist
+            ).exclude(
+                target_country__in=['', 'Unknown', None]
+            ).values('target_country').annotate(
+                count=Count('id')
+            ).order_by('-count')[:5]
+
+            # Get most common inferred actors
+            common_actors = MediaNarrative.objects.filter(
+                journalist_fk=selected_journalist
+            ).exclude(
+                inferred_actor__in=['', 'Unknown', None]
+            ).values('inferred_actor').annotate(
+                count=Count('id')
+            ).order_by('-count')[:5]
+
+            # *** OPTIONAL: Generate Mini Chart for Selected Journalist ***
+            # Example: Pie chart for intent distribution
+            if common_intents: # Check if the list is not empty
+                import plotly.express as px # Ensure imported
+                import pandas as pd
+                df_intent = pd.DataFrame(common_intents) # Use the data calculated above
+                if not df_intent.empty:
+                    fig_intent = px.pie(df_intent, values='count', names='strategic_intent', title=f"Focus Areas for {selected_journalist.name}")
+                    journalist_intent_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+
 
     # 4. Pagination
     paginator = Paginator(qs, 10)
@@ -1421,8 +1486,15 @@ def authors(request):
         'page_obj': page_obj,
         'selected_name': journalist_name or "All Journalists",
         'selected_journalist': selected_journalist,
+        # *** ADD NEW CONTEXT VARIABLES ***
+        'journalist_stats': journalist_stats,
+        'common_intents': common_intents,
+        'common_countries': common_countries,
+        'common_actors': common_actors,
+        'journalist_intent_chart': journalist_intent_chart,
     }
     return render(request, 'dashboard/authors.html', context)
+
     
 def articles_view(request):
     search_query = request.GET.get("q", "")
