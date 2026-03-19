@@ -59,14 +59,22 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
     
     return None
 
+# VULNERABILITY CALCULATION (DB-DRIVEN)
+
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """Queries the ContextualRisk model for a specific baseline score."""
+    """
+    1. Normalizes input (Mappings).
+    2. Queries ContextualRisk (DB-driven scores).
+    3. Returns score and intent.
+    """
+    # --- STEP 1: KEEP YOUR MAPPINGS ---
     country_mapping = {
         "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
         "ivory coast": "Côte d'Ivoire", "coteivoire": "Côte d'Ivoire",
         "south africa": "South Africa", "senegal": "Senegal", 
         "drc": "DRC", "ethiopia": "Ethiopia",
     }
+    
     actor_mapping = {
         "uae": "UAE", "china": "China", "france": "France", "us": "US",
         "united states": "US", "russia": "Russia", "saudi": "Saudi Arabia",
@@ -79,17 +87,22 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     db_country = country_mapping.get(c_term, target_country)
     db_actor = actor_mapping.get(a_term, foreign_actor)
 
+    # --- STEP 2: DB QUERY (ContextualRisk) ---
     query = ContextualRisk.objects.filter(
         country__iexact=db_country, 
         actor__iexact=db_actor
     )
     
+    # If the user selected an intent in the dropdown, filter by it
     if intent_filter and intent_filter != "All":
         query = query.filter(intent__iexact=intent_filter)
     
+    # Get the highest risk score available for this match
     match = query.order_by('-risk_score').first()
     
     if match:
         return round(float(match.risk_score), 4), match.intent
         
+    # --- STEP 3: FALLBACK ---
     return 0.0, "No Risk Data Found"
+    
