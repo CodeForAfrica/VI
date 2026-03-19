@@ -1434,7 +1434,7 @@ def authors(request):
             journalist_stats = MediaNarrative.objects.filter(journalist_fk=selected_journalist).aggregate(
                 total_articles=Count('id'),
                 # avg_vulnerability=Avg('vulnerability_index'), # REMOVED - VI not calculated per article contextually here
-                avg_confidence=Avg('confidence'),
+                #avg_confidence=Avg('confidence'),
                 # Potentially get most common intents/countries/actors via separate queries
             )
             # Get most common intents
