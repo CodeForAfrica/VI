@@ -105,6 +105,24 @@ class MediaNarrative(Model):
         outlet = self.media_outlet_fk.name if self.media_outlet_fk else self.media_outlet or "Unknown"
         date = self.posting_time.strftime("%Y-%m-%d") if self.posting_time else "No date"
         return f"{outlet} - {date}"
+        
+    #for media tab
+    @property
+    def narrative_summary(self):
+        """
+        Returns a clean summary. Priority: 
+        1. LLM Notes 
+        2. LLM Strategy 
+        3. Strategic Intent 
+        4. Fallback to truncated text
+        """
+        if self.llm_strat_notes:
+            return self.llm_strat_notes
+        if self.llm_strat:
+            return self.llm_strat
+        if self.strategic_intent:
+            return self.strategic_intent
+        return self.article_text[:100] + "..." if self.article_text else "No summary available"
 
     # IMPROVED: Fetch real article image from URL with media outlet logo fallback
     def get_article_image(self):
