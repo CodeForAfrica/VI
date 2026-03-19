@@ -68,7 +68,7 @@
                                 {% endif %}
                             </td>
                             <!-- Updated summary display: Show full article text summary -->
-                            <td>{{ item.article_text }}</td>
+                            <td>{{ item.article_text|truncatewords:50 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
