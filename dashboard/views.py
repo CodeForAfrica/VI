@@ -1299,7 +1299,7 @@ def countries(request):
     intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>"
     volume_over_time_chart = "<p class='text-center py-5 text-muted'>No volume data available</p>"
 
-    # *** NEW: Aggregate Risk Scores from VulnerabilityIndex Table ***
+    # Aggregate Risk Scores from VulnerabilityIndex Table 
     # This shows the *calculated risk* per country/actor combination, not just raw article counts.
     # It uses the pre-calculated scores from the VulnerabilityIndex model.
     risk_scores_per_combo = VulnerabilityIndex.objects.all()
@@ -1433,22 +1433,35 @@ def countries(request):
     # Volume of Articles Over Time for the Selected Country 
     # Shows trends - are certain topics or actors becoming more prominent?
     volume_over_time_data = []
-    if selected_country:
-        # Filter and prepare data for the chart
-        articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time')
-        if articles_for_country.exists():
-            df_time = pd.DataFrame(articles_for_country) # <-- CORRECTED LINE: Assign the DataFrame
-            df_time['date'] = pd.to_datetime(df_time['posting_time'], utc=True).dt.date
-            daily_counts = df_time['date'].value_counts().sort_index().reset_index(name='count')
-            if not daily_counts.empty:
-                fig_time = px.line(
-                    daily_counts, x='date', y='count',
-                    title=f"Daily Article Volume for {selected_country}",
-                    labels={'count': 'Number of Articles', 'date': 'Date'},
-                    template="plotly_white"
-                )
-                fig_time.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
-                volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn'))
+        if selected_country:
+            # Filter and prepare data for the chart
+            articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time')
+            if articles_for_country.exists():
+                # 1. Correctly assign the DataFrame
+                df_time = pd.DataFrame(articles_for_country)
+                # 2. Process the DataFrame
+                df_time['date'] = pd.to_datetime(df_time['posting_time'], utc=True).dt.date
+                # 3. Create the daily counts series, then convert to DataFrame
+                daily_counts_series = df_time['date'].value_counts().sort_index()
+                daily_counts = daily_counts_series.reset_index(name='count')
+                # 4. Check if the DataFrame for the chart has data
+                if not daily_counts.empty:
+                    # 5. Define the figure, ensuring all parentheses match for px.line
+                    fig_time = px.line(
+                        daily_counts,
+                        x='date',
+                        y='count',
+                        title=f"Daily Article Volume for {selected_country}",
+                        labels={'count': 'Number of Articles', 'date': 'Date'},
+                        template="plotly_white"
+                    ) 
+                    # 6. Update the layout, ensuring parentheses match for update_layout and margin
+                    fig_time.update_layout(
+                        height=400,
+                        margin=dict(l=20, r=20, t=40, b=20) 
+                    ) 
+                    # 7. Convert figure to HTML
+                    volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn')
 
     # Additional Stats for Selected Country 
     country_stats = None
