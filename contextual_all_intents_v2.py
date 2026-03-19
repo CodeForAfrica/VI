@@ -2,7 +2,7 @@
 from math import isfinite
 
 # ---------- CONFIG / SEED INPUTS (replace with live data) ----------
-countries = ["Senegal","DRC","CoteIvoire","Ethiopia"]
+countries = ["Senegal", "DRC", "CoteIvoire", "Ethiopia", "South Africa"]
 actors = ["China","France","UnitedStates","Russia","Rwanda","Saudi","Turkey","UAE","Israel","Iran","NonState"]
 
 # GDP (USD)
