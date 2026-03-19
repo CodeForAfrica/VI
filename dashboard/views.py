@@ -60,10 +60,12 @@ def clear_cache_view(request):
 # =========================
 
 COUNTRIES = [
-    "Senegal", "Ethiopia", "Côte d'Ivoire", "CoteIvoire", "DRC", "South Africa"
+    "Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"
 ]
 FOREIGN_ACTORS = [
-    "US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda"
+    "US", "China", "France", "Russia", "UAE",
+    "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda",
+    "NonState" 
 ]
 # Each item must be a (Value, Label) pair
 INTENT_CHOICES = [
