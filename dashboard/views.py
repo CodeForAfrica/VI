@@ -906,25 +906,31 @@ def overview(request):
    
 
 from django.core.paginator import Paginator
+from django.db.models import Q, Count, F
 
 def media(request):
     # 1. Get the filter parameter
     outlet_name = request.GET.get('outlet', '').strip()
     
-    # 2. Start with all narratives, optimized with select_related
-    qs = MediaNarrative.objects.all().select_related('media_outlet_fk').order_by('-posting_time')
+    # 2. START WITH ALL NARRATIVES
+    # We remove select_related here to be safe if the FKs are empty
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
     
-    # 3. Apply filter if a specific outlet is requested
-    if outlet_name:
-        qs = qs.filter(media_outlet_fk__name__iexact=outlet_name)
+    # 3. SMART FILTER (Checks both the link and the text field)
+    if outlet_name and outlet_name != "All Outlets":
+        qs = qs.filter(
+            Q(media_outlet_fk__name__iexact=outlet_name) | 
+            Q(media_outlet__iexact=outlet_name)
+        )
     
-    # 4. Get the sidebar/stats list
-    top_outlets = MediaOutlet.objects.annotate(
-        article_count=Count('articles')
-    ).order_by('-article_count')[:5]
+    # 4. GET SIDEBAR STATS (Counts based on the text field 'media_outlet')
+    top_outlets = MediaNarrative.objects.values('media_outlet').annotate(
+        name=F('media_outlet'),
+        article_count=Count('id')
+    ).filter(article_count__gt=0).order_by('-article_count')[:10]
     
-    # 5. Handle Pagination
-    paginator = Paginator(qs, 5)
+    # 5. HANDLE PAGINATION
+    paginator = Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
