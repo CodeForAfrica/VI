@@ -159,12 +159,12 @@ class Command(BaseCommand):
             return objs
 
         if anchor_rows:
-            anchor_objs = create_articles_from_rows(anchor_rows) 
+            anchor_objs= create_articles_from_rows(anchor_rows, True) 
             MediaNarrative.objects.bulk_create(anchor_objs, batch_size=1000)
             self.stdout.write(f"Inserted {len(anchor_objs)} anchor articles.")
 
         if non_anchor_rows:
-            non_anchor_objs = create_articles_from_rows(non_anchor_rows) 
+            non_anchor_objs = create_articles_from_rows(non_anchor_rows, False) 
             MediaNarrative.objects.bulk_create(non_anchor_objs, batch_size=1000)
             self.stdout.write(f"Inserted {len(non_anchor_objs)} non-anchor articles.")
 
