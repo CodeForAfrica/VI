@@ -101,52 +101,35 @@
         </div>
     {% endif %}
 
-    <!-- Row 3: Sample Articles -->
-    <div class="row">
+    <!-- Row 3: Filter Controls (Optional, if you have a filter form) -->
+    <!-- You might want to add a filter section here if users can select a country -->
+    <!-- Example filter section (adjust based on your actual filter mechanism) -->
+    <!--
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm border-0">
-                <div class=" text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Sample Articles ({{ selected_country }})</h4>
-                </div>
                 <div class="card-body">
-                    {% for article in sample_articles %}
-                    <div class="mb-4 pb-3 border-bottom">
-                        <h5 class="fw-bold text-dark mb-3">{{ article.article_text|truncatewords:18 }}</h5>
-
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary px-3 py-2">
-                                <i class="bi bi-geo-alt-fill me-1"></i> {{ article.target_country }}
-                            </span>
-
-                            <span class="badge rounded-pill bg-warning bg-opacity-10 text-dark px-3 py-2">
-                                <i class="bi bi-person-fill me-1"></i> {{ article.inferred_actor }}
-                            </span>
-
-                            <span class="badge rounded-pill bg-info bg-opacity-10 text-info px-3 py-2">
-                                <i class="bi bi-shield-shaded me-1"></i> {{ article.strategic_intent|title }}
-                            </span>
-
-                            <!-- Optionally show tone and posting time -->
-                            <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary px-3 py-2">
-                                <i class="bi bi-megaphone-fill me-1"></i> {{ article.tone|title }}
-                            </span>
-                            <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-                                <i class="bi bi-calendar-event me-1"></i> {{ article.posting_time|date:"M d, Y" }}
-                            </span>
+                    <form method="get">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <label for="country_filter" class="form-label">Select Country:</label>
+                                <select name="country" id="country_filter" class="form-select">
+                                    <option value="">All Countries</option>
+                                    {% for country in african_countries %}
+                                    <option value="{{ country }}" {% if selected_country == country %}selected{% endif %}>{{ country }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">Filter</button>
+                            </div>
                         </div>
-
-                        <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary px-4 shadow-sm">
-                            Read Full Article
-                        </a>
-                    </div>
-                    {% empty %}
-                    <div class="text-center py-5">
-                        <p class="text-muted fs-5">No sample articles available for the current selection.</p>
-                    </div>
-                    {% endfor %}
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+    -->
+
 </div>
 {% endblock %}
