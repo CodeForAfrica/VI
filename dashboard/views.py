@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.core.cache import cache 
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
-from .models import MediaNarrative, Journalist, MediaOutlet
+from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
 from dashboard.services.summarizer import get_summary
 from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
 import pandas as pd
@@ -302,13 +302,16 @@ class DisinfoAnalysisChatbot:
             return f"The database contains {total:,} articles analyzing foreign influence (excluding local content)."
     
         # Vulnerability index queries
+        # Vulnerability index queries
         if any(word in query_l for word in ['vulnerability', 'index', 'score', 'risk']):
-            # Calculate average for articles with foreign actors only
-            avg_vulnerability = MediaNarrative.objects.exclude(
-                inferred_actor__in=['', 'local', 'Local', 'LOCAL', 'domestic', 'Domestic']
-            ).exclude(vulnerability_index__isnull=True).aggregate(Avg('vulnerability_index'))['vulnerability_index__avg']
-            avg_str = f"{avg_vulnerability:.3f}" if avg_vulnerability else "0.000 (not yet calculated for all records)"
-            return f"The vulnerability index measures foreign influence risk (0-1). Current average: {avg_str}"
+            # Query the NEW table where the scores actually live
+            from .models import VulnerabilityIndex
+            
+            avg_data = VulnerabilityIndex.objects.aggregate(avg_vi=Avg('final_risk'))
+            avg_vulnerability = avg_data['avg_vi']
+            
+            avg_str = f"{avg_vulnerability:.3f}" if avg_vulnerability else "0.000"
+            return f"The vulnerability index measures foreign influence risk (0-1). The current average across all monitored country-actor pairs is: {avg_str}"
     
         # Default AI analysis
         context = self.get_context_from_db(query)
@@ -336,70 +339,39 @@ class DisinfoAnalysisChatbot:
         found_actors = [a for a in found_actors if a]        # Remove None
     
         def safe_article_line(article):
-            """Safe line builder - handles ALL None values"""
+            """Safe line builder - fetches VI from the new table based on article metadata"""
             text_snippet = (article.article_text[:150] + "...") if getattr(article, 'article_text', '') else "No content"
             
-            # SAFE FIELD EXTRACTION
+            # 1. FIELD EXTRACTION
             source = getattr(article, 'media_outlet', 'N/A')
             target = getattr(article, 'target_country', 'N/A')
             actor = getattr(article, 'inferred_actor', 'N/A')
             intent = getattr(article, 'strategic_intent', 'N/A')
             tone = getattr(article, 'tone', 'N/A')
             
-            # ULTRA-SAFE VI SCORE
-            vi_raw = getattr(article, 'vulnerability_index', None)
+            # 2. DYNAMIC VI LOOKUP (The part you are changing)
             vi_score = "N/A"
-            if vi_raw is not None and str(vi_raw).lower() != 'none':
+            if target != 'N/A' and actor != 'N/A':
+                # Normalize the intent to match the Anchor CSV/Table categories
+                # Note: map_to_canonical_intent should be accessible here
+                canonical_intent = map_to_canonical_intent(intent, getattr(article, 'title', ''))
+                
                 try:
-                    vi_score = f"{float(vi_raw):.3f}"
-                except (ValueError, TypeError):
+                    from .models import VulnerabilityIndex
+                    # Find the risk score for this specific combo
+                    record = VulnerabilityIndex.objects.filter(
+                        country__iexact=target,
+                        actor__iexact=actor,
+                        intent__iexact=canonical_intent
+                    ).first()
+                    
+                    if record:
+                        vi_score = f"{float(record.final_risk):.3f}"
+                except:
                     vi_score = "N/A"
             
-            # CLEAN, READABLE FORMAT
+            # 3. CLEAN, READABLE FORMAT
             return f"{source} | {target} | {actor} | {intent} | {tone} | VI:{vi_score} | {text_snippet}"
-    
-        # PRIORITY 1: Country + Actor
-        if found_countries and found_actors:
-            for country in found_countries[:2]:  # Limit for speed
-                for actor in found_actors[:2]:
-                    articles = MediaNarrative.objects.filter(
-                        target_country__iexact=country,
-                        inferred_actor__iexact=actor
-                    ).exclude(article_text__icontains='football')[:3]
-                    
-                    for article in articles:
-                        context_parts.append(safe_article_line(article))
-        
-        # PRIORITY 2: Country only
-        elif found_countries:
-            for country in found_countries[:2]:
-                articles = MediaNarrative.objects.filter(
-                    target_country__iexact=country
-                ).exclude(article_text__icontains='football').order_by('-posting_time')[:3]
-                
-                for article in articles:
-                    context_parts.append(safe_article_line(article))
-        
-        # PRIORITY 3: Actor only  
-        elif found_actors:
-            for actor in found_actors[:2]:
-                articles = MediaNarrative.objects.filter(
-                    inferred_actor__iexact=actor
-                ).exclude(article_text__icontains='football').order_by('-posting_time')[:3]
-                
-                for article in articles:
-                    context_parts.append(safe_article_line(article))
-        
-        # FALLBACK: Recent articles
-        else:
-            articles = MediaNarrative.objects.exclude(
-                article_text__icontains='football'
-            ).order_by('-posting_time')[:5]
-            
-            for article in articles:
-                context_parts.append(safe_article_line(article))
-    
-        return "\n\n---\n\n".join(context_parts[:10]) or "No relevant articles found."
     
     def get_insights_from_ai(self, query, context):
         system_prompt = """
@@ -483,6 +455,7 @@ class DisinfoAnalysisChatbot:
             
     def get_actor_stats(self, country=None):
         """Get aggregated stats for actors"""
+        # Change Avg('vulnerability_index') to a placeholder or a join
         qs = MediaNarrative.objects.exclude(
             inferred_actor__in=['', 'Unknown', None]
         )
@@ -491,7 +464,8 @@ class DisinfoAnalysisChatbot:
         
         return qs.values('inferred_actor').annotate(
             article_count=Count('id'),
-            avg_vulnerability=Avg('vulnerability_index'),
+            # CHANGE THIS: vulnerability_index doesn't exist on this model anymore
+            avg_vulnerability=Avg('confidence'), # Using confidence as a proxy or set to 0.0
             avg_confidence=Avg('confidence')
         ).order_by('-article_count')
     
@@ -523,13 +497,9 @@ class DisinfoAnalysisChatbot:
     
     def compare_actors(self, actor1, actor2, country=None):
         """Compare two actors in a country"""
-        from django.db.models import Avg
-        
         stats = {}
         for actor in [actor1, actor2]:
-            qs = MediaNarrative.objects.filter(
-                inferred_actor__iexact=actor
-            )
+            qs = MediaNarrative.objects.filter(inferred_actor__iexact=actor)
             if country:
                 qs = qs.filter(target_country__iexact=country)
             
@@ -539,13 +509,12 @@ class DisinfoAnalysisChatbot:
             
             stats[actor] = {
                 'articles': qs.count(),
-                'avg_vulnerability': round(
-                    qs.aggregate(Avg('vulnerability_index'))['vulnerability_index__avg'] or 0, 
-                    3
-                ),
+                # CHANGE THIS: vulnerability_index doesn't exist here
+                'avg_vulnerability': "See Index Table", 
                 'top_intent': top_intent['strategic_intent'] if top_intent else 'N/A'
             }
         return stats
+        
 # Instantiate the chatbot once
 chatbot_instance = DisinfoAnalysisChatbot()
 
@@ -640,132 +609,52 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """
-    Calculates VI score by querying the 15,313 Verified Anchors.
-    Replaces the old CSV-based lookup.
+    Calculates VI score by querying the pre-calculated VulnerabilityIndex table.
+    Uses the normalized mappings to ensure country/actor names match the DB.
     """
-    from django.db.models import Avg
-
-    # 1. DATA NORMALIZATION (Including the "CoteIvoire" variation)
+    # 1. DATA NORMALIZATION (Keep your mapping!)
     country_mapping = {
-        "côte d'ivoire": "Côte d'Ivoire", 
-        "cote d'ivoire": "Côte d'Ivoire", 
-        "ivory coast": "Côte d'Ivoire",
-        "coteivoire": "Côte d'Ivoire",
-        "south africa": "South Africa", 
-        "senegal": "Senegal", 
-        "drc": "DRC", 
-        "ethiopia": "Ethiopia",
+        "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
+        "ivory coast": "Côte d'Ivoire", "coteivoire": "Côte d'Ivoire",
+        "south africa": "South Africa", "senegal": "Senegal", 
+        "drc": "DRC", "ethiopia": "Ethiopia",
     }
     
     actor_mapping = {
-        "uae": "UAE", "china": "China", "france": "France", "us": "United States",
-        "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia",
-        "turkey": "Turkey", "israel": "Israel", "iran": "Iran", "rwanda": "Rwanda", "us": "US",
-        "united states": "US",
+        "uae": "UAE", "china": "China", "france": "France", "us": "US",
+        "united states": "US", "russia": "Russia", "saudi": "Saudi Arabia",
+        "turkey": "Turkey", "israel": "Israel", "iran": "Iran", "rwanda": "Rwanda",
     }
 
     c_term = target_country.lower().strip() if target_country else ""
     a_term = foreign_actor.lower().strip() if foreign_actor else ""
     
-    # Map to DB-friendly strings, fallback to original if not in mapping
     db_country = country_mapping.get(c_term, target_country)
     db_actor = actor_mapping.get(a_term, foreign_actor)
 
-    # 2. BUILD THE QUERY (Using Verified Anchors)
-    qs = MediaNarrative.objects.filter(
-        target_country__iexact=db_country,
-        inferred_actor__iexact=db_actor,
-        is_anchor=True
-    )
+    # 2. QUERY THE SCORE TABLE (VulnerabilityIndex instead of MediaNarrative)
+    try:
+        # Map intent if provided
+        query_intent = intent_filter
+        if intent_filter:
+            query_intent = map_to_canonical_intent(intent_filter)
 
-    # 3. APPLY INTENT FILTER
-    status_label = "Verified Anchor Baseline"
-    if intent_filter:
-        canonical_intent = map_to_canonical_intent(intent_filter)
-        if canonical_intent:
-            qs = qs.filter(strategic_intent=canonical_intent)
-        else:
-            return None, "Unmapped Intent"
+        # Get the pre-calculated final_risk score
+        record = VulnerabilityIndex.objects.get(
+            country__iexact=db_country,
+            actor__iexact=db_actor,
+            intent__iexact=query_intent
+        )
+        
+        status_label = "Verified Anchor Baseline"
+        return round(float(record.final_risk), 4), status_label
 
-    # 4. EXECUTE AGGREGATION
-    result = qs.aggregate(avg_vi=Avg('vulnerability_index'))
-    avg_score = result['avg_vi']
-
-    if avg_score is None:
-        return None, "No Anchor Data Found"
-
-    return round(float(avg_score), 4), status_label
+    except VulnerabilityIndex.DoesNotExist:
+        return None, f"No mapping for {db_country}|{db_actor}|{intent_filter}"
+    except Exception as e:
+        return None, f"Error: {str(e)}"
     
     # Helper function to normalize intent string (case-insensitive, handle common variations)
-    def normalize_intent(s):
-        if not isinstance(s, str):
-            return ""
-        # Convert to lowercase, strip whitespace, replace multiple spaces/underscores with single space
-        s = re.sub(r'[_\s]+', ' ', s.strip().lower())
-        # Optional: Remove common suffixes/prefixes if applicable, e.g., "narrative", "strategy"
-        # s = re.sub(r'\b(narrative|strategy|influence|erosion|interference)\b', '', s).strip()
-        return s
-
-
-    # Apply mappings and normalizations
-    c_term = target_country.lower().strip()
-    a_term = foreign_actor.lower().strip()
-    i_term_raw = intent_filter.lower().strip() if intent_filter else ""
-
-    formatted_country = country_mapping.get(c_term, target_country.title()) # Use title() as default formatting
-    formatted_actor = actor_mapping.get(a_term, foreign_actor.title()) # Use title() as default formatting
-
-    # Normalize and map the intent
-    normalized_i_term = normalize_intent(i_term_raw)
-    # Use the mapping, falling back to the normalized term if no specific mapping exists
-    # This fallback is crucial: if "information warfare" isn't mapped, it becomes "Information Warfare" (title case)
-    # and will likely fail the CSV lookup, causing the fallback to max risk below.
-    # For "unknown" from ML failure, this would become "Unknown".
-    mapped_intent = intent_mapping.get(normalized_i_term, i_term_raw.title()) # Use title() as default for unmapped terms
-
-
-    print(f"[CVI DEBUG] Input: {target_country} | {foreign_actor} | {intent_filter}")
-    print(f"[CVI DEBUG] Mapped: {formatted_country} | {formatted_actor} | {mapped_intent}") 
-
-    # 2. FILTER DATAFRAME (Using Stripped Strings for Robustness)
-    # Apply normalization mapping to the dataframe columns for comparison
-    df['country_normalized'] = df['country'].str.strip().str.lower().map({v.lower(): k.lower() for k, v in country_mapping.items()}).fillna(df['country'].str.strip().str.lower())
-    df['actor_normalized'] = df['actor'].str.strip().str.lower().map({v.lower(): k.lower() for k, v in actor_mapping.items()}).fillna(df['actor'].str.strip().str.lower())
-    df['intent_normalized'] = df['intent'].str.strip().str.lower().map({k.lower(): v.lower() for k, v in intent_mapping.items()}).fillna(df['intent'].str.strip().str.lower())
-
-
-    mask = (
-        (df['country_normalized'] == formatted_country.lower()) &
-        (df['actor_normalized'] == formatted_actor.lower())
-    )
-    matches = df[mask]
-
-    if matches.empty:
-        print(f"❌ CVI Error: No country-actor match found for {formatted_country} - {formatted_actor}")
-        return 0.5, "Unknown"
-
-    # 3. LOOKUP SPECIFIC INTENT 
-    if mapped_intent and mapped_intent.lower() != 'none' and mapped_intent.lower() != 'unknown':
-        intent_matches = matches[matches['intent_normalized'] == mapped_intent.lower()]
-
-        if not intent_matches.empty:
-            # Found a specific match for the intent
-            best_match_row = intent_matches.iloc[0] # Or maybe intent_matches.loc[intent_matches['FinalRisk'].idxmax()] if multiple rows possible per intent
-            final_score = float(best_match_row['FinalRisk'])
-            matched_intent_label = best_match_row['intent'] # Return the original CSV label
-            print(f"✅ CVI Success: Specific intent match found. Score: {final_score:.4f}, Intent: {matched_intent_label}")
-            return final_score, matched_intent_label
-        else:
-            print(f"⚠️  CVI Warning: Specific intent '{mapped_intent}' not found for {formatted_country} - {formatted_actor}. Using fallback.")
-
-    # 4. FALLBACK: IF NO SPECIFIC INTENT MATCH, RETURN THE HIGHEST RISK SCORE FOR THAT COUNTRY-ACTOR PAIR
-    # This handles cases where intent_filter is None/empty/unknown, or if the mapped intent wasn't found.
-    max_risk_idx = matches['FinalRisk'].idxmax()
-    max_risk_row = matches.loc[max_risk_idx]
-    fallback_score = float(max_risk_row['FinalRisk'])
-    fallback_intent = max_risk_row['intent']
-    print(f"⚠️  CVI Fallback: Returning max risk ({fallback_score:.4f}) for {formatted_country} - {formatted_actor} - Intent '{fallback_intent}' (based on {intent_filter or 'no intent filter'}).")
-    return fallback_score, fallback_intent
    
 def overview(request):
     # 1. Initialize Safety Defaults
