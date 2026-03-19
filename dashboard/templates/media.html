@@ -3,8 +3,37 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- Filter Controls Row -->
+<div class="container-fluid py-2">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-center">
+                        <div class="col-md-4">
+                            <label for="outlet_filter" class="form-label fw-bold text-dark">Filter by Outlet:</label>
+                            <select name="outlet" id="outlet_filter" class="form-select form-select-lg shadow-sm" onchange="this.form.submit();">
+                                <option value="" {% if selected_name == "All Outlets" %}selected{% endif %}>All Outlets</option>
+                                {% for outlet in top_outlets %}
+                                    <option value="{{ outlet.name }}" {% if selected_name == outlet.name %}selected{% endif %}>
+                                        {{ outlet.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                             <!-- Optional: Add a submit button if you prefer not to use onchange -->
+                            <!-- <button type="submit" class="btn btn-primary w-100 shadow-sm">Apply Filter</button> -->
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container">
-    <!-- Main Chart -->
+    <!-- Main Chart (Top Outlets) -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-white py-3 text-center border-bottom">
             <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Most Frequent Media Outlets</h4>
@@ -17,6 +46,109 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Row for Outlet-Specific Charts (only show if an outlet is selected) -->
+    {% if selected_name != "All Outlets" %}
+    <div class="row mb-5">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Strategic Intent Distribution ({{ selected_name }})</h4>
+                </div>
+                <div class="card-body">
+                    {% if outlet_intent_chart %}
+                        {{ outlet_intent_chart|safe }}
+                    {% else %}
+                        <p class="text-muted text-center">No intent data available for {{ selected_name }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Tone Distribution ({{ selected_name }})</h4>
+                </div>
+                <div class="card-body">
+                    {% if outlet_tone_chart %}
+                        {{ outlet_tone_chart|safe }}
+                    {% else %}
+                        <p class="text-muted text-center">No tone data available for {{ selected_name }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Top Foreign Actors Mentioned ({{ selected_name }})</h4>
+                </div>
+                <div class="card-body">
+                    {% if outlet_actor_chart %}
+                        {{ outlet_actor_chart|safe }}
+                    {% else %}
+                        <p class="text-muted text-center">No actor data available for {{ selected_name }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Top Countries Covered ({{ selected_name }})</h4>
+                </div>
+                <div class="card-body">
+                    {% if outlet_country_chart %}
+                        {{ outlet_country_chart|safe }}
+                    {% else %}
+                        <p class="text-muted text-center">No country data available for {{ selected_name }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outlet Stats Card -->
+    {% if outlet_stats %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Summary for {{ selected_name }}</h5>
+                    <p class="card-text">
+                        <strong>Total Articles:</strong> {{ outlet_stats.total_articles }} |
+                        <strong>Avg. Prediction Confidence:</strong> {{ outlet_stats.avg_confidence|floatformat:2 }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+
+    <!-- Row for Overall View Charts (only show if "All Outlets" is selected) -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Average Prediction Confidence by Outlet (High Activity)</h4>
+                </div>
+                <div class="card-body">
+                    {% if outlet_risk_chart %}
+                        {{ outlet_risk_chart|safe }}
+                    {% else %}
+                        <p class="text-muted text-center">No confidence data available.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
 
     <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
@@ -68,7 +200,7 @@
                                 {% endif %}
                             </td>
                             <!-- Updated summary display: Show full article text summary -->
-                            <td>{{ item.article_text|truncatewords:50 }}</td>
+                            <td>{{ item.article_text|truncatewords:20 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
@@ -85,11 +217,11 @@
             <nav>
                 <ul class="pagination justify-content-center mb-0">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
                     {% endif %}
                     <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name }}&page={{ page_obj.next_page_number }}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">Next</a></li>
                     {% endif %}
                 </ul>
             </nav>
