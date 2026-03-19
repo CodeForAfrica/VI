@@ -571,138 +571,73 @@ def overview(request):
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
 
-    # --- CACHE KEYS FOR FILTERED QUERYSETS AND STATS ---
     # Base queryset without sports (potentially expensive to build)
-    base_qs_cache_key = "overview_base_qs_no_sports"
-    base_qs = cache.get(base_qs_cache_key)
-    if base_qs is None:
-        logger.info("Cache MISS for base_qs, rebuilding...")
+    # --- STEP 1: GET CLEAN ARTICLE IDS (No Sports) ---
+    base_ids_cache_key = "global_clean_article_ids"
+    clean_ids = cache.get(base_ids_cache_key)
+
+    if clean_ids is None:
+        logger.info("🚀 Cache MISS: Performing heavy text exclusion for the first time...")
         exclude_keywords = [
             'football', 'soccer', 'sport', 'sports', 'match', 'game',
             'tournament', 'championship', 'olympic', 'cricket', 'basketball',
             'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
             'league', 'team', 'player', 'coach', 'stadium'
         ]
-        base_qs = MediaNarrative.objects.all()
+        qs = MediaNarrative.objects.all()
         for word in exclude_keywords:
-          
-            # Consider moving this exclusion to ingestion time if possible.
-            base_qs = base_qs.exclude(article_text__icontains=word)
+            qs = qs.exclude(article_text__icontains=word)
         
-        # Instead, cache the *fact* that the exclusion list was applied.
-        # We'll cache the results of operations performed on the filtered queryset below.
-        cache.set(f"{base_qs_cache_key}_excluded", True, timeout=60*60*24) # Cache the exclusion logic flag
+        clean_ids = list(qs.values_list('id', flat=True))
+        cache.set(base_ids_cache_key, clean_ids, timeout=60*60*24)
+        logger.info(f"✅ Cache SET: Stored {len(clean_ids)} clean article IDs.")
     else:
-        logger.info(f"Cache HIT for base_qs exclusion logic: {base_qs_cache_key}")
+        logger.info(f"🎯 Cache HIT: Using {len(clean_ids)} pre-filtered article IDs.")
 
-    # Apply filters based on user input to the base queryset
-    # Create a cache key specific to the current filters
-    filtered_qs_cache_key = f"overview_filtered_qs_{calc_target_country}_{calc_foreign_actor}"
-    full_stats_qs = cache.get(filtered_qs_cache_key)
-    if full_stats_qs is None:
-        logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
-        # Rebuild the base queryset excluding sports AND applying target country filter
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        # Start with all articles
-        temp_base_qs = MediaNarrative.objects.all()
-        # Apply the sports exclusion
-        for word in exclude_keywords:
-             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
+    # --- STEP 2: BUILD FILTERED QUERYSET ---
+    # This is your "Source of Truth" for the rest of the function
+    full_stats_qs = MediaNarrative.objects.filter(id__in=clean_ids)
+    full_stats_qs = full_stats_qs.filter(target_country__in=COUNTRIES)
 
-        # TARGET COUNTRY FILTER 
-        # Filter to only include articles for the specified target countries
-        # Use the COUNTRIES constant defined at the top of the file
-        temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
-       
+    if calc_target_country:
+        full_stats_qs = full_stats_qs.filter(target_country__iexact=calc_target_country)
+    if calc_foreign_actor:
+        full_stats_qs = full_stats_qs.filter(inferred_actor__iexact=calc_foreign_actor)
 
-        # Apply user filters (from the calculator panel)
-        if calc_target_country:
-            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-        if calc_foreign_actor:
-            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-
-        # Order by posting time - this is also expensive if the result set is huge
-        full_stats_qs = temp_base_qs.order_by('-posting_time')
-        # Again, DO NOT cache the full QuerySet object itself.
-        # We'll cache the results of operations performed on it.
-    else:
-        logger.info(f"Cache HIT for filtered_qs: {filtered_qs_cache_key}")
-
-    # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
+    # Final sort for display
+    full_stats_qs = full_stats_qs.order_by('-posting_time')
+    
+    # --- STEP 3: CALCULATOR LOGIC ---
     if calc_target_country and calc_foreign_actor:
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country,
             calc_foreign_actor,
             intent_filter=calc_strategic_intent
         )
-        # Filter display list to match selection actor and country selection (already done above implicitly via cache key)
     else:
+        # Reset defaults if no filter selected
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
 
-    # --- CACHING FOR EXPENSIVE OPERATIONS ON THE FILTERED QUERYSET ---
-    # Cache total articles count
+    # --- STEP 4: CACHING STATS (Count only) ---
     total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
     total_articles = cache.get(total_articles_cache_key)
+    
     if total_articles is None:
-        logger.info(f"Cache MISS for total_articles: {total_articles_cache_key}")
-        # Perform the count on the filtered queryset
-        if full_stats_qs is not None:
-             total_articles = full_stats_qs.count()
-        else:
-            # Fallback if full_stats_qs wasn't cached and had to be rebuilt
-            exclude_keywords = [
-                'football', 'soccer', 'sport', 'sports', 'match', 'game',
-                'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-                'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-                'league', 'team', 'player', 'coach', 'stadium'
-            ]
-            temp_base_qs = MediaNarrative.objects.all()
-            for word in exclude_keywords:
-                 temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
-            if calc_target_country:
-                temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-            if calc_foreign_actor:
-                temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-            total_articles = temp_base_qs.count()
-
-        cache.set(total_articles_cache_key, total_articles, timeout=60*60) # Cache for 1 hour
+        logger.info(f"Cache MISS for total_articles count")
+        total_articles = full_stats_qs.count()
+        cache.set(total_articles_cache_key, total_articles, timeout=60*60)
     else:
-        logger.info(f"Cache HIT for total_articles: {total_articles_cache_key}")
+        logger.info(f"Cache HIT for total_articles count")
 
-
-    # Rebuild full_stats_qs if it wasn't cached (necessary to perform other operations)
-    if full_stats_qs is None:
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        temp_base_qs = MediaNarrative.objects.all()
-        for word in exclude_keywords:
-             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
-        if calc_target_country:
-            temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
-        if calc_foreign_actor:
-            temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
-        full_stats_qs = temp_base_qs.order_by('-posting_time')
-
-
-    # 5. Global Stats & Averages (Updated for separated tables)
+    # --- STEP 5: GLOBAL STATS & AVERAGES ---
     stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
     global_stats_cached = cache.get(stats_cache_key)
     
     if global_stats_cached is None:
-        logger.info(f"Cache MISS for global_stats: {stats_cache_key}")
-        
-        # A. Aggregations on the MediaNarrative (Articles) table
+        logger.info(f"Cache MISS for global_stats")
+        # Use full_stats_qs directly - no need to rebuild it!
         unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
         unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
         unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
