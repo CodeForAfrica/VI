@@ -845,19 +845,28 @@ from django.db.models import Q, Count, F
 def media(request):
     # 1. Get the filter parameter
     outlet_name = request.GET.get('outlet', '').strip()
-    
+
     # 2. START WITH ALL NARRATIVES
     # We remove select_related here to be safe if the FKs are empty
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    
+
     # 3. SMART FILTER (Checks both the link and the text field)
     if outlet_name and outlet_name != "All Outlets":
         qs = qs.filter(
-            Q(media_outlet_fk__name__iexact=outlet_name) | 
+            Q(media_outlet_fk__name__iexact=outlet_name) |
             Q(media_outlet__iexact=outlet_name)
         )
-    
-    # 4. GET SIDEBAR STATS (Counts based on the text field 'media_outlet')
+
+    # Initialize variables for new charts/stats
+    media_chart = None # Main chart (Top Outlets)
+    outlet_risk_chart = None # Average Risk per Outlet (when no specific outlet is selected)
+    outlet_intent_chart = None # Top Intents for Selected Outlet
+    outlet_actor_chart = None # Top Actors covered by Selected Outlet
+    outlet_tone_chart = None # Tone distribution for Selected Outlet
+    outlet_country_chart = None # Top Countries covered by Selected Outlet
+    outlet_stats = None # Summary stats for Selected Outlet
+
+    # 4. SIDEBAR STATS & MAIN CHART (Counts based on the text field 'media_outlet')
     top_outlets = MediaNarrative.objects.values('media_outlet').annotate(
         name=F('media_outlet'), # F('media_outlet') gets the field value
         article_count=Count('id')
@@ -867,11 +876,10 @@ def media(request):
     ).order_by('-article_count')[:10]
 
     # Generate the main chart HTML using the top_outlets data
-    media_chart = None # Initialize to None in case the list is empty
-    if top_outlets: # Check if there's data to plot
+    if top_outlets:
         # Convert the QuerySet (list of dicts) to a Pandas DataFrame
         import pandas as pd
-        df = pd.DataFrame(list(top_outlets)) # Convert QuerySet to List of Dicts, then to DF
+        df = pd.DataFrame(list(top_outlets))
 
         if not df.empty and len(df) > 0: # Double-check DataFrame is not empty
             # Create the Plotly bar chart
@@ -893,25 +901,148 @@ def media(request):
             media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
         else:
             # If DataFrame is empty after conversion, set media_chart to None or a default message
-            media_chart = "<p class='text-center py-5 text-muted'>No data available for the chart.</p>"
+            media_chart = "<p class='text-center py-5 text-muted'>No data available for the main chart.</p>"
     else:
         # If top_outlets QuerySet was empty, set media_chart to None or a default message
-        media_chart = "<p class='text-center py-5 text-muted'>No data available for the chart.</p>"
+        media_chart = "<p class='text-center py-5 text-muted'>No data available for the main chart.</p>"
 
-    
-    # 5. HANDLE PAGINATION
+    # 5. ENHANCED CHARTS & STATS (Conditional based on outlet selection)
+    if outlet_name and outlet_name != "All Outlets":
+        # Get the queryset for the specific selected outlet
+        selected_outlet_qs = qs # qs is already filtered by outlet_name if provided
+
+        # Calculate stats for the selected outlet
+        outlet_stats = selected_outlet_qs.aggregate(
+            total_articles=Count('id'),
+            avg_confidence=Avg('confidence'), # Average confidence of predictions for this outlet
+            # Potentially avg tone score if applicable
+        )
+
+        # Chart: Top Strategic Intents for Selected Outlet
+        outlet_intents = selected_outlet_qs.exclude(
+            strategic_intent__in=['', 'Unknown', None]
+        ).values('strategic_intent').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+
+        if outlet_intents.exists():
+            df_intent = pd.DataFrame(list(outlet_intents))
+            if not df_intent.empty:
+                fig_intent = px.pie(
+                    df_intent, values='count', names='strategic_intent',
+                    title=f"Strategic Intent Distribution for {outlet_name}",
+                    template="plotly_white"
+                )
+                # Optional: Add a legend outside the plot
+                fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                outlet_intent_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+
+        # Chart: Top Foreign Actors Covered by Selected Outlet
+        outlet_actors = selected_outlet_qs.exclude(
+            inferred_actor__in=['', 'Unknown', None]
+        ).values('inferred_actor').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+
+        if outlet_actors.exists():
+            df_actor = pd.DataFrame(list(outlet_actors))
+            if not df_actor.empty:
+                fig_actor = px.bar(
+                    df_actor, x='count', y='inferred_actor', orientation='h',
+                    title=f"Top Foreign Actors Mentioned by {outlet_name}",
+                    labels={'count': 'Mentions', 'inferred_actor': 'Foreign Actor'},
+                    template="plotly_white"
+                )
+                fig_actor.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                outlet_actor_chart = fig_actor.to_html(full_html=False, include_plotlyjs='cdn')
+
+        # Chart: Tone Distribution for Selected Outlet
+        outlet_tones = selected_outlet_qs.exclude(
+            tone__in=['', 'Unknown', None]
+        ).values('tone').annotate(
+            count=Count('id')
+        ).order_by('-count')
+
+        if outlet_tones.exists():
+            df_tone = pd.DataFrame(list(outlet_tones))
+            if not df_tone.empty:
+                fig_tone = px.pie(
+                    df_tone, values='count', names='tone',
+                    title=f"Tone Distribution for {outlet_name}",
+                    template="plotly_white"
+                )
+                fig_tone.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                outlet_tone_chart = fig_tone.to_html(full_html=False, include_plotlyjs='cdn')
+
+        # Chart: Top Countries Covered by Selected Outlet
+        outlet_countries = selected_outlet_qs.exclude(
+            target_country__in=['', 'Unknown', None]
+        ).values('target_country').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+
+        if outlet_countries.exists():
+            df_country = pd.DataFrame(list(outlet_countries))
+            if not df_country.empty:
+                fig_country = px.bar(
+                    df_country, x='count', y='target_country', orientation='h',
+                    title=f"Top Countries Covered by {outlet_name}",
+                    labels={'count': 'Article Count', 'target_country': 'Target Country'},
+                    template="plotly_white"
+                )
+                fig_country.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                outlet_country_chart = fig_country.to_html(full_html=False, include_plotlyjs='cdn')
+
+    else:
+        # Chart: Average Calculated Risk by Outlet (when no specific outlet is selected)
+        # This requires joining with the VulnerabilityIndex table based on article metadata
+        # Calculate average risk score for articles grouped by outlet
+        # This is complex as risk is calculated per (country, actor, intent) combo, not per article directly.
+        # We might need to join MediaNarrative with VulnerabilityIndex on country, actor, intent
+        # Or aggregate risk scores from the VulnerabilityIndex table and link back to outlets somehow.
+        # For now, let's calculate average *confidence* of predictions per outlet as a proxy for "activity level" or "focus".
+        outlet_avg_confidence = MediaNarrative.objects.filter(
+            # Ensure outlet is known
+            Q(media_outlet__isnull=False) & ~Q(media_outlet='')
+        ).exclude(
+            confidence__isnull=True # Exclude articles where confidence wasn't calculated
+        ).values('media_outlet').annotate(
+            avg_confidence=Avg('confidence'),
+            article_count=Count('id') # Also get count to filter out very low volume outlets maybe
+        ).filter(article_count__gt=5).order_by('-avg_confidence')[:10] # Filter out outlets with very few articles
+
+        if outlet_avg_confidence.exists():
+            df_conf = pd.DataFrame(list(outlet_avg_confidence))
+            if not df_conf.empty:
+                fig_conf = px.bar(
+                    df_conf, x='avg_confidence', y='media_outlet', orientation='h',
+                    title="Average Prediction Confidence by Outlet (High Activity)",
+                    labels={'avg_confidence': 'Avg. Confidence', 'media_outlet': 'Media Outlet'},
+                    template="plotly_white"
+                )
+                fig_conf.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                outlet_risk_chart = fig_conf.to_html(full_html=False, include_plotlyjs='cdn')
+
+
+    # 6. HANDLE PAGINATION
     paginator = Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     context = {
         'top_outlets': top_outlets,
-        'media_chart': media_chart,
+        'media_chart': media_chart, # Main Top Outlets Chart
+        'outlet_risk_chart': outlet_risk_chart, # Average Confidence per Outlet (overall view)
+        'outlet_intent_chart': outlet_intent_chart, # Intent Distribution (selected outlet view)
+        'outlet_actor_chart': outlet_actor_chart, # Actor Mentions (selected outlet view)
+        'outlet_tone_chart': outlet_tone_chart, # Tone Distribution (selected outlet view)
+        'outlet_country_chart': outlet_country_chart, # Country Coverage (selected outlet view)
+        'outlet_stats': outlet_stats, # Summary stats (selected outlet view)
         'page_obj': page_obj,
         'selected_name': outlet_name if outlet_name else "All Outlets",
-        'target_countries': COUNTRIES, 
+        'target_countries': COUNTRIES,
     }
-    return render(request, 'media.html', context)    
+    return render(request, 'media.html', context)
     
 def generate_report(request):
     selected_country = request.GET.get('country')
