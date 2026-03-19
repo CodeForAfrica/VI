@@ -1,7 +1,7 @@
 <!-- dashboard/templates/media.html -->
 
 {% extends "base.html" %}
-{% block content %}
+{% block content %} <!-- OPEN: content block -->
 
 <!-- Filter Controls Row -->
 <div class="container-fluid py-2">
@@ -14,11 +14,11 @@
                             <label for="outlet_filter" class="form-label fw-bold text-dark">Filter by Outlet:</label>
                             <select name="outlet" id="outlet_filter" class="form-select form-select-lg shadow-sm" onchange="this.form.submit();">
                                 <option value="" {% if selected_name == "All Outlets" %}selected{% endif %}>All Outlets</option>
-                                {% for outlet in top_outlets %}
+                                {% for outlet in top_outlets %} <!-- OPEN: for outlet in top_outlets (inside form) -->
                                     <option value="{{ outlet.name }}" {% if selected_name == outlet.name %}selected{% endif %}>
                                         {{ outlet.name }}
                                     </option>
-                                {% endfor %}
+                                {% endfor %} <!-- CLOSE: for outlet in top_outlets (inside form) -->
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -39,16 +39,16 @@
             <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Most Frequent Media Outlets</h4>
         </div>
         <div class="card-body p-4">
-            {% if media_chart %}
+            {% if media_chart %} <!-- OPEN: if media_chart -->
                 {{ media_chart|safe }}
-            {% else %}
+            {% else %} <!-- ELSE: if media_chart -->
                 <p class="text-muted text-center">No data available for the chart.</p>
-            {% endif %}
+            {% endif %} <!-- CLOSE: if media_chart -->
         </div>
     </div>
 
     <!-- Row for Outlet-Specific Charts (only show if an outlet is selected) -->
-    {% if selected_name != "All Outlets" %}
+    {% if selected_name != "All Outlets" %} <!-- OPEN: if selected_name != "All Outlets" (MAIN CONDITIONAL BLOCK) -->
     <div class="row mb-5">
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
@@ -56,11 +56,11 @@
                     <h4 class="fw-bold">Strategic Intent Distribution ({{ selected_name }})</h4>
                 </div>
                 <div class="card-body">
-                    {% if outlet_intent_chart %}
+                    {% if outlet_intent_chart %} <!-- OPEN: if outlet_intent_chart -->
                         {{ outlet_intent_chart|safe }}
-                    {% else %}
+                    {% else %} <!-- ELSE: if outlet_intent_chart -->
                         <p class="text-muted text-center">No intent data available for {{ selected_name }}.</p>
-                    {% endif %} <!-- Closes {% if outlet_intent_chart %} -->
+                    {% endif %} <!-- CLOSE: if outlet_intent_chart -->
                 </div>
             </div>
         </div>
@@ -70,11 +70,11 @@
                     <h4 class="fw-bold">Tone Distribution ({{ selected_name }})</h4>
                 </div>
                 <div class="card-body">
-                    {% if outlet_tone_chart %}
+                    {% if outlet_tone_chart %} <!-- OPEN: if outlet_tone_chart -->
                         {{ outlet_tone_chart|safe }}
-                    {% else %}
+                    {% else %} <!-- ELSE: if outlet_tone_chart -->
                         <p class="text-muted text-center">No tone data available for {{ selected_name }}.</p>
-                    {% endif %} <!-- Closes {% if outlet_tone_chart %} -->
+                    {% endif %} <!-- CLOSE: if outlet_tone_chart -->
                 </div>
             </div>
         </div>
@@ -87,11 +87,11 @@
                     <h4 class="fw-bold">Top Foreign Actors Mentioned ({{ selected_name }})</h4>
                 </div>
                 <div class="card-body">
-                    {% if outlet_actor_chart %}
+                    {% if outlet_actor_chart %} <!-- OPEN: if outlet_actor_chart -->
                         {{ outlet_actor_chart|safe }}
-                    {% else %}
+                    {% else %} <!-- ELSE: if outlet_actor_chart -->
                         <p class="text-muted text-center">No actor data available for {{ selected_name }}.</p>
-                    {% endif %} <!-- Closes {% if outlet_actor_chart %} -->
+                    {% endif %} <!-- CLOSE: if outlet_actor_chart -->
                 </div>
             </div>
         </div>
@@ -101,18 +101,18 @@
                     <h4 class="fw-bold">Top Countries Covered ({{ selected_name }})</h4>
                 </div>
                 <div class="card-body">
-                    {% if outlet_country_chart %}
+                    {% if outlet_country_chart %} <!-- OPEN: if outlet_country_chart -->
                         {{ outlet_country_chart|safe }}
-                    {% else %}
+                    {% else %} <!-- ELSE: if outlet_country_chart -->
                         <p class="text-muted text-center">No country data available for {{ selected_name }}.</p>
-                    {% endif %} <!-- Closes {% if outlet_country_chart %} -->
+                    {% endif %} <!-- CLOSE: if outlet_country_chart -->
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Outlet Stats Card -->
-    {% if outlet_stats %}
+    {% if outlet_stats %} <!-- OPEN: if outlet_stats -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm border-0">
@@ -126,27 +126,26 @@
             </div>
         </div>
     </div>
-    {% endif %} <!-- Closes {% if outlet_stats %} -->
+    {% endif %} <!-- CLOSE: if outlet_stats -->
 
-    {% endif %} <!-- **** CR {% if selected_name != "All Outlets" %} block **** -->
+    {% endif %} <!-- CLOSE: if selected_name != "All Outlets" (MAIN CONDITIONAL BLOCK) -->
 
     <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center mb-3">
             <h5 class="fw-bold">Filter by Outlet: <span class="text-primary">{{ selected_name }}</span></h5>
-            {% if selected_name != "All Outlets" %}
-                <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
-            {% endif %}
+            {% if selected_name != "All Outlets" %} <!-- OPEN: if selected_name != "All Outlets" (Clear                <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
+            {% endif %} <!-- CLOSE: if selected_name != "All Outlets" (Clear Filter Link) -->
         </div>
         <div class="col-lg-8 mx-auto">
             <div class="list-group shadow-sm">
-                {% for outlet in top_outlets %}
+                {% for outlet in top_outlets %} 
                 <a href="?outlet={{ outlet.name|urlencode }}"
                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if selected_name == outlet.name %}active{% endif %}">
                     <span class="fw-bold">{{ outlet.name }}</span>
                     <span class="badge bg-primary rounded-pill">{{ outlet.article_count }}</span>
                 </a>
-                {% endfor %}
+                {% endfor %} 
             </div>
         </div>
     </div>
@@ -168,45 +167,45 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in page_obj %}
+                        {% for item in page_obj %} 
                         <tr>
                             <td class="text-nowrap">{{ item.posting_time|date:"M d, Y" }}</td>
                             <!-- Fixed outlet display: Check FK first, fallback to text field -->
                             <td>
-                                {% if item.media_outlet_fk %}
+                                {% if item.media_outlet_fk %} <!-- OPEN: if item.media_outlet_fk -->
                                     <span class="badge bg-light text-dark border">{{ item.media_outlet_fk.name }}</span>
-                                {% else %}
+                                {% else %} <
                                     <span class="badge bg-light text-dark border">{{ item.media_outlet }}</span>
-                                {% endif %}
+                                {% endif %} 
                             </td>
                             <!-- Updated summary display: Show full article text summary -->
                             <td>{{ item.article_text|truncatewords:20 }}</td>
                         </tr>
-                        {% empty %}
+                        {% empty %} 
                         <tr>
                             <td colspan="3" class="text-center py-4 text-muted">No articles found for this selection.</td>
                         </tr>
-                        {% endfor %}
+                        {% endfor %} 
                     </tbody>
                 </table>
             </div>
         </div>
 
-        {% if page_obj.has_other_pages %}
+        {% if page_obj.has_other_pages %} 
         <div class="card-footer bg-white py-3">
             <nav>
                 <ul class="pagination justify-content-center mb-0">
-                    {% if page_obj.has_previous %}
+                    {% if page_obj.has_previous %} <!-- OPEN: if page_obj.has_previous -->
                         <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
-                    {% endif %}
+                    {% endif %} <!-- CLOSE: if page_obj.has_previous -->
                     <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-                    {% if page_obj.has_next %}
+                    {% if page_obj.has_next %} <!-- OPEN: if page_obj.has_next -->
                         <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">Next</a></li>
-                    {% endif %}
+                    {% endif %} 
                 </ul>
             </nav>
         </div>
-        {% endif %}
+        {% endif %} 
     </div>
 </div>
-{% endblock %}
+{% endblock %} 
