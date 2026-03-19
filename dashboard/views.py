@@ -464,8 +464,6 @@ class DisinfoAnalysisChatbot:
         
         return qs.values('inferred_actor').annotate(
             article_count=Count('id'),
-            # CHANGE THIS: vulnerability_index doesn't exist on this model anymore
-            avg_vulnerability=Avg('confidence'), # Using confidence as a proxy or set to 0.0
             avg_confidence=Avg('confidence')
         ).order_by('-article_count')
     
@@ -595,15 +593,6 @@ def overview(request):
     else:
         logger.info(f"Cache HIT for base_qs exclusion logic: {base_qs_cache_key}")
 
-    canonical_top_subjects = []
-    for sub in top_subjects:
-        canonical_intent = map_to_canonical_intent(sub['strategic_intent'])
-        canonical_top_subjects.append({
-            'canonical_intent': canonical_intent,
-            'inferred_actor': sub['inferred_actor'],
-            'target_country': sub['target_country'],
-            'total': sub['total']
-        })
     # Apply filters based on user input to the base queryset
     # Create a cache key specific to the current filters
     filtered_qs_cache_key = f"overview_filtered_qs_{calc_target_country}_{calc_foreign_actor}"
@@ -611,7 +600,6 @@ def overview(request):
     if full_stats_qs is None:
         logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
         # Rebuild the base queryset excluding sports AND applying target country filter
-        # (could be optimized further if cached efficiently)
         exclude_keywords = [
             'football', 'soccer', 'sport', 'sports', 'match', 'game',
             'tournament', 'championship', 'olympic', 'cricket', 'basketball',
@@ -624,11 +612,11 @@ def overview(request):
         for word in exclude_keywords:
              temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
 
-        # --- ADD TARGET COUNTRY FILTER HERE ---
+        # TARGET COUNTRY FILTER 
         # Filter to only include articles for the specified target countries
         # Use the COUNTRIES constant defined at the top of the file
         temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
-        # ----------------------------------------
+       
 
         # Apply user filters (from the calculator panel)
         if calc_target_country:
@@ -705,24 +693,39 @@ def overview(request):
         full_stats_qs = temp_base_qs.order_by('-posting_time')
 
 
-    # 5. Global Stats & Averages (Cache these!)
+    # 5. Global Stats & Averages (Updated for separated tables)
     stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
     global_stats_cached = cache.get(stats_cache_key)
+    
     if global_stats_cached is None:
         logger.info(f"Cache MISS for global_stats: {stats_cache_key}")
-        # Perform expensive aggregations on the filtered queryset
+        
+        # A. Aggregations on the MediaNarrative (Articles) table
         unique_outlets = full_stats_qs.values('media_outlet').distinct().count()
         unique_intents = full_stats_qs.exclude(strategic_intent__in=['', 'Unknown', None]).values('strategic_intent').distinct().count()
         unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
-        avg_stats = full_stats_qs.aggregate(Avg('vulnerability_index'), Avg('confidence'))
-        avg_vulnerability = avg_stats['vulnerability_index__avg'] or 0.0
-        avg_confidence = avg_stats['confidence__avg'] or 0.0
+        
+        # Only aggregate confidence here since vulnerability_index is gone
+        avg_stats = full_stats_qs.aggregate(avg_conf=Avg('confidence'))
+        avg_confidence = avg_stats['avg_conf'] or 0.0
+    
+        # B. Fetch Average Vulnerability from the NEW table
+        # We filter the VulnerabilityIndex table based on the user's dashboard selection
+        vi_qs = VulnerabilityIndex.objects.all()
+        if calc_target_country:
+            vi_qs = vi_qs.filter(country__iexact=calc_target_country)
+        if calc_foreign_actor:
+            vi_qs = vi_qs.filter(actor__iexact=calc_foreign_actor)
+        
+        vi_stats = vi_qs.aggregate(avg_vi=Avg('final_risk'))
+        avg_vulnerability = vi_stats['avg_vi'] or 0.0
+    
         global_stats_cached = {
             'unique_outlets': unique_outlets,
             'unique_intents': unique_intents,
             'unique_actors': unique_actors,
-            'avg_vulnerability': round(avg_vulnerability, 3),
-            'avg_confidence': round(avg_confidence, 3),
+            'avg_vulnerability': round(float(avg_vulnerability), 3),
+            'avg_confidence': round(float(avg_confidence), 3),
         }
         cache.set(stats_cache_key, global_stats_cached, timeout=60*60) # Cache for 1 hour
     else:
@@ -771,12 +774,26 @@ def overview(request):
 
     top_subjects_cache_key = f"overview_top_subjects_{calc_target_country}_{calc_foreign_actor}"
     top_subjects = cache.get(top_subjects_cache_key)
+    
     if top_subjects is None:
-        logger.info(f"Cache MISS for top_subjects: {top_subjects_cache_key}")
-        # Perform aggregation on the filtered queryset
-        top_subjects = full_stats_qs.exclude(strategic_intent__in=['', None]).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5]
-        cache.set(top_subjects_cache_key, top_subjects, timeout=60*60) # Cache for 1 hour
+        # DATA IS FETCHED HERE
+        top_subjects = list(full_stats_qs.exclude(
+            strategic_intent__in=['', None]
+        ).values('strategic_intent', 'inferred_actor', 'target_country').annotate(total=Count('id')).order_by('-total')[:5])
+        
+        cache.set(top_subjects_cache_key, top_subjects, timeout=60*60)
 
+    canonical_top_subjects = []
+    for sub in top_subjects:
+        # Now top_subjects is a list of dictionaries, so this will work:
+        canonical_intent = map_to_canonical_intent(sub['strategic_intent'])
+        
+        canonical_top_subjects.append({
+            'canonical_intent': canonical_intent,
+            'inferred_actor': sub['inferred_actor'],
+            'target_country': sub['target_country'],
+            'total': sub['total']
+        }) # Cache for 1 hour
 
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
@@ -864,7 +881,7 @@ def overview(request):
         'african_countries': COUNTRIES,
         'foreign_actors': FOREIGN_ACTORS,
         'country_list': country_list,
-        'top_subjects': top_subjects,
+        'top_subjects': canonical_top_subjects,
         'cvi_score': cvi_score,
         'cvi_intent': cvi_intent,
         'selected_country': calc_target_country,
