@@ -1430,14 +1430,14 @@ def countries(request):
                 fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # *** NEW: Volume of Articles Over Time for the Selected Country ***
+    # Volume of Articles Over Time for the Selected Country 
     # Shows trends - are certain topics or actors becoming more prominent?
     volume_over_time_data = []
     if selected_country:
         # Filter and prepare data for the chart
         articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time')
         if articles_for_country.exists():
-            df_time(articles_for_country))
+            df_time = pd.DataFrame(articles_for_country) # <-- CORRECTED LINE: Assign the DataFrame
             df_time['date'] = pd.to_datetime(df_time['posting_time'], utc=True).dt.date
             daily_counts = df_time['date'].value_counts().sort_index().reset_index(name='count')
             if not daily_counts.empty:
@@ -1448,9 +1448,9 @@ def countries(request):
                     template="plotly_white"
                 )
                 fig_time.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
-                volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn')
+                volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn'))
 
-    # *** NEW: Additional Stats for Selected Country (Optional) ***
+    # Additional Stats for Selected Country 
     country_stats = None
     if selected_country:
         country_stats = qs.aggregate(
@@ -1466,7 +1466,7 @@ def countries(request):
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'actor_country_chart': actor_country_chart,
-        # *** ADD NEW CHART VARIABLES ***
+    
         'risk_per_country_chart': risk_per_country_chart,
         'risk_per_actor_chart': risk_per_actor_chart,
         'intent_distribution_chart': intent_distribution_chart,
@@ -1474,7 +1474,7 @@ def countries(request):
         'sample_articles': sample_articles,
         'selected_country': selected_country or "All Countries",
         'african_countries': COUNTRIES,
-        # *** ADD NEW STAT VARIABLE ***
+        
         'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
