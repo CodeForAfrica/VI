@@ -11,7 +11,7 @@
         top: 20px;
     }
     .list-group-item.active {
-        background-color: #2563eb !important;
+        background-color:2563eb !important;
         border-color: #2563eb !important;
     }
     .badge-soft {
@@ -44,7 +44,7 @@
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header bg-white py-3">
             <h5 class="fw-bold mb-0 text-primary">Top Journalists by Articles Published</h5>
-            <small class="text-muted most active contributors in the dataset</small>
+            <small class="text-muted">Visualizing the most active contributors in the dataset</small>
         </div>
         <div class="card-body">
             {% if authors_chart %}
@@ -110,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- Stats Cards Section -->
+            <!-- *** NEW: Stats Cards Section *** -->
             {% if journalist_stats %}
             <div class="row mb-4">
                 <div class="col-md-4">
@@ -129,11 +129,11 @@
                         </div>
                     </div>
                 </div>
-                
+                <!-- Add more stat cards if needed, e.g., avg tone score -->
             </div>
             {% endif %}
 
-            <!-- *** NEW: Mini Chart Section *** -->
+            <!-- *** NEW: Mini Chart Section (Optional) *** -->
             {% if journalist_intent_chart %}
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
@@ -145,7 +145,7 @@
             </div>
             {% endif %}
 
-            <!-- Common Intents/Countries/Actors Section  -->
+            <!-- *** NEW: Common Intents/Countries/Actors Section *** -->
             <div class="row mb-4">
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm">
@@ -206,7 +206,7 @@
                 </div>
             </div>
 
-            {% endif %} <!-- End of {% if selected_journalist %} block -->
+            {% endif %} <!-- **** ADDED: Closes {% if selected_journalist %} block **** -->
 
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold mb-0">
@@ -237,7 +237,7 @@
                             <div class="d-flex gap-2">
                                 <span class="badge bg-light text-dark border small">Tone: {{ article.tone|title }}</span>
                                 <span class="badge bg-light text-dark border small">Intent: {{ article.strategic_intent|title }}</span>
-                                <!-- show inferred actor and target country -->
+                                <!-- Optionally show inferred actor and target country -->
                                 <span class="badge bg-light text-dark border small">Actor: {{ article.inferred_actor|title }}</span>
                                 <span class="badge bg-light text-dark border small">Country: {{ article.target_country }}</span>
                             </div>
@@ -248,7 +248,7 @@
                 <div class="col-12 text-center py-5 card shadow-sm border-0">
                     <p class="text-muted mb-0">No articles found for this selection.</p>
                 </div>
-                {% endfor %}
+                {% endfor %} <!-- **** ADDED: Closes {% for article in page_obj %} loop **** -->
             </div>
 
             {% if page_obj.has_other_pages %}
@@ -265,7 +265,7 @@
                     {% endif %}
                 </ul>
             </nav>
-}
+            {% endif %} <!-- **** ADDED: Closes {% if page_obj.has_other_pages %} block **** -->
 
         </div>
     </div>
