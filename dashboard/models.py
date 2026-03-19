@@ -64,6 +64,7 @@ class ContextualRisk(models.Model):
     
     class Meta:
         unique_together = ('country', 'actor', 'intent')
+        db_table = 'dashboard_contextualrisk'
         
 class MediaNarrative(Model):
     article_text = TextField()
