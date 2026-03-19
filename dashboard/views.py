@@ -949,93 +949,52 @@ def generate_report(request):
         return render(request, 'report_form.html', context)
 
     # 2. Setup Mapping Logics
-    csv_country_map = {
-        "ethiopia": "Ethiopia", "senegal": "Senegal", "drc": "DRC",
-        "democratic republic of the congo": "DRC", "cote d'ivoire": "CoteIvoire",
-        "coteivoire": "CoteIvoire", "ivory coast": "CoteIvoire", "south africa": "South Africa"
-    }
-    csv_actor_map = {
-        "us": "UnitedStates", "unitedstates": "UnitedStates", "saudi": "Saudi",
-        "saudi arabia": "Saudi", "uae": "UAE", "russia": "Russia", "france": "France",
-        "china": "China", "rwanda": "Rwanda", "turkey": "Turkey", "israel": "Israel",
-        "iran": "Iran", "nonstate": "NonState"
-    }
-    db_country_map = {
-        "coteivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
-        "drc": "DRC", "ethiopia": "Ethiopia", "senegal": "Senegal", "south africa": "South Africa"
-    }
     db_actor_map = {
-        "unitedstates": "US", "us": "US", "saudi": "Saudi Arabia",
-        "saudi arabia": "Saudi Arabia", "uae": "UAE", "russia": "Russia",
-        "france": "France", "china": "China", "rwanda": "Rwanda",
-        "turkey": "Turkey", "israel": "Israel", "iran": "Iran"
+        "united states": "US",
+        "unitedstates": "US",
+        "usa": "US",
+        "russia": "Russia",
+        "china": "China",
+        "france": "France",
+        "turkey": "Turkey",
+        "uae": "UAE",
+        "united arab emirates": "UAE"
     }
+    # Get all unique country names actually present in your database
+    db_countries = MediaNarrative.objects.values_list('target_country', flat=True).distinct()
+    
+    # Create a helper map: { "lower_case_name": "Official DB Name" }
+    # Example: {"senegal": "Senegal", "ethiopia": "Ethiopia"}
+    db_country_map = {c.lower(): c for c in db_countries if c}
+
+    # Add manual aliases for tricky names that might not match perfectly
+    aliases = {
+        "democratic republic of the congo": "DRC",
+        "ivory coast": "Cote d'Ivoire",
+        "cote d'ivoire": "Cote d'Ivoire",
+        "coteivoire": "Cote d'Ivoire",
+    }
+    db_country_map.update(aliases)
+
+    # Use the map to find the "Official" name for the search
+    # If not found in the map, we just Title Case it as a backup
+    db_country = db_country_map.get(selected_country.lower(), selected_country.title())
 
     report_data = []
 
     # --- 3. Process Data ---
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file = os.path.join(current_dir, '..', 'final_risk_by_actor_intent_country.csv')
-
-        if not os.path.exists(csv_file):
-            csv_file = os.path.join(current_dir, 'final_risk_by_actor_intent_country (1).csv')
-
-        if not os.path.exists(csv_file):
-             logger.error(f"Neither 'final_risk_by_actor_intent_country.csv' nor 'final_risk_by_actor_intent_country (1).csv' found in {os.path.dirname(csv_file)}")
-             return HttpResponse("Error: Risk data file not found.", status=500)
-
-        df = pd.read_csv(csv_file)
-        search_country = csv_country_map.get(selected_country.lower(), selected_country.title())
-        db_country = db_country_map.get(selected_country.lower(), selected_country.title())
-
-        for actor in selected_actors:
-            # A. DATABASE Risk Score Logic (Replacing CSV)
+    for actor in selected_actors:
+            # 1. Setup Mapping for this actor
             db_actor = db_actor_map.get(actor.lower(), actor)
             
-            # Query the new ContextualRisk model instead of the CSV DataFrame
-            risk_record = ContextualRisk.objects.filter(
-                country__iexact=db_country,
-                actor__iexact=db_actor
-            ).order_by('-risk_score').first()
-
-            # B. Database Chart Logic (Keep your existing chart logic here)
-            chart_qs = MediaNarrative.objects.filter(
-                target_country__iexact=db_country,
-                inferred_actor__iexact=db_actor
-            )
-            
-            # ... [Insert your existing volume_chart generation code here] ...
-
-            # C. Combine results using the DB record
-            if risk_record:
-                report_data.append({
-                    'actor': actor,
-                    'cvi_score': round(float(risk_record.risk_score), 3),
-                    'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
-                    'primary_threat': risk_record.intent,
-                    'chart': volume_chart
-                })
-            else:
-                # Fallback if no specific risk record exists in the DB
-                report_data.append({
-                    'actor': actor, 
-                    'cvi_score': 0.0, 
-                    'risk_level': "N/A",
-                    'primary_threat': "No Risk Data in DB", 
-                    'chart': volume_chart
-                })
-
-            # B. Database Chart Logic for THIS specific actor
-            db_actor = db_actor_map.get(actor.lower(), actor)
-            chart_qs = MediaNarrative.objects.filter(
-                target_country__iexact=db_country,
-                inferred_actor__iexact=db_actor
-            )
-
+            # 2. Generate the Chart FIRST so it's ready to be saved
             volume_chart = None
+            chart_qs = MediaNarrative.objects.filter(
+                target_country__iexact=db_country,
+                inferred_actor__iexact=db_actor
+            )
+
             if chart_qs.exists():
-                # Use matplotlib for PDF charts (more reliable than plotly HTML embeds in PDFs)
                 try:
                     plt.figure(figsize=(10, 4))
                     df_chart = pd.DataFrame(list(chart_qs.values('posting_time')))
@@ -1049,41 +1008,40 @@ def generate_report(request):
                     buf = BytesIO()
                     plt.savefig(buf, format='png', bbox_inches='tight')
                     buf.seek(0)
-                    volume_chart_bytes = buf.read()
-                    if volume_chart_bytes: # Ensure the buffer is not empty
-                        volume_chart = base64.b64encode(volume_chart_bytes).decode('utf-8')
-                    else:
-                        logger.warning(f"Generated chart for {actor} in {db_country} is empty.")
-                        volume_chart = None # Or assign a default image data URI
-                    buf.close() # Close buffer
-                    plt.close() # Close figure to free memory
+                    volume_chart = base64.b64encode(buf.read()).decode('utf-8')
+                    buf.close()
+                    plt.close()
                 except Exception as e_chart:
-                    logger.error(f"Chart generation error for {actor} in {db_country}: {e_chart}")
-                    volume_chart = None # Assign None on error to prevent template issues
-            else:
-                 logger.info(f"No data found for chart for {actor} in {db_country}.")
+                    logger.error(f"Chart error for {actor}: {e_chart}")
+                    volume_chart = None
 
-            # C. Combine results
-            if not matching_rows.empty:
-                max_row = matching_rows.loc[matching_rows['FinalRisk'].idxmax()]
+            # 3. Get Risk Data from Database
+            risk_record = ContextualRisk.objects.filter(
+                country__iexact=db_country,
+                actor__iexact=db_actor
+            ).order_by('-risk_score').first()
+
+            # 4. Append to results
+            if risk_record:
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(max_row['FinalRisk']), 3),
-                    'risk_level': "High" if max_row['FinalRisk'] > 0.7 else "Medium" if max_row['FinalRisk'] > 0.4 else "Low",
-                    'primary_threat': max_row['intent'],
+                    'cvi_score': round(float(risk_record.risk_score), 3),
+                    'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
+                    'primary_threat': risk_record.intent,
                     'chart': volume_chart
                 })
             else:
                 report_data.append({
-                    'actor': actor, 'cvi_score': 0.0, 'risk_level': "N/A",
-                    'primary_threat': "No Data Found", 'chart': volume_chart
+                    'actor': actor, 
+                    'cvi_score': 0.0, 
+                    'risk_level': "N/A",
+                    'primary_threat': "No Data Found", 
+                    'chart': volume_chart
                 })
 
+        # Sort all actors by risk score (Highest first)
         report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
 
-    except FileNotFoundError:
-        logger.error(f"Risk data CSV file not found.")
-        return HttpResponse("Error: Risk data file not found.", status=500)
     except Exception as e:
         logger.error(f"Report Generation Data Processing Error: {e}")
         return HttpResponse(f"Error: {e}", status=500)
