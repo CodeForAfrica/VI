@@ -98,7 +98,7 @@ class MLInferenceService:
             logger.error(f"Failed to initialize tokenizer: {e}")
             self.tokenizer = None # Or handle the error as appropriate
             
-    def lookup_risk(self, country, intent):
+    def lookup_risk(self, country, intent, actor="Unknown"):
         """
         Maps model/LLM outputs to canonical labels and looks up risk scores.
         """
@@ -159,27 +159,41 @@ class MLInferenceService:
         normalized_intent = str(intent).lower().strip()
         mapped_intent = intent_mapping.get(normalized_intent, intent) 
 
+        # --- START REPLACED SECTION ---
+        from dashboard.models import ContextualRisk
+        
         try:
-            df = self._csv_risk_df
-            
-            # Use the mapped_intent for the CSV search
-            match = df[
-                (df['country'].str.strip() == country) & 
-                (df['intent'].str.strip() == mapped_intent)
-            ]
-            
-            if not match.empty:
-                score = float(match.iloc[0]['risk_score'])
-                # Log the mapping for transparency
+            # A. DATABASE LOOKUP (Priority 1)
+            # This matches the calculations from update_vulnerability_indexes.py
+            risk_record = ContextualRisk.objects.filter(
+                country__iexact=str(country).strip(),
+                intent__iexact=str(mapped_intent).strip(),
+                actor__iexact=str(actor).strip()
+            ).first()
+
+            if risk_record:
+                score = float(risk_record.risk_score)
                 if mapped_intent != intent:
-                    logger.info(f"🔄 Mapped '{intent}' -> '{mapped_intent}' | Score: {score}")
+                    logger.info(f"🔄 DB Match: Mapped '{intent}' -> '{mapped_intent}' | Score: {score}")
                 return score
+
+            # B. FALLBACK: CSV LOOKUP (Priority 2)
+            df = self._csv_risk_df
+            if not df.empty:
+                match = df[
+                    (df['country'].str.strip() == country) & 
+                    (df['intent'].str.strip() == mapped_intent)
+                ]
+                if not match.empty:
+                    score = float(match.iloc[0]['risk_score'])
+                    logger.info(f"💾 CSV Fallback Match: {country} | {mapped_intent} | Score: {score}")
+                    return score
             
-            logger.warning(f"⚠️ No CSV match for {country} | {mapped_intent} (Original: {intent})")
+            logger.warning(f"⚠️ No Match in DB or CSV for {country} | {mapped_intent} | {actor}")
             return 0.0
             
         except Exception as e:
-            logger.error(f"Error during risk lookup: {e}")
+            logger.error(f"❌ Error during risk lookup: {e}")
             return 0.0
             
     def _load_csv_risks(self):
@@ -531,11 +545,11 @@ class MLInferenceService:
             # Robust fallback: return a list of same length as input
             return [("unknown", 0.0)] * len(article_texts)
 
-    def perform_strategic_intent_inference(self, article_text):
+ # 1. Add country and actor to the arguments here
+    def perform_strategic_intent_inference(self, article_text, country="Unknown", actor="Unknown"):
         """
         SINGLE INFERENCE WITH LLM FALLBACK
-        Used when batch confidence is low (< 0.6) or for single-article processing.
-        Includes full logging and decision logic.
+        Includes Database Risk Score lookup based on Country and Actor.
         """
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -543,7 +557,7 @@ class MLInferenceService:
         model_intent = "unknown"
         model_confidence = 0.0
         
-        # 1. Get Model Prediction
+        # --- (Steps 1 & 2: Model and LLM Prediction stay exactly the same) ---
         try:
             classifier = self._load_strategic_classifier()
             if classifier:
@@ -558,10 +572,9 @@ class MLInferenceService:
         except Exception as e:
             logger.error(f"Model inference failed: {e}")
 
-        # 2. Get LLM Prediction
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
         
-        # 3. Decision Logic (Your exact logic)
+        # --- (Step 3: Your exact Decision Logic stays the same) ---
         final_intent = "unknown"
         final_confidence = 0.0
         prediction_source = "unknown"
@@ -574,7 +587,6 @@ class MLInferenceService:
                     final_intent, final_confidence = model_intent, max_conf
                     prediction_source = "ensemble_matched_confirmed"
                 else:
-                    # Low confidence match - pick higher
                     if model_confidence >= llm_confidence:
                         final_intent, final_confidence = model_intent, model_confidence
                         prediction_source = "model_selected_after_low_match"
@@ -582,16 +594,20 @@ class MLInferenceService:
                         final_intent, final_confidence = llm_intent, llm_confidence
                         prediction_source = "llm_selected_after_low_match"
             else:
-                # Disagreement - pick higher
                 if model_confidence >= llm_confidence:
                     final_intent, final_confidence = model_intent, model_confidence
                     prediction_source = "model"
                 else:
                     final_intent, final_confidence = llm_intent, llm_confidence
                     prediction_source = "llm"
+
+        # 2. Lookup the risk score from the ContextualRisk table
+        risk_score = self.lookup_risk(country, final_intent, actor)
         
-        logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Source={prediction_source}")
-        return final_intent, final_confidence
+        logger.info(f"Final Decision: Intent={final_intent}, Confidence={final_confidence}, Risk={risk_score}, Source={prediction_source}")
+        
+        # 3. IMPORTANT: You must return the risk_score so the script can save it!
+        return final_intent, final_confidence, risk_score, prediction_source, llm_notes
 
     def _decode_label(self, label):
         """Helper to convert model class IDs to string labels."""
