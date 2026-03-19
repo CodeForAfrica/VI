@@ -1493,7 +1493,7 @@ def authors(request):
         'common_actors': common_actors,
         'journalist_intent_chart': journalist_intent_chart,
     }
-    return render(request, 'dashboard/authors.html', context)
+    return render(request, 'authors.html', context)
 
     
 def articles_view(request):
