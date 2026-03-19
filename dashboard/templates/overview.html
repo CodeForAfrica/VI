@@ -191,7 +191,13 @@
             <div class="card-body">
                 <h6 class="fw-bold">
                     <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
-                        {{ article.display_title|default:article.article_text|truncatewords:15 }}
+                        {% if article.title %}
+                            {{ article.title }}
+                        {% elif article.article_text %}
+                            {{ article.article_text|truncatewords:12 }}
+                        {% else %}
+                            Narrative Entry #{{ article.id }}
+                        {% endif %}
                     </a>
                 </h6>
                 <div class="mb-3 mt-2">
