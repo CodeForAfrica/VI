@@ -11,7 +11,7 @@
         top: 20px;
     }
     .list-group-item.active {
-        background-color:2563eb !important;
+        background-color: #2563eb !important;
         border-color: #2563eb !important;
     }
     .badge-soft {
@@ -79,7 +79,7 @@
                     </a>
                     {% empty %}
                     <div class="p-3 text-muted">No journalists found.</div>
-                    {% endfor %}
+                    {% endfor %} 
                 </div>
             </div>
         </div>
@@ -110,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- *** NEW: Stats Cards Section *** -->
+            <!--  Stats Cards Section -->
             {% if journalist_stats %}
             <div class="row mb-4">
                 <div class="col-md-4">
@@ -129,11 +129,11 @@
                         </div>
                     </div>
                 </div>
-                <!-- Add more stat cards if needed, e.g., avg tone score -->
+                
             </div>
-            {% endif %}
+            {% endif %} 
 
-            <!-- *** NEW: Mini Chart Section (Optional) *** -->
+            <!--  Mini Chart Section (Optional)  -->
             {% if journalist_intent_chart %}
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
@@ -143,9 +143,9 @@
                     {{ journalist_intent_chart|safe }}
                 </div>
             </div>
-            {% endif %}
+            {% endif %} 
 
-            <!-- *** NEW: Common Intents/Countries/Actors Section *** -->
+            <!-- Common Intents/Countries/Actors Section -->
             <div class="row mb-4">
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm">
@@ -159,10 +159,10 @@
                                         <small>{{ intent.strategic_intent|title }}</small>
                                         <span class="badge bg-primary rounded-pill">{{ intent.count }}</span>
                                     </div>
-                                {% endfor %}
+                                {% endfor %} 
                             {% else %}
                                 <small class="text-muted">No common intents found.</small>
-                            {% endif %}
+                            {% endif %} 
                         </div>
                     </div>
                 </div>
@@ -178,10 +178,10 @@
                                         <small>{{ country.target_country }}</small>
                                         <span class="badge bg-success rounded-pill">{{ country.count }}</span>
                                     </div>
-                                {% endfor %}
+                                {% endfor %} 
                             {% else %}
                                 <small class="text-muted">No common countries found.</small>
-                            {% endif %}
+                            {% endif %} 
                         </div>
                     </div>
                 </div>
@@ -197,16 +197,16 @@
                                         <small>{{ actor.inferred_actor }}</small>
                                         <span class="badge bg-warning text-dark rounded-pill">{{ actor.count }}</span>
                                     </div>
-                                {% endfor %}
+                                {% endfor %} 
                             {% else %}
                                 <small class="text-muted">No common actors found.</small>
-                            {% endif %}
+                            {% endif %} 
                         </div>
                     </div>
                 </div>
             </div>
 
-            {% endif %} <!-- **** ADDED: Closes {% if selected_journalist %} block **** -->
+            {% endif %} 
 
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold mb-0">
@@ -237,7 +237,7 @@
                             <div class="d-flex gap-2">
                                 <span class="badge bg-light text-dark border small">Tone: {{ article.tone|title }}</span>
                                 <span class="badge bg-light text-dark border small">Intent: {{ article.strategic_intent|title }}</span>
-                                <!-- Optionally show inferred actor and target country -->
+                                <!-- show inferred actor and target country -->
                                 <span class="badge bg-light text-dark border small">Actor: {{ article.inferred_actor|title }}</span>
                                 <span class="badge bg-light text-dark border small">Country: {{ article.target_country }}</span>
                             </div>
@@ -248,7 +248,7 @@
                 <div class="col-12 text-center py-5 card shadow-sm border-0">
                     <p class="text-muted mb-0">No articles found for this selection.</p>
                 </div>
-                {% endfor %} <!-- **** ADDED: Closes {% for article in page_obj %} loop **** -->
+                {% endfor %} 
             </div>
 
             {% if page_obj.has_other_pages %}
@@ -265,9 +265,9 @@
                     {% endif %}
                 </ul>
             </nav>
-            {% endif %} <!-- **** ADDED: Closes {% if page_obj.has_other_pages %} block **** -->
+            {% endif %} 
 
-        </div>
-    </div>
-</div>
-{% endblock %}
+        </div> 
+    </div> 
+</div> 
+{% endblock %} 
