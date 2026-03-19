@@ -56,7 +56,7 @@ class VulnerabilityIndex(models.Model):
         unique_together = ('actor', 'country', 'intent')
         ordering = ['actor', 'country', 'intent']
         
- class ContextualRisk(models.Model):
+class ContextualRisk(models.Model):
     country = models.CharField(max_length=100)
     actor = models.CharField(max_length=100)
     intent = models.CharField(max_length=100)
