@@ -55,7 +55,16 @@ class VulnerabilityIndex(models.Model):
     class Meta:
         unique_together = ('actor', 'country', 'intent')
         ordering = ['actor', 'country', 'intent']
-
+        
+class ContextualRisk(models.Model):
+    country = models.CharField(max_length=100)
+    actor = models.CharField(max_length=100)
+    intent = models.CharField(max_length=100)
+    risk_score = models.FloatField()  # This replaces 'FinalRisk' from your CSV
+    
+    class Meta:
+        unique_together = ('country', 'actor', 'intent')
+        
 class MediaNarrative(Model):
     article_text = TextField()
     posting_time = DateTimeField(null=True, blank=True)
