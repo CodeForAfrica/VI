@@ -1293,8 +1293,59 @@ def countries(request):
     publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
     subject_chart = "<p class='text-center py-5 text-muted'>No subject data available</p>"
     actor_country_chart = "<p class='text-center py-5 text-muted'>No actor-country pairing data available</p>"
+    # *** NEW: Initialize additional chart variables ***
+    risk_per_country_chart = "<p class='text-center py-5 text-muted'>No risk data available</p>"
+    risk_per_actor_chart = "<p class='text-center py-5 text-muted'>No risk data available</p>"
+    intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>"
+    volume_over_time_chart = "<p class='text-center py-5 text-muted'>No volume data available</p>"
 
-    # --- 1. Top African Countries by total articles ---
+    # *** NEW: Aggregate Risk Scores from VulnerabilityIndex Table ***
+    # This shows the *calculated risk* per country/actor combination, not just raw article counts.
+    # It uses the pre-calculated scores from the VulnerabilityIndex model.
+    risk_scores_per_combo = VulnerabilityIndex.objects.all()
+    if selected_country:
+        risk_scores_per_combo = risk_scores_per_combo.filter(country__iexact=selected_country)
+
+    # Chart 1: Risk Score Distribution by Country (if no specific country is selected)
+    if not selected_country:
+        country_risk_data = risk_scores_per_combo.values('country').annotate(
+            avg_risk=Avg('final_risk')
+        ).order_by('-avg_risk') # Highest risk first
+
+        if country_risk_data.exists():
+            df_risk_country = pd.DataFrame(list(country_risk_data))
+            if not df_risk_country.empty:
+                fig_risk_country = px.bar(
+                    df_risk_country, x='avg_risk', y='country', orientation='h',
+                    title="Average Calculated Risk by Country",
+                    labels={'avg_risk': 'Avg. Risk Score', 'country': 'Country'},
+                    template="plotly_white"
+                )
+                fig_risk_country.update_traces(marker_color='red', textposition='outside', texttemplate='%{x:.3f}') # Color based on risk
+                fig_risk_country.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                risk_per_country_chart = fig_risk_country.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # Chart 2: Risk Score Distribution by Actor (for the selected country)
+    if selected_country:
+        actor_risk_data = risk_scores_per_combo.values('actor').annotate(
+            avg_risk=Avg('final_risk')
+        ).order_by('-avg_risk') # Highest risk first
+
+        if actor_risk_data.exists():
+            df_risk_actor = pd.DataFrame(list(actor_risk_data))
+            if not df_risk_actor.empty:
+                fig_risk_actor = px.bar(
+                    df_risk_actor, x='avg_risk', y='actor', orientation='h',
+                    title=f"Average Calculated Risk by Actor for {selected_country}",
+                    labels={'avg_risk': 'Avg. Risk Score', 'actor': 'Foreign Actor'},
+                    template="plotly_white"
+                )
+                fig_risk_actor.update_traces(marker_color='orange', textposition='outside', texttemplate='%{x:.3f}') # Color based on risk
+                fig_risk_actor.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                risk_per_actor_chart = fig_risk_actor.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # --- 1. Top African Countries by total articles (Original) ---
+    # This remains relevant as a baseline for volume.
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
@@ -1310,14 +1361,15 @@ def countries(request):
                 x=df['Articles'],
                 y=df['Country'],
                 orientation='h',
-                marker=dict(color='#2563eb'), 
+                marker=dict(color='#2563eb'),
                 text=df['Articles'],
                 textposition='outside'
             ))
             fig.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
             publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 2. Top Foreign Actors Mentioned ---
+    # --- 2. Top Foreign Actors Mentioned (Original) ---
+    # Shows overall activity by actors.
     top_subjects = MediaNarrative.objects.exclude(
         inferred_actor__in=['', 'Unknown', None]
     ).values('inferred_actor').annotate(
@@ -1334,7 +1386,8 @@ def countries(request):
             fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 3. Top Actor-Country Pairings ---
+    # --- 3. Top Actor-Country Pairings (Original) ---
+    # Shows the most frequent topic combinations.
     ac_pairings = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).exclude(
@@ -1353,13 +1406,76 @@ def countries(request):
             fig_ac.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             actor_country_chart = fig_ac.to_html(full_html=False, include_plotlyjs='cdn')
 
+    # *** NEW: Intent Distribution for the Selected Country ***
+    # Shows what types of strategic influence topics are most prevalent for the selected country.
+    intent_distribution = []
+    if selected_country:
+        intent_distribution = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country
+        ).exclude(
+            strategic_intent__in=['', 'Unknown', None]
+        ).values('strategic_intent').annotate(
+            count=Count('id')
+        ).order_by('-count')
+
+        if intent_distribution.exists():
+            df_intent = pd.DataFrame(list(intent_distribution))
+            if not df_intent.empty:
+                fig_intent = px.pie(
+                    df_intent, values='count', names='strategic_intent',
+                    title=f"Strategic Intent Distribution for {selected_country}",
+                    template="plotly_white"
+                )
+                # Optional: Add a legend outside the plot
+                fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # *** NEW: Volume of Articles Over Time for the Selected Country ***
+    # Shows trends - are certain topics or actors becoming more prominent?
+    volume_over_time_data = []
+    if selected_country:
+        # Filter and prepare data for the chart
+        articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time')
+        if articles_for_country.exists():
+            df_time(articles_for_country))
+            df_time['date'] = pd.to_datetime(df_time['posting_time'], utc=True).dt.date
+            daily_counts = df_time['date'].value_counts().sort_index().reset_index(name='count')
+            if not daily_counts.empty:
+                fig_time = px.line(
+                    daily_counts, x='date', y='count',
+                    title=f"Daily Article Volume for {selected_country}",
+                    labels={'count': 'Number of Articles', 'date': 'Date'},
+                    template="plotly_white"
+                )
+                fig_time.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # *** NEW: Additional Stats for Selected Country (Optional) ***
+    country_stats = None
+    if selected_country:
+        country_stats = qs.aggregate(
+            total_articles=Count('id'),
+            avg_confidence=Avg('confidence'), # Average confidence of predictions
+            # Potentially avg tone score if applicable
+        )
+
+    # Sample articles (limit for display)
+    sample_articles = qs[:10]
+
     context = {
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'actor_country_chart': actor_country_chart,
-        'sample_articles': qs[:10],
+        # *** ADD NEW CHART VARIABLES ***
+        'risk_per_country_chart': risk_per_country_chart,
+        'risk_per_actor_chart': risk_per_actor_chart,
+        'intent_distribution_chart': intent_distribution_chart,
+        'volume_over_time_chart': volume_over_time_chart,
+        'sample_articles': sample_articles,
         'selected_country': selected_country or "All Countries",
-        'african_countries': COUNTRIES, 
+        'african_countries': COUNTRIES,
+        # *** ADD NEW STAT VARIABLE ***
+        'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
 
