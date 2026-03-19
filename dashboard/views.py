@@ -569,6 +569,8 @@ def overview(request):
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
 
+    temp_base_qs = MediaNarrative.objects.all()
+
     # --- CACHE KEYS FOR FILTERED QUERYSETS AND STATS ---
     # Base queryset without sports (potentially expensive to build)
     base_qs_cache_key = "overview_base_qs_no_sports"
@@ -600,36 +602,33 @@ def overview(request):
     if full_stats_qs is None:
         logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
         # Rebuild the base queryset excluding sports AND applying target country filter
-        exclude_keywords = [
-            'football', 'soccer', 'sport', 'sports', 'match', 'game',
-            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
-            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
-            'league', 'team', 'player', 'coach', 'stadium'
-        ]
-        # Start with all articles
         temp_base_qs = MediaNarrative.objects.all()
-        # Apply the sports exclusion
+
+        # 2. Optimized Sports Exclusion (Prevents NULL field errors)
+        exclude_keywords = ['football', 'soccer', 'sport', 'match', 'game', 'tournament']
+        q_exclude = Q()
         for word in exclude_keywords:
-             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
+            # Only exclude if the field is NOT NULL and contains the word
+            q_exclude |= Q(article_text__icontains=word)
+        temp_base_qs = temp_base_qs.exclude(q_exclude)
 
-        # TARGET COUNTRY FILTER 
-        # Filter to only include articles for the specified target countries
-        # Use the COUNTRIES constant defined at the top of the file
-        temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
+        # 3. Flexible Country Filter
+        # This ensures we only filter if COUNTRIES has data, 
+        # and uses __in for a single database hit.
+        if COUNTRIES:
+            temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
        
-
-        # Apply user filters (from the calculator panel)
+        # 4. Apply UI Panel Filters (Calculator)
         if calc_target_country:
             temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
         if calc_foreign_actor:
             temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
 
-        # Order by posting time - this is also expensive if the result set is huge
-        full_stats_qs = temp_base_qs.order_by('-posting_time')
-        # Again, DO NOT cache the full QuerySet object itself.
-        # We'll cache the results of operations performed on it.
-    else:
-        logger.info(f"Cache HIT for filtered_qs: {filtered_qs_cache_key}")
+        # 5. CRITICAL FOR CHART: Remove articles with no date
+        full_stats_qs = temp_base_qs.exclude(posting_time__isnull=True).order_by('-posting_time')
+        
+        # DEBUG: Check your terminal/console to see this number!
+        print(f"--- DEBUG: Chart QuerySet Count: {full_stats_qs.count()} ---")
 
     # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
     if calc_target_country and calc_foreign_actor:
