@@ -859,9 +859,45 @@ def media(request):
     
     # 4. GET SIDEBAR STATS (Counts based on the text field 'media_outlet')
     top_outlets = MediaNarrative.objects.values('media_outlet').annotate(
-        name=F('media_outlet'),
+        name=F('media_outlet'), # F('media_outlet') gets the field value
         article_count=Count('id')
-    ).filter(article_count__gt=0).order_by('-article_count')[:10]
+    ).filter(
+        # Ensure we only count articles where 'media_outlet' is not null or empty string
+        Q(media_outlet__isnull=False) & ~Q(media_outlet='')
+    ).order_by('-article_count')[:10]
+
+    # Generate the main chart HTML using the top_outlets data
+    media_chart = None # Initialize to None in case the list is empty
+    if top_outlets: # Check if there's data to plot
+        # Convert the QuerySet (list of dicts) to a Pandas DataFrame
+        import pandas as pd
+        df = pd.DataFrame(list(top_outlets)) # Convert QuerySet to List of Dicts, then to DF
+
+        if not df.empty and len(df) > 0: # Double-check DataFrame is not empty
+            # Create the Plotly bar chart
+            # Sort by article_count for a cleaner display (ascending for horizontal bar if desired)
+            df_sorted = df.sort_values(by='article_count', ascending=True) # Ascending for horizontal bar (top = highest)
+            import plotly.express as px # Import here or at the top
+            fig = px.bar(
+                df_sorted,
+                x='article_count', # X-axis: count
+                y='name',          # Y-axis: outlet name
+                orientation='h',    # Horizontal bars
+                title='Top Media Outlets by Article Count', # Chart title
+                labels={'name': 'Media Outlet', 'article_count': 'Number of Articles'}, # Axis labels
+                template="plotly_white" # Styling
+            )
+            # Optional: Adjust layout
+            fig.update_layout(height=400, margin=dict(l=10, r=10, t=30, b=10))
+            # Convert the figure to HTML string
+            media_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        else:
+            # If DataFrame is empty after conversion, set media_chart to None or a default message
+            media_chart = "<p class='text-center py-5 text-muted'>No data available for the chart.</p>"
+    else:
+        # If top_outlets QuerySet was empty, set media_chart to None or a default message
+        media_chart = "<p class='text-center py-5 text-muted'>No data available for the chart.</p>"
+
     
     # 5. HANDLE PAGINATION
     paginator = Paginator(qs, 10) # Show 10 per page
@@ -870,6 +906,7 @@ def media(request):
 
     context = {
         'top_outlets': top_outlets,
+        'media_chart': media_chart,
         'page_obj': page_obj,
         'selected_name': outlet_name if outlet_name else "All Outlets",
         'target_countries': COUNTRIES, 
