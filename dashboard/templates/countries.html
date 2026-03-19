@@ -1,8 +1,11 @@
+<!-- dashboard/templates/countries.html -->
+
 {% extends "base.html" %}
 {% load custom_filters %}
 
 {% block content %}
 <div class="container-fluid py-4">
+    <!-- Row 1: Basic Country/Pairing Charts -->
     <div class="row mb-5">
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
@@ -26,28 +29,109 @@
         </div>
     </div>
 
+    <!-- Row 2: Enhanced Risk/Intent/Time Charts (Conditional Display) -->
+    {% if selected_country != "All Countries" %}
+        <!-- Show these charts only when a specific country is selected -->
+        <div class="row mb-5">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                        <h4 class="fw-bold">Calculated Risk by Actor ({{ selected_country }})</h4>
+                    </div>
+                    <div class="card-body">
+                        {{ risk_per_actor_chart|safe }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                        <h4 class="fw-bold">Strategic Intent Distribution ({{ selected_country }})</h4>
+                    </div>
+                    <div class="card-body">
+                        {{ intent_distribution_chart|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                        <h4 class="fw-bold">Daily Article Volume Trend ({{ selected_country }})</h4>
+                    </div>
+                    <div class="card-body">
+                        {{ volume_over_time_chart|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional: Display Summary Stats for Selected Country -->
+        {% if country_stats %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Summary for {{ selected_country }}</h5>
+                        <p class="card-text">
+                            <strong>Total Articles:</strong> {{ country_stats.total_articles }} |
+                            <strong>Avg. Prediction Confidence:</strong> {{ country_stats.avg_confidence|floatformat:2 }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <!-- Show this chart only when viewing "All Countries" -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-header bg-white text-center border-bottom-0 pt-3">
+                        <h4 class="fw-bold">Average Calculated Risk by Country</h4>
+                    </div>
+                    <div class="card-body">
+                        {{ risk_per_country_chart|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Row 3: Sample Articles -->
     <div class="row">
         <div class="col-12">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Sample Articles</h4>
+                <div class=" text-center border-bottom-0 pt-3">
+                    <h4 class="fw-bold">Sample Articles ({{ selected_country }})</h4>
                 </div>
                 <div class="card-body">
                     {% for article in sample_articles %}
                     <div class="mb-4 pb-3 border-bottom">
                         <h5 class="fw-bold text-dark mb-3">{{ article.article_text|truncatewords:18 }}</h5>
-                        
+
                         <div class="d-flex flex-wrap gap-2 mb-3">
                             <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary px-3 py-2">
                                 <i class="bi bi-geo-alt-fill me-1"></i> {{ article.target_country }}
                             </span>
-                            
+
                             <span class="badge rounded-pill bg-warning bg-opacity-10 text-dark px-3 py-2">
                                 <i class="bi bi-person-fill me-1"></i> {{ article.inferred_actor }}
                             </span>
-                            
+
                             <span class="badge rounded-pill bg-info bg-opacity-10 text-info px-3 py-2">
                                 <i class="bi bi-shield-shaded me-1"></i> {{ article.strategic_intent|title }}
+                            </span>
+
+                            <!-- Optionally show tone and posting time -->
+                            <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary px-3 py-2">
+                                <i class="bi bi-megaphone-fill me-1"></i> {{ article.tone|title }}
+                            </span>
+                            <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
+                                <i class="bi bi-calendar-event me-1"></i> {{ article.posting_time|date:"M d, Y" }}
                             </span>
                         </div>
 
