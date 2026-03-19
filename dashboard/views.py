@@ -859,7 +859,7 @@ def media(request):
 
     # Initialize variables for new charts/stats
     media_chart = None # Main chart (Top Outlets)
-    outlet_risk_chart = None # Average Risk per Outlet (when no specific outlet is selected)
+    # outlet_risk_chart = None # Average Risk per Outlet (when no specific outlet is selected) 
     outlet_intent_chart = None # Top Intents for Selected Outlet
     outlet_actor_chart = None # Top Actors covered by Selected Outlet
     outlet_tone_chart = None # Tone distribution for Selected Outlet
@@ -993,36 +993,8 @@ def media(request):
                 fig_country.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 outlet_country_chart = fig_country.to_html(full_html=False, include_plotlyjs='cdn')
 
-    else:
-        # Chart: Average Calculated Risk by Outlet (when no specific outlet is selected)
-        # This requires joining with the VulnerabilityIndex table based on article metadata
-        # Calculate average risk score for articles grouped by outlet
-        # This is complex as risk is calculated per (country, actor, intent) combo, not per article directly.
-        # We might need to join MediaNarrative with VulnerabilityIndex on country, actor, intent
-        # Or aggregate risk scores from the VulnerabilityIndex table and link back to outlets somehow.
-        # For now, let's calculate average *confidence* of predictions per outlet as a proxy for "activity level" or "focus".
-        outlet_avg_confidence = MediaNarrative.objects.filter(
-            # Ensure outlet is known
-            Q(media_outlet__isnull=False) & ~Q(media_outlet='')
-        ).exclude(
-            confidence__isnull=True # Exclude articles where confidence wasn't calculated
-        ).values('media_outlet').annotate(
-            avg_confidence=Avg('confidence'),
-            article_count=Count('id') # Also get count to filter out very low volume outlets maybe
-        ).filter(article_count__gt=5).order_by('-avg_confidence')[:10] # Filter out outlets with very few articles
-
-        if outlet_avg_confidence.exists():
-            df_conf = pd.DataFrame(list(outlet_avg_confidence))
-            if not df_conf.empty:
-                fig_conf = px.bar(
-                    df_conf, x='avg_confidence', y='media_outlet', orientation='h',
-                    title="Average Prediction Confidence by Outlet (High Activity)",
-                    labels={'avg_confidence': 'Avg. Confidence', 'media_outlet': 'Media Outlet'},
-                    template="plotly_white"
-                )
-                fig_conf.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
-                outlet_risk_chart = fig_conf.to_html(full_html=False, include_plotlyjs='cdn')
-
+    # NOTE: The 'else' block for 'outlet_risk_chart' is REMOVED HERE.
+    # No chart is calculated for the overall view now.
 
     # 6. HANDLE PAGINATION
     paginator = Paginator(qs, 10) # Show 10 per page
@@ -1032,7 +1004,7 @@ def media(request):
     context = {
         'top_outlets': top_outlets,
         'media_chart': media_chart, # Main Top Outlets Chart
-        'outlet_risk_chart': outlet_risk_chart, # Average Confidence per Outlet (overall view)
+        # 'outlet_risk_chart': outlet_risk_chart, # REMOVED FROM CONTEXT
         'outlet_intent_chart': outlet_intent_chart, # Intent Distribution (selected outlet view)
         'outlet_actor_chart': outlet_actor_chart, # Actor Mentions (selected outlet view)
         'outlet_tone_chart': outlet_tone_chart, # Tone Distribution (selected outlet view)
