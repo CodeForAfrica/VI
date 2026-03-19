@@ -22,7 +22,8 @@
     <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center mb-3">
             <h5 class="fw-bold">Filter by Outlet: <span class="text-primary">{{ selected_name }}</span></h5>
-            {% if selected_name != "All Out <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
+            {% if selected_name != "All Outlets" %}
+                <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
             {% endif %}
         </div>
         <div class="col-lg-8 mx-auto">
