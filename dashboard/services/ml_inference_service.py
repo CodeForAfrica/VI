@@ -1369,6 +1369,8 @@ class MLInferenceService:
         self._temp_dirs.clear()
 
 # NO GLOBAL INSTANCE — create on demand
+_service_instance = None
+
 def get_ml_service():
     global _service_instance
     if _service_instance is None:
