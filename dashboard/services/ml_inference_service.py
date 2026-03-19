@@ -197,29 +197,25 @@ class MLInferenceService:
             return 0.0
             
     def _load_csv_risks(self):
-        """Load pre-calculated risk scores using an absolute path from settings.BASE_DIR"""
+        """Load pre-calculated risk scores directly from the Database instead of CSV"""
         try:
-            # This ensures we look in the project root, no matter where the script is called from
-            csv_filename = 'final_risk_by_actor_intent_country.csv'
-            path = os.path.join(settings.BASE_DIR, csv_filename)
+            from dashboard.models import VulnerabilityIndex
             
-            if os.path.exists(path):
-                df = pd.read_csv(path)
-                logger.info(f"✅ Successfully loaded CSV risk data from absolute path: {path}")
+            # Fetch all records from the DB table
+            queryset = VulnerabilityIndex.objects.all().values('actor', 'country', 'intent', 'final_risk')
+            df = pd.DataFrame(list(queryset))
+            
+            if not df.empty:
+                logger.info(f"✅ Successfully loaded {len(df)} risk records from the Database.")
                 return df
             
-            # Fallback check: try one level up from BASE_DIR if BASE_DIR is pointing to 'config'
-            fallback_path = os.path.join(os.path.dirname(settings.BASE_DIR), csv_filename)
-            if os.path.exists(fallback_path):
-                df = pd.read_csv(fallback_path)
-                logger.info(f"✅ from fallback path: {fallback_path}")
-                return df
-
-            logger.warning(f"⚠️ CSV risk file not found. Looked in: {path} and {fallback_path}")
+            logger.warning("⚠️ No risk data found in the Database table 'VulnerabilityIndex'.")
             return pd.DataFrame()
+            
         except Exception as e:
-            logger.error(f"❌ Failed to load CSV risk data: {e}")
+            logger.error(f"❌ Failed to load Database risk data: {e}")
             return pd.DataFrame()
+            
 
     def _download_from_s3(self, s3_key, local_path):
         """Download single file from S3"""
