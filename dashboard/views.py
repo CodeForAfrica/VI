@@ -983,68 +983,69 @@ def generate_report(request):
     report_data = []
 
     # --- 3. Process Data ---
-    for actor in selected_actors:
-            # 1. Setup Mapping for this actor
-            db_actor = db_actor_map.get(actor.lower(), actor)
-            
-            # 2. Generate the Chart FIRST so it's ready to be saved
-            volume_chart = None
-            chart_qs = MediaNarrative.objects.filter(
-                target_country__iexact=db_country,
-                inferred_actor__iexact=db_actor
-            )
-
-            if chart_qs.exists():
-                try:
-                    plt.figure(figsize=(10, 4))
-                    df_chart = pd.DataFrame(list(chart_qs.values('posting_time')))
-                    df_chart['date'] = pd.to_datetime(df_chart['posting_time']).dt.date
-                    counts = df_chart['date'].value_counts().sort_index()
-
-                    plt.plot(counts.index, counts.values, color='#2563eb', marker='o')
-                    plt.title(f"Volume: {actor} in {db_country}")
-                    plt.grid(True, alpha=0.3)
-
-                    buf = BytesIO()
-                    plt.savefig(buf, format='png', bbox_inches='tight')
-                    buf.seek(0)
-                    volume_chart = base64.b64encode(buf.read()).decode('utf-8')
-                    buf.close()
-                    plt.close()
-                except Exception as e_chart:
-                    logger.error(f"Chart error for {actor}: {e_chart}")
-                    volume_chart = None
-
-            # 3. Get Risk Data from Database
-            risk_record = ContextualRisk.objects.filter(
-                country__iexact=db_country,
-                actor__iexact=db_actor
-            ).order_by('-risk_score').first()
-
-            # 4. Append to results
-            if risk_record:
-                report_data.append({
-                    'actor': actor,
-                    'cvi_score': round(float(risk_record.risk_score), 3),
-                    'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
-                    'primary_threat': risk_record.intent,
-                    'chart': volume_chart
-                })
-            else:
-                report_data.append({
-                    'actor': actor, 
-                    'cvi_score': 0.0, 
-                    'risk_level': "N/A",
-                    'primary_threat': "No Data Found", 
-                    'chart': volume_chart
-                })
-
-        # Sort all actors by risk score (Highest first)
-        report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
-
-    except Exception as e:
-        logger.error(f"Report Generation Data Processing Error: {e}")
-        return HttpResponse(f"Error: {e}", status=500)
+    try:
+        for actor in selected_actors:
+                # 1. Setup Mapping for this actor
+                db_actor = db_actor_map.get(actor.lower(), actor)
+                
+                # 2. Generate the Chart FIRST so it's ready to be saved
+                volume_chart = None
+                chart_qs = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country,
+                    inferred_actor__iexact=db_actor
+                )
+    
+                if chart_qs.exists():
+                    try:
+                        plt.figure(figsize=(10, 4))
+                        df_chart = pd.DataFrame(list(chart_qs.values('posting_time')))
+                        df_chart['date'] = pd.to_datetime(df_chart['posting_time']).dt.date
+                        counts = df_chart['date'].value_counts().sort_index()
+    
+                        plt.plot(counts.index, counts.values, color='#2563eb', marker='o')
+                        plt.title(f"Volume: {actor} in {db_country}")
+                        plt.grid(True, alpha=0.3)
+    
+                        buf = BytesIO()
+                        plt.savefig(buf, format='png', bbox_inches='tight')
+                        buf.seek(0)
+                        volume_chart = base64.b64encode(buf.read()).decode('utf-8')
+                        buf.close()
+                        plt.close()
+                    except Exception as e_chart:
+                        logger.error(f"Chart error for {actor}: {e_chart}")
+                        volume_chart = None
+    
+                # 3. Get Risk Data from Database
+                risk_record = ContextualRisk.objects.filter(
+                    country__iexact=db_country,
+                    actor__iexact=db_actor
+                ).order_by('-risk_score').first()
+    
+                # 4. Append to results
+                if risk_record:
+                    report_data.append({
+                        'actor': actor,
+                        'cvi_score': round(float(risk_record.risk_score), 3),
+                        'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
+                        'primary_threat': risk_record.intent,
+                        'chart': volume_chart
+                    })
+                else:
+                    report_data.append({
+                        'actor': actor, 
+                        'cvi_score': 0.0, 
+                        'risk_level': "N/A",
+                        'primary_threat': "No Data Found", 
+                        'chart': volume_chart
+                    })
+    
+            # Sort all actors by risk score (Highest first)
+            report_data.sort(key=lambda x: x['cvi_score'], reverse=True)
+    
+        except Exception as e:
+            logger.error(f"Report Generation Data Processing Error: {e}")
+            return HttpResponse(f"Error: {e}", status=500)
 
     # --- 4. Get Key Narratives & AI Insights ---
     key_narratives = []
