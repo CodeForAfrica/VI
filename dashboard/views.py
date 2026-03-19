@@ -889,6 +889,18 @@ def overview(request):
         'selected_intent': calc_strategic_intent,
         'intent_choices': INTENT_CHOICES,
         'vulnerability_description': vulnerability_methodology,  
+        
+        # dropdown state management
+        'selected_country': calc_target_country,
+        'selected_actor': calc_foreign_actor,
+        'selected_intent': calc_strategic_intent,
+        
+        # filter persistence for pagination links
+        'selected_filters': {
+            'target_country': calc_target_country,
+            'inferred_actor': calc_foreign_actor,
+            'strategic_intent': calc_strategic_intent,
+        }
     }
     return render(request, 'overview.html', context)        
    
@@ -1531,7 +1543,7 @@ def all_articles(request):
                 article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
                 article.display_summary = text
-
+        article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
     context = {
         'page_obj': page_obj,
         'filters_applied': bool(target_country or inferred_actor or strategic_intent or start_date or end_date),
