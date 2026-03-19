@@ -56,15 +56,15 @@ class VulnerabilityIndex(models.Model):
         unique_together = ('actor', 'country', 'intent')
         ordering = ['actor', 'country', 'intent']
         
-# ContextualRisk(models.Model):
-    #country = models.CharField(max_length=100)
-    #actor = models.CharField(max_length=100)
-    #intent = models.CharField(max_length=100)
-   # risk_score = models.FloatField()  # This replaces 'FinalRisk' from your CSV
-    
-    #class Meta:
-        #unique_together = ('country', 'actor', 'intent')
-        #db_table = 'dashboard_contextualrisk'
+ class ContextualRisk(models.Model):
+    country = models.CharField(max_length=100)
+    actor = models.CharField(max_length=100)
+    intent = models.CharField(max_length=100)
+    risk_score = models.FloatField()
+
+    class Meta:
+        # This ensures the table name matches what the error is looking for
+        db_table = 'dashboard_contextualrisk'
         
 class MediaNarrative(Model):
     article_text = TextField()
