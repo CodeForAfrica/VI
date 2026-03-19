@@ -73,11 +73,11 @@
 <nav class="navbar navbar-expand-lg sticky-top">
     <div class="container">
         <div class="navbar-nav mx-auto">
-            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Home</a>
-            <a class="nav-link {% if '/authors/' in request.path %}active{% endif %}" href="/authors/">Authors</a>
-            <a class="nav-link {% if '/countries/' in request.path %}active{% endif %}" href="/countries/">Countries</a>
-            <a class="nav-link {% if '/media/' in request.path %}active{% endif %}" href="/media/">Media</a>
-            <a class="nav-link {% if '/report/' in request.path %}active{% endif %}" href="/report/">Report</a>
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'overview' %}">Home</a>
+            <a class="nav-link {% if '/authors/' in request.path %}active{% endif %}" href="{% url 'authors' %}">Authors</a>
+            <a class="nav-link {% if '/countries/' in request.path %}active{% endif %}" href="{% url 'countries' %}">Countries</a>
+            <a class="nav-link {% if 'outlets' in request.path %}active{% endif %}" href="{% url 'media' %}">Media</a>
+            <a class="nav-link {% if '/report/' in request.path %}active{% endif %}" href="{% url 'generate_report' %}">Report</a>
         </div>
     </div>
 </nav>
