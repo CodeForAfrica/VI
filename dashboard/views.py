@@ -603,6 +603,8 @@ def overview(request):
         full_stats_qs = full_stats_qs.filter(target_country__iexact=calc_target_country)
     if calc_foreign_actor:
         full_stats_qs = full_stats_qs.filter(inferred_actor__iexact=calc_foreign_actor)
+    if calc_strategic_intent:
+        full_stats_qs = full_stats_qs.filter(strategic_intent__iexact=calc_strategic_intent)
 
     # Final sort for display
     full_stats_qs = full_stats_qs.order_by('-posting_time')
