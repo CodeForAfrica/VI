@@ -8,7 +8,7 @@ urlpatterns = [
     path('vi/', views.overview, name='vi_tool'),
     path('authors/', views.authors, name='authors'),
     # CHECK THE COMMA AT THE END OF THE LINE BELOW:
-    path('media-outlets/', views.media, name='media'), 
+    path('outlets/', views.media, name='media'), 
     path('intents/', views.intents, name='intents'),
     path('countries/', views.countries, name='countries'),
     path('all-articles/', views.all_articles, name='all_articles'),
