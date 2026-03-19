@@ -614,11 +614,6 @@ def overview(request):
             calc_foreign_actor,
             intent_filter=calc_strategic_intent
         )
-    else:
-        # Reset defaults if no filter selected
-        calc_target_country = ""
-        calc_foreign_actor = ""
-        calc_strategic_intent = ""
 
     # --- STEP 4: CACHING STATS (Count only) ---
     total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
