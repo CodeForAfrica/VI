@@ -1,7 +1,10 @@
+<!-- dashboard/templates/media.html -->
+
 {% extends "base.html" %}
 {% block content %}
 
 <div class="container">
+    <!-- Main Chart -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-white py-3 text-center border-bottom">
             <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Most Frequent Media Outlets</h4>
@@ -15,17 +18,17 @@
         </div>
     </div>
 
+    <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center mb-3">
             <h5 class="fw-bold">Filter by Outlet: <span class="text-primary">{{ selected_name }}</span></h5>
-            {% if selected_name != "All Outlets" %}
-                <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
+            {% if selected_name != "All Out <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
             {% endif %}
         </div>
         <div class="col-lg-8 mx-auto">
             <div class="list-group shadow-sm">
                 {% for outlet in top_outlets %}
-                <a href="?outlet={{ outlet.name|urlencode }}" 
+                <a href="?outlet={{ outlet.name|urlencode }}"
                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if selected_name == outlet.name %}active{% endif %}">
                     <span class="fw-bold">{{ outlet.name }}</span>
                     <span class="badge bg-primary rounded-pill">{{ outlet.article_count }}</span>
@@ -35,6 +38,7 @@
         </div>
     </div>
 
+    <!-- Recent Narratives Card -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-white py-3 border-bottom">
             <h5 class="mb-0 fw-bold">Recent Narratives: {{ selected_name }}</h5>
@@ -46,15 +50,24 @@
                         <tr>
                             <th>Date</th>
                             <th>Outlet</th>
-                            <th>Narrative Headline/Summary</th>
+                            <!-- Changed header text -->
+                            <th>Article Summary/Headline</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in page_obj %}
                         <tr>
                             <td class="text-nowrap">{{ item.posting_time|date:"M d, Y" }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ item.media_outlet_fk.name }}</span></td>
-                            <td>{{ item.narrative_summary|truncatewords:20 }}</td>
+                            <!-- Fixed outlet display: Check FK first, fallback to text field -->
+                            <td>
+                                {% if item.media_outlet_fk %}
+                                    <span class="badge bg-light text-dark border">{{ item.media_outlet_fk.name }}</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">{{ item.media_outlet }}</span>
+                                {% endif %}
+                            </td>
+                            <!-- Updated summary display: Show full article text summary -->
+                            <td>{{ item.article_text }}</td>
                         </tr>
                         {% empty %}
                         <tr>
@@ -65,7 +78,7 @@
                 </table>
             </div>
         </div>
-        
+
         {% if page_obj.has_other_pages %}
         <div class="card-footer bg-white py-3">
             <nav>
