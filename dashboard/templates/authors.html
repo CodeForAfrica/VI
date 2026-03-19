@@ -1,3 +1,5 @@
+<!-- dashboard/templates/dashboard/authors.html -->
+
 {% extends "base.html" %}
 {% load static %}
 
@@ -22,13 +24,27 @@
     .article-card:hover {
         transform: translateY(-2px);
     }
+    /* Added styles for the new stats cards */
+    .stats-card {
+        background-color: #f8fafc;
+        border-left: 4px solid #2563eb;
+    }
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e293b;
+    }
+    .stat-label {
+        font-size: 0.875rem;
+        color: #64748b;
+    }
 </style>
 
 <div class="container py-4">
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header bg-white py-3">
             <h5 class="fw-bold mb-0 text-primary">Top Journalists by Articles Published</h5>
-            <small class="text-muted">Visualizing the most active contributors in the dataset</small>
+            <small class="text-muted most active contributors in the dataset</small>
         </div>
         <div class="card-body">
             {% if authors_chart %}
@@ -53,11 +69,11 @@
                         <strong>View All Journalists</strong>
                     </a>
                     {% for journalist in top_journalists %}
-                    <a href="?journalist={{ journalist.name|urlencode }}" 
-                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center 
+                    <a href="?journalist={{ journalist.name|urlencode }}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
                        {% if selected_name == journalist.name %}active{% endif %}">
                         <span>{{ journalist.name }}</span>
-                        <span class="badge {% if selected_name == journalist.name %}bg-white text-primary{% else %}bg-primary{% endif %} rounded-pill">
+                        <span class="badge {% if selected_name == journalist.name %}bg-white text-primarybg-primary{% endif %} rounded-pill">
                             {{ journalist.article_count }}
                         </span>
                     </a>
@@ -69,7 +85,7 @@
         </div>
 
         <div class="col-lg-8">
-            
+
             {% if selected_journalist %}
             <div class="card shadow-sm border-0 mb-4 animate__animated animate__fadeIn">
                 <div class="card-body">
@@ -93,7 +109,104 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Stats Cards Section -->
+            {% if journalist_stats %}
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card stats-card border-0">
+                        <div class="card-body text-center">
+                            <div class="stat-value">{{ journalist_stats.total_articles }}</div>
+                            <div class="stat-label">Total Articles</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card stats-card border-0">
+                        <div class="card-body text-center">
+                            <div class="stat-value">{% if journalist_stats.avg_confidence %}{{ journalist_stats.avg_confidence|floatformat:2 }}{% else %}N/A{% endif %}</div>
+                            <div class="stat-label">Avg. Confidence</div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
             {% endif %}
+
+            <!-- *** NEW: Mini Chart Section *** -->
+            {% if journalist_intent_chart %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="fw-bold mb-0">Focus Areas Distribution</h6>
+                </div>
+                <div class="card-body">
+                    {{ journalist_intent_chart|safe }}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Common Intents/Countries/Actors Section  -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white py-2">
+                            <h6 class="fw-bold mb-0">Common Intents</h6>
+                        </div>
+                        <div class="card-body p-2">
+                            {% if common_intents %}
+                                {% for intent in common_intents %}
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small>{{ intent.strategic_intent|title }}</small>
+                                        <span class="badge bg-primary rounded-pill">{{ intent.count }}</span>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <small class="text-muted">No common intents found.</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white py-2">
+                            <h6 class="fw-bold mb-0">Covered Countries</h6>
+                        </div>
+                        <div class="card-body p-2">
+                            {% if common_countries %}
+                                {% for country in common_countries %}
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small>{{ country.target_country }}</small>
+                                        <span class="badge bg-success rounded-pill">{{ country.count }}</span>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <small class="text-muted">No common countries found.</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white py-2">
+                            <h6 class="fw-bold mb-0">Mentioned Actors</h6>
+                        </div>
+                        <div class="card-body p-2">
+                            {% if common_actors %}
+                                {% for actor in common_actors %}
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small>{{ actor.inferred_actor }}</small>
+                                        <span class="badge bg-warning text-dark rounded-pill">{{ actor.count }}</span>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <small class="text-muted">No common actors found.</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% endif %} <!-- End of {% if selected_journalist %} block -->
 
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold mb-0">
@@ -112,7 +225,7 @@
                     <div class="card border-0 shadow-sm article-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between mb-2">
-                                <span class="badge badge-soft">{{ article.media_outlet_fk.name }}</span>
+                                <span class="badge badge-soft">{{ article.media_outlet_fk.name|default:article.media_outlet }}</span>
                                 <small class="text-muted">{{ article.posting_time|date:"M d, Y" }}</small>
                             </div>
                             <h6 class="fw-bold mb-2">
@@ -124,6 +237,9 @@
                             <div class="d-flex gap-2">
                                 <span class="badge bg-light text-dark border small">Tone: {{ article.tone|title }}</span>
                                 <span class="badge bg-light text-dark border small">Intent: {{ article.strategic_intent|title }}</span>
+                                <!-- show inferred actor and target country -->
+                                <span class="badge bg-light text-dark border small">Actor: {{ article.inferred_actor|title }}</span>
+                                <span class="badge bg-light text-dark border small">Country: {{ article.target_country }}</span>
                             </div>
                         </div>
                     </div>
@@ -141,7 +257,7 @@
                     {% if page_obj.has_previous %}
                         <li class="page-item"><a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
                     {% endif %}
-                    
+
                     <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
 
                     {% if page_obj.has_next %}
@@ -149,7 +265,7 @@
                     {% endif %}
                 </ul>
             </nav>
-            {% endif %}
+}
 
         </div>
     </div>
