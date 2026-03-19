@@ -128,27 +128,9 @@
     </div>
     {% endif %}
 
-    {% else %}
+    <!-- ELSE BLOCK FOR "ALL OUTLETS" VIEW: REMOVED THE AVERAGE CONFIDENCE CHART ROW -->
 
-    <!-- Row for Overall View Charts (only show if "All Outlets" is selected) -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card shadow-sm h-100 border-0">
-                <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Average Prediction Confidence by Outlet (High Activity)</h4>
-                </div>
-                <div class="card-body">
-                    {% if outlet_risk_chart %}
-                        {{ outlet_risk_chart|safe }}
-                    {% else %}
-                        <p class="text-muted text-center">No confidence data available.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {% endif %}
+    {% endif %} <!-- Closes {% if selected_name != "All Outlets" %} -->
 
     <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
