@@ -87,6 +87,8 @@ class MediaNarrative(Model):
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     ml_processed_at = models.DateTimeField(null=True, blank=True)
     is_anchor = models.BooleanField(default=False)
+    true_label = CharField(max_length=255, blank=True, null=True,
+    help_text="Human-verified ground truth strategic intent for anchor articles")
 
     class Meta:
         ordering = ['-posting_time']
