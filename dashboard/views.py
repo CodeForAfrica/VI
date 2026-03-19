@@ -609,10 +609,11 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """
-    Calculates VI score by querying the pre-calculated VulnerabilityIndex table.
-    Uses the normalized mappings to ensure country/actor names match the DB.
+    1. Normalizes input (Mappings).
+    2. Queries ContextualRisk (DB-driven scores).
+    3. Returns score and intent.
     """
-    # 1. DATA NORMALIZATION (Keep your mapping!)
+    # --- STEP 1: KEEP YOUR MAPPINGS ---
     country_mapping = {
         "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
         "ivory coast": "Côte d'Ivoire", "coteivoire": "Côte d'Ivoire",
@@ -632,27 +633,24 @@ def calculate_contextual_score(target_country, foreign_actor, intent_filter=None
     db_country = country_mapping.get(c_term, target_country)
     db_actor = actor_mapping.get(a_term, foreign_actor)
 
-    # 2. QUERY THE SCORE TABLE (VulnerabilityIndex instead of MediaNarrative)
-    try:
-        # Map intent if provided
-        query_intent = intent_filter
-        if intent_filter:
-            query_intent = map_to_canonical_intent(intent_filter)
-
-        # Get the pre-calculated final_risk score
-        record = VulnerabilityIndex.objects.get(
-            country__iexact=db_country,
-            actor__iexact=db_actor,
-            intent__iexact=query_intent
-        )
+    # --- STEP 2: DB QUERY (ContextualRisk) ---
+    query = ContextualRisk.objects.filter(
+        country__iexact=db_country, 
+        actor__iexact=db_actor
+    )
+    
+    # If the user selected an intent in the dropdown, filter by it
+    if intent_filter and intent_filter != "All":
+        query = query.filter(intent__iexact=intent_filter)
+    
+    # Get the highest risk score available for this match
+    match = query.order_by('-risk_score').first()
+    
+    if match:
+        return round(float(match.risk_score), 4), match.intent
         
-        status_label = "Verified Anchor Baseline"
-        return round(float(record.final_risk), 4), status_label
-
-    except VulnerabilityIndex.DoesNotExist:
-        return None, f"No mapping for {db_country}|{db_actor}|{intent_filter}"
-    except Exception as e:
-        return None, f"Error: {str(e)}"
+    # --- STEP 3: FALLBACK ---
+    return 0.0, "No Risk Data Found"
     
     # Helper function to normalize intent string (case-insensitive, handle common variations)
    
@@ -1059,12 +1057,41 @@ def generate_report(request):
         db_country = db_country_map.get(selected_country.lower(), selected_country.title())
 
         for actor in selected_actors:
-            # A. CSV Risk Score Logic
-            search_actor = csv_actor_map.get(actor.lower(), actor.title())
-            matching_rows = df[
-                (df['country'].str.strip() == search_country) &
-                (df['actor'].str.strip() == search_actor)
-            ]
+            # A. DATABASE Risk Score Logic (Replacing CSV)
+            db_actor = db_actor_map.get(actor.lower(), actor)
+            
+            # Query the new ContextualRisk model instead of the CSV DataFrame
+            risk_record = ContextualRisk.objects.filter(
+                country__iexact=db_country,
+                actor__iexact=db_actor
+            ).order_by('-risk_score').first()
+
+            # B. Database Chart Logic (Keep your existing chart logic here)
+            chart_qs = MediaNarrative.objects.filter(
+                target_country__iexact=db_country,
+                inferred_actor__iexact=db_actor
+            )
+            
+            # ... [Insert your existing volume_chart generation code here] ...
+
+            # C. Combine results using the DB record
+            if risk_record:
+                report_data.append({
+                    'actor': actor,
+                    'cvi_score': round(float(risk_record.risk_score), 3),
+                    'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
+                    'primary_threat': risk_record.intent,
+                    'chart': volume_chart
+                })
+            else:
+                # Fallback if no specific risk record exists in the DB
+                report_data.append({
+                    'actor': actor, 
+                    'cvi_score': 0.0, 
+                    'risk_level': "N/A",
+                    'primary_threat': "No Risk Data in DB", 
+                    'chart': volume_chart
+                })
 
             # B. Database Chart Logic for THIS specific actor
             db_actor = db_actor_map.get(actor.lower(), actor)
