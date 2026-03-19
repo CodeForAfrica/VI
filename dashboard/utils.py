@@ -1,5 +1,5 @@
 # dashboard/utils.py
-from .models import ContextualRisk
+from .models import VulnerabilityIndex
 
 # The mapping dictionary for your intents
 intent_mapping = {
