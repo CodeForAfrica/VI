@@ -60,7 +60,7 @@
                         {{ outlet_intent_chart|safe }}
                     {% else %}
                         <p class="text-muted text-center">No intent data available for {{ selected_name }}.</p>
-                    {% endif %}
+                    {% endif %} <!-- Closes {% if outlet_intent_chart %} -->
                 </div>
             </div>
         </div>
@@ -74,7 +74,7 @@
                         {{ outlet_tone_chart|safe }}
                     {% else %}
                         <p class="text-muted text-center">No tone data available for {{ selected_name }}.</p>
-                    {% endif %}
+                    {% endif %} <!-- Closes {% if outlet_tone_chart %} -->
                 </div>
             </div>
         </div>
@@ -91,7 +91,7 @@
                         {{ outlet_actor_chart|safe }}
                     {% else %}
                         <p class="text-muted text-center">No actor data available for {{ selected_name }}.</p>
-                    {% endif %}
+                    {% endif %} <!-- Closes {% if outlet_actor_chart %} -->
                 </div>
             </div>
         </div>
@@ -105,7 +105,7 @@
                         {{ outlet_country_chart|safe }}
                     {% else %}
                         <p class="text-muted text-center">No country data available for {{ selected_name }}.</p>
-                    {% endif %}
+                    {% endif %} <!-- Closes {% if outlet_country_chart %} -->
                 </div>
             </div>
         </div>
@@ -126,11 +126,9 @@
             </div>
         </div>
     </div>
-    {% endif %}
+    {% endif %} <!-- Closes {% if outlet_stats %} -->
 
-    <!-- ELSE BLOCK FOR "ALL OUTLETS" VIEW: REMOVED THE AVERAGE CONFIDENCE CHART ROW -->
-
-    {% endif %} <!-- **** ADDED: Closes {% if selected_name != "All Outlets" %} block **** -->
+    {% endif %} <!-- **** CR {% if selected_name != "All Outlets" %} block **** -->
 
     <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
