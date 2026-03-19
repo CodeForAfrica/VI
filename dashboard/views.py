@@ -616,18 +616,18 @@ def overview(request):
         )
 
     # --- STEP 4: CACHING STATS (Count only) ---
-    total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}"
+    total_articles_cache_key = f"overview_total_articles_{calc_target_country}_{calc_foreign_actor}_{calc_strategic_intent}"
     total_articles = cache.get(total_articles_cache_key)
     
     if total_articles is None:
-        logger.info(f"Cache MISS for total_articles count")
+        logger.info(f"🚀 Cache MISS for total_articles: {total_articles_cache_key}")
         total_articles = full_stats_qs.count()
         cache.set(total_articles_cache_key, total_articles, timeout=60*60)
     else:
-        logger.info(f"Cache HIT for total_articles count")
-
+        logger.info(f"🎯 Cache HIT for total_articles: {total_articles_cache_key}")
+        
     # --- STEP 5: GLOBAL STATS & AVERAGES ---
-    stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}"
+    stats_cache_key = f"overview_global_stats_{calc_target_country}_{calc_foreign_actor}_{calc_strategic_intent}"
     global_stats_cached = cache.get(stats_cache_key)
     
     if global_stats_cached is None:
