@@ -117,24 +117,6 @@ intent_mapping = {
     "diplomatic cooperation": "Economic",
     "diplomatic influence": "Sovereignty",
 }
-def map_to_canonical_intent(stored_intent_str):
-    if not stored_intent_str:
-        return "Unknown" # Or handle empty/null as needed
-
-    # Normalize the input string for comparison (lowercase, strip, handle common separators)
-    normalized_input = re.sub(r'\s+', ' ', stored_intent_str.strip().lower())
-
-    # Look for a match in the intent_mapping
-    canonical_intent = intent_mapping.get(normalized_input)
-
-    # If a match is found, return the canonical value
-    if canonical_intent:
-        return canonical_intent
-
-    # If no match found, return the original string or a default
-    # Returning the original allows for debugging if unexpected values appear
-    # Returning "Unknown" might hide new/missed intents
-    return stored_intent_str
     
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
@@ -606,81 +588,114 @@ def chatbot_response(request):
         'query': user_query
     })
         
+# =========================
+# VULNERABILITY CALCULATION (DB-DRIVEN)
+# =========================
+
+def map_to_canonical_intent(stored_intent_str, article_title=""):
+    """
+    Normalizes raw intent strings into canonical database categories.
+    Returns None if no match is found to maintain data purity.
+    """
+    if not stored_intent_str:
+        return None
+
+    normalized_input = stored_intent_str.strip().lower()
+
+    # Check match in the global intent_mapping dict
+    canonical = intent_mapping.get(normalized_input)
+    if canonical:
+        return canonical
+
+    # Recovery Logic for 'Other' using title keywords
+    # 2. Recovery Logic for 'Other' or Unmapped Intents using title keywords
+    if (normalized_input == 'other' or not canonical) and article_title:
+        title_l = article_title.lower()
+        
+        # --- Economic ---
+        if any(w in title_l for w in ['trade', 'investment', 'debt', 'economy', 'finance', 'infrastructure', 'business', 'aid', 'loan']): 
+            return "Economic"
+            
+        # --- Military Presence ---
+        if any(w in title_l for w in ['military', 'security', 'defense', 'army', 'base', 'troop', 'weapon', 'maritime', 'patrol']): 
+            return "MilitaryPresence"
+            
+        # --- Election Influence ---
+        if any(w in title_l for w in ['election', 'vote', 'policy', 'government', 'campaign', 'candidate', 'democratic', 'ballot']): 
+            return "ElectionInfluence"
+            
+        # --- Sovereignty ---
+        if any(w in title_l for w in ['sovereignty', 'border', 'territory', 'interference', 'independence', 'unilateral', 'autonomy']): 
+            return "Sovereignty"
+            
+        # --- Resource Dependency ---
+        if any(w in title_l for w in ['oil', 'gas', 'mining', 'mineral', 'gold', 'resource', 'energy', 'extract', 'commodity']): 
+            return "ResourceDependency"
+            
+        # --- Social Fragility (Includes Religious/LGBTQ focus if not explicitly mapped) ---
+        if any(w in title_l for w in ['protest', 'riot', 'unrest', 'religion', 'church', 'mosque', 'lgbt', 'rights', 'strike', 'conflict']): 
+            return "SocialFragility"
+    
+    return None
 
 def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
     """
-    Calculates contextual vulnerability score based on intent, country, and actor.
-    Uses the logic defined in contextual_all_intents_v2.py via the final_risk CSV.
+    Calculates VI score by querying the 15,313 Verified Anchors.
+    Replaces the old CSV-based lookup.
     """
-    file_path = os.path.join(os.getcwd(), 'final_risk_by_actor_intent_country.csv')
-    if not os.path.exists(file_path):
-        print(f"❌ CVI Error: CSV file not found at {file_path}")
-        return 0.5, "Unknown"
+    from django.db.models import Avg
 
-    try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        print(f"❌ CVI Error loading CSV: {e}")
-        return 0.5, "Unknown"
-
-    # 1. NORMALIZE AND MAP INPUTS (Ensures UI strings/ML outputs match CSV strings)
+    # 1. DATA NORMALIZATION (Including the "CoteIvoire" variation)
     country_mapping = {
-        "côte d'ivoire": "CoteIvoire", "cote d'ivoire": "CoteIvoire", "ivory coast": "CoteIvoire",
-        "south africa": "South Africa", "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia",
-        # Add other potential variations if needed
+        "côte d'ivoire": "Côte d'Ivoire", 
+        "cote d'ivoire": "Côte d'Ivoire", 
+        "ivory coast": "Côte d'Ivoire",
+        "coteivoire": "Côte d'Ivoire",
+        "south africa": "South Africa", 
+        "senegal": "Senegal", 
+        "drc": "DRC", 
+        "ethiopia": "Ethiopia",
     }
+    
     actor_mapping = {
-        "uae": "UAE", "china": "China", "france": "France", "us": "UnitedStates",
-        "united states": "UnitedStates", "russia": "Russia", "saudi": "Saudi",
-        "saudi arabia": "Saudi", "turkey": "Turkey", "israel": "Israel", "iran": "Iran",
-        "rwanda": "Rwanda", "nonstate": "NonState"
-        # Add other potential variations if needed
+        "uae": "UAE", "china": "China", "france": "France", "us": "United States",
+        "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia",
+        "turkey": "Turkey", "israel": "Israel", "iran": "Iran", "rwanda": "Rwanda", "us": "US",
+        "united states": "US",
     }
 
-    # Define the mapping from raw ML output (or UI input) to canonical CSV intent names
-    # These keys should match the *exact* strings output by your strategic intent model
-    # Values should match the *exact* strings in the 'intent' column of your CSV.
-    # Use the INTENT_FACTORS from contextual_all_intents_v2.py as reference for canonical names.
-    intent_mapping = {
-        # Direct matches (if ML outputs match CSV exactly)
-        "economic": "Economic",
-        "sovereignty": "Sovereignty",
-        "lgbtq": "LGBTQ",
-        "religious": "Religious",
-        "electioninfluence": "ElectionInfluence", 
-        "militarypresence": "MilitaryPresence", 
-        "resourcedependency": "ResourceDependency", 
-        "socialfragility": "SocialFragility", 
+    c_term = target_country.lower().strip() if target_country else ""
+    a_term = foreign_actor.lower().strip() if foreign_actor else ""
+    
+    # Map to DB-friendly strings, fallback to original if not in mapping
+    db_country = country_mapping.get(c_term, target_country)
+    db_actor = actor_mapping.get(a_term, foreign_actor)
 
-        # Common variations/spelling from ML model output (case-insensitive)
-        "economic dependency": "Economic",
-        "sovereignty erosion": "Sovereignty",
-        "sovereignty threat": "Sovereignty",
-        "lgbtq rights": "LGBTQ",
-        "lgbt advocacy": "LGBTQ",
-        "religious influence": "Religious",
-        "religious polarisation": "Religious",
-        "election influence": "ElectionInfluence", 
-        "election interference": "ElectionInfluence",
-        "electoral interference": "ElectionInfluence",
-        "military presence": "MilitaryPresence", 
-        "military base": "MilitaryPresence",
-        "resource dependency": "ResourceDependency", 
-        "resource control": "ResourceDependency",
-        "social fragility": "SocialFragility", 
-        "social unrest": "SocialFragility",
-        "information warfare": "SocialFragility", 
-        "human rights advocacy": "LGBTQ", 
-        "debt trap diplomacy": "Economic", 
-        "cultural influence": "SocialFragility", 
-        "centralization of power": "Sovereignty",
-        "cultural exchange": "Economic",
-        "cultural hegemony": "Sovereignty",
-        "democratic interference": "ElectionInfluence",
-        "diplomatic cooperation": "Economic",
-        "diplomatic influence": "Sovereignty",
-    }
+    # 2. BUILD THE QUERY (Using Verified Anchors)
+    qs = MediaNarrative.objects.filter(
+        target_country__iexact=db_country,
+        inferred_actor__iexact=db_actor,
+        is_anchor=True
+    )
 
+    # 3. APPLY INTENT FILTER
+    status_label = "Verified Anchor Baseline"
+    if intent_filter:
+        canonical_intent = map_to_canonical_intent(intent_filter)
+        if canonical_intent:
+            qs = qs.filter(strategic_intent=canonical_intent)
+        else:
+            return None, "Unmapped Intent"
+
+    # 4. EXECUTE AGGREGATION
+    result = qs.aggregate(avg_vi=Avg('vulnerability_index'))
+    avg_score = result['avg_vi']
+
+    if avg_score is None:
+        return None, "No Anchor Data Found"
+
+    return round(float(avg_score), 4), status_label
+    
     # Helper function to normalize intent string (case-insensitive, handle common variations)
     def normalize_intent(s):
         if not isinstance(s, str):
