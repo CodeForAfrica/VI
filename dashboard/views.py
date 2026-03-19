@@ -569,8 +569,6 @@ def overview(request):
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
 
-    temp_base_qs = MediaNarrative.objects.all()
-
     # --- CACHE KEYS FOR FILTERED QUERYSETS AND STATS ---
     # Base queryset without sports (potentially expensive to build)
     base_qs_cache_key = "overview_base_qs_no_sports"
@@ -602,48 +600,46 @@ def overview(request):
     if full_stats_qs is None:
         logger.info(f"Cache MISS for filtered_qs: {filtered_qs_cache_key}")
         # Rebuild the base queryset excluding sports AND applying target country filter
+        exclude_keywords = [
+            'football', 'soccer', 'sport', 'sports', 'match', 'game',
+            'tournament', 'championship', 'olympic', 'cricket', 'basketball',
+            'tennis', 'golf', 'athletics', 'rugby', 'boxing', 'mma', 'fight',
+            'league', 'team', 'player', 'coach', 'stadium'
+        ]
+        # Start with all articles
         temp_base_qs = MediaNarrative.objects.all()
-
-        # 2. Optimized Sports Exclusion (Prevents NULL field errors)
-        exclude_keywords = ['football', 'soccer', 'sport', 'match', 'game', 'tournament']
-        q_exclude = Q()
+        # Apply the sports exclusion
         for word in exclude_keywords:
-            # Only exclude if the field is NOT NULL and contains the word
-            q_exclude |= Q(article_text__icontains=word)
-        temp_base_qs = temp_base_qs.exclude(q_exclude)
+             temp_base_qs = temp_base_qs.exclude(article_text__icontains=word)
 
-        # 3. Flexible Country Filter
-        # This ensures we only filter if COUNTRIES has data, 
-        # and uses __in for a single database hit.
-        if COUNTRIES:
-            temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
+        # TARGET COUNTRY FILTER 
+        # Filter to only include articles for the specified target countries
+        # Use the COUNTRIES constant defined at the top of the file
+        temp_base_qs = temp_base_qs.filter(target_country__in=COUNTRIES)
        
-        # 4. Apply UI Panel Filters (Calculator)
+
+        # Apply user filters (from the calculator panel)
         if calc_target_country:
             temp_base_qs = temp_base_qs.filter(target_country__iexact=calc_target_country)
         if calc_foreign_actor:
             temp_base_qs = temp_base_qs.filter(inferred_actor__iexact=calc_foreign_actor)
 
-        # 5. CRITICAL FOR CHART: Remove articles with no date
-        full_stats_qs = temp_base_qs.exclude(posting_time__isnull=True).order_by('-posting_time')
-        
-        # DEBUG: Check your terminal/console to see this number!
-        print(f"--- DEBUG: Chart QuerySet Count: {full_stats_qs.count()} ---")
+        # Order by posting time - this is also expensive if the result set is huge
+        full_stats_qs = temp_base_qs.order_by('-posting_time')
+        # Again, DO NOT cache the full QuerySet object itself.
+        # We'll cache the results of operations performed on it.
+    else:
+        logger.info(f"Cache HIT for filtered_qs: {filtered_qs_cache_key}")
 
     # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
     if calc_target_country and calc_foreign_actor:
-        # Ensure we have a default if intent is empty
-        intent_to_search = calc_strategic_intent if calc_strategic_intent else "Economic"
-        
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country,
             calc_foreign_actor,
-            intent_to_search  # This matches the 3rd positional argument in utils.py
+            intent_filter=calc_strategic_intent
         )
+        # Filter display list to match selection actor and country selection (already done above implicitly via cache key)
     else:
-        # Defaults if no selection is made
-        cvi_score = 0.0
-        cvi_intent = "No Selection"
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
@@ -1026,27 +1022,46 @@ def generate_report(request):
                     logger.error(f"Chart error for {actor}: {e_chart}")
                     volume_chart = None
 
-            # 3. Get Risk Data from Database
+            # 3. Get Risk Data from VulnerabilityIndex (replaces ContextualRisk)
+            vi_country_map = {
+                "cote d'ivoire": "CoteIvoire",
+                "côte d'ivoire": "CoteIvoire",
+                "ivory coast": "CoteIvoire",
+                "coteivoire": "CoteIvoire",
+            }
+            vi_actor_map = {
+                "us": "UnitedStates",
+                "usa": "UnitedStates",
+                "united states": "UnitedStates",
+                "unitedstates": "UnitedStates",
+                "saudi arabia": "Saudi",
+                "saudi": "Saudi",
+            }
+
+            vi_country = vi_country_map.get(str(db_country).lower(), db_country)
+            vi_actor = vi_actor_map.get(str(db_actor).lower(), db_actor)
+
             risk_record = VulnerabilityIndex.objects.filter(
-                country__iexact=db_country,
-                actor__iexact=db_actor
-            ).order_by('-risk_score').first()
+                country__iexact=vi_country,
+                actor__iexact=vi_actor,
+            ).order_by('-final_risk').first()
 
             # 4. Append to results
             if risk_record:
+                score = float(risk_record.final_risk)
                 report_data.append({
                     'actor': actor,
-                    'cvi_score': round(float(risk_record.risk_score), 3),
-                    'risk_level': "High" if risk_record.risk_score > 0.7 else "Medium" if risk_record.risk_score > 0.4 else "Low",
+                    'cvi_score': round(score, 3),
+                    'risk_level': "High" if score > 0.7 else "Medium" if score > 0.4 else "Low",
                     'primary_threat': risk_record.intent,
                     'chart': volume_chart
                 })
             else:
                 report_data.append({
-                    'actor': actor, 
-                    'cvi_score': 0.0, 
+                    'actor': actor,
+                    'cvi_score': 0.0,
                     'risk_level': "N/A",
-                    'primary_threat': "No Data Found", 
+                    'primary_threat': "No Data Found",
                     'chart': volume_chart
                 })
 
