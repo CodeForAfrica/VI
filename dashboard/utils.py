@@ -90,48 +90,18 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
 
 # VULNERABILITY CALCULATION (DB-DRIVEN)
 
-def calculate_contextual_score(target_country, foreign_actor, intent_filter=None):
-    """
-    1. Normalizes input (Mappings).
-    2. Queries ContextualRisk (DB-driven scores).
-    3. Returns score and intent.
-    """
-    # --- STEP 1: KEEP YOUR MAPPINGS ---
-    country_mapping = {
-        "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
-        "ivory coast": "Côte d'Ivoire", "coteivoire": "Côte d'Ivoire",
-        "south africa": "South Africa", "senegal": "Senegal", 
-        "drc": "DRC", "ethiopia": "Ethiopia",
-    }
-    
-    actor_mapping = {
-        "uae": "UAE", "china": "China", "france": "France", "us": "US",
-        "united states": "US", "russia": "Russia", "saudi": "Saudi Arabia",
-        "turkey": "Turkey", "israel": "Israel", "iran": "Iran", "rwanda": "Rwanda",
-    }
-
-    c_term = target_country.lower().strip() if target_country else ""
-    a_term = foreign_actor.lower().strip() if foreign_actor else ""
-    
-    db_country = country_mapping.get(c_term, target_country)
-    db_actor = actor_mapping.get(a_term, foreign_actor)
-
-    # --- STEP 2: DB QUERY (ContextualRisk) ---
+def calculate_contextual_score(target_country, foreign_actor, strategic_intent):
+    # Query the database table we just created
     query = ContextualRisk.objects.filter(
-        country__iexact=db_country, 
-        actor__iexact=db_actor
+        country__iexact=target_country.strip(),
+        actor__iexact=foreign_actor.strip(),
+        intent__iexact=strategic_intent.strip()
     )
     
-    # If the user selected an intent in the dropdown, filter by it
-    if intent_filter and intent_filter != "All":
-        query = query.filter(intent__iexact=intent_filter)
-    
-    # Get the highest risk score available for this match
-    match = query.order_by('-risk_score').first()
+    match = query.first()
     
     if match:
-        return round(float(match.risk_score), 4), match.intent
-        
-    # --- STEP 3: FALLBACK ---
-    return 0.0, "No Risk Data Found"
+        return match.risk_score, match.intent
+    
+    return 0.0, strategic_intent
     
