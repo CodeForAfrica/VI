@@ -633,13 +633,18 @@ def overview(request):
 
     # 4. CALCULATOR LOGIC (Uses cached calculate_contextual_score)
     if calc_target_country and calc_foreign_actor:
+        # Ensure we have a default if intent is empty
+        intent_to_search = calc_strategic_intent if calc_strategic_intent else "Economic"
+        
         cvi_score, cvi_intent = calculate_contextual_score(
             calc_target_country,
             calc_foreign_actor,
-            intent_filter=calc_strategic_intent
+            intent_to_search  # This matches the 3rd positional argument in utils.py
         )
-        # Filter display list to match selection actor and country selection (already done above implicitly via cache key)
     else:
+        # Defaults if no selection is made
+        cvi_score = 0.0
+        cvi_intent = "No Selection"
         calc_target_country = ""
         calc_foreign_actor = ""
         calc_strategic_intent = ""
