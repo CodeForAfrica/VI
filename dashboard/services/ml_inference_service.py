@@ -1370,5 +1370,8 @@ class MLInferenceService:
 
 # NO GLOBAL INSTANCE — create on demand
 def get_ml_service():
-    """Get ML service instance"""
-    return MLInferenceService()
+    global _service_instance
+    if _service_instance is None:
+        # This will only run ONCE per server start
+        _service_instance = MLInferenceService()
+    return _service_instance
