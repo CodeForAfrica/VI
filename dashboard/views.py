@@ -1027,7 +1027,7 @@ def generate_report(request):
                     volume_chart = None
 
             # 3. Get Risk Data from Database
-            risk_record = ContextualRisk.objects.filter(
+            risk_record = VulnerabilityIndex.objects.filter(
                 country__iexact=db_country,
                 actor__iexact=db_actor
             ).order_by('-risk_score').first()
