@@ -90,18 +90,13 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
 
 # VULNERABILITY CALCULATION (DB-DRIVEN)
 
+from .models import VulnerabilityIndex
+
 def calculate_contextual_score(target_country, foreign_actor, strategic_intent):
-    # Query the database table we just created
-    query = ContextualRisk.objects.filter(
+    match = VulnerabilityIndex.objects.filter(
         country__iexact=target_country.strip(),
         actor__iexact=foreign_actor.strip(),
         intent__iexact=strategic_intent.strip()
-    )
-    
-    match = query.first()
-    
-    if match:
-        return match.risk_score, match.intent
-    
-    return 0.0, strategic_intent
+    ).first()
+    return (match.final_risk, match.intent) if match else (0.0, strategic_intent)
     
