@@ -934,7 +934,7 @@ def media(request):
         'selected_name': outlet_name if outlet_name else "All Outlets",
         'target_countries': COUNTRIES, 
     }
-    return render(request, 'dashboard/media.html', context)    
+    return render(request, 'media.html', context)    
     
 def generate_report(request):
     selected_country = request.GET.get('country')
