@@ -1385,11 +1385,35 @@ def generate_report(request):
 
 
 def countries(request):
-    selected_country = request.GET.get('country', '').strip()
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
+    selected_country_raw = request.GET.get('country', '').strip() # Get the raw input from the dropdown/filter
 
-    if selected_country:
-        qs = qs.filter(target_country__iexact=selected_country)
+    # *** MAP: Normalize selected_country_raw to match VulnerabilityIndex.country format ***
+    # This mapping should correspond to the exact strings in VulnerabilityIndex.country
+    VI_COUNTRY_MAP = {
+        # From MediaNarrative.target_country (or UI) -> VulnerabilityIndex.country
+        "Côte d'Ivoire": "ivory coast",
+        "Cote d'Ivoire": "ivory coast", # Without accent
+        "côte d'ivoire": "ivory coast",
+        "cote d'ivoire": "ivory coast",
+        "ivory coast": "ivory coast", # Direct match
+        "Senegal": "senegal",
+        "senegal": "senegal",
+        "DRC": "drc",
+        "Democratic Republic of Congo": "drc",
+        "drc": "drc",
+        "Ethiopia": "ethiopia",
+        "ethiopia": "ethiopia",
+        "South Africa": "south africa",
+        "south africa": "south africa",
+        # Add other mappings if needed based on your VI table content
+    }
+    # Use the mapping, defaulting to the raw input if no mapping is found
+    selected_country_for_vi = VI_COUNTRY_MAP.get(selected_country_raw, selected_country_raw.lower())
+
+    # Use selected_country_raw for MediaNarrative queries (as it should match target_country format)
+    qs = MediaNarrative.objects.all().order_by('-posting_time')
+    if selected_country_raw:
+        qs = qs.filter(target_country__iexact=selected_country_raw)
 
     # Initialize variables with placeholders to prevent NameErrors
     publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
@@ -1404,12 +1428,13 @@ def countries(request):
     # Aggregate Risk Scores from VulnerabilityIndex Table 
     # This shows the *calculated risk* per country/actor combination, not just raw article counts.
     # It uses the pre-calculated scores from the VulnerabilityIndex model.
+    # Use selected_country_for_vi for VulnerabilityIndex queries
     risk_scores_per_combo = VulnerabilityIndex.objects.all()
-    if selected_country:
-        risk_scores_per_combo = risk_scores_per_combo.filter(country__iexact=selected_country)
+    if selected_country_for_vi: # Use the mapped name for VI filtering
+        risk_scores_per_combo = risk_scores_per_combo.filter(country__iexact=selected_country_for_vi)
 
     # Chart 1: Risk Score Distribution by Country (if no specific country is selected)
-    if not selected_country:
+    if not selected_country_for_vi: # Check the mapped name for "All Countries"
         country_risk_data = risk_scores_per_combo.values('country').annotate(
             avg_risk=Avg('final_risk')
         ).order_by('-avg_risk') # Highest risk first
@@ -1428,7 +1453,8 @@ def countries(request):
                 risk_per_country_chart = fig_risk_country.to_html(full_html=False, include_plotlyjs='cdn')
 
     # Chart 2: Risk Score Distribution by Actor (for the selected country)
-    if selected_country:
+    # Use selected_country_for_vi for VI filtering and selected_country_raw for display
+    if selected_country_for_vi: # Check the mapped name for specific country
         actor_risk_data = risk_scores_per_combo.values('actor').annotate(
             avg_risk=Avg('final_risk')
         ).order_by('-avg_risk') # Highest risk first
@@ -1438,7 +1464,7 @@ def countries(request):
             if not df_risk_actor.empty:
                 fig_risk_actor = px.bar(
                     df_risk_actor, x='avg_risk', y='actor', orientation='h',
-                    title=f"Average Calculated Risk by Actor for {selected_country}",
+                    title=f"Average Calculated Risk by Actor for {selected_country_raw}", # Use raw name for display
                     labels={'avg_risk': 'Avg. Risk Score', 'actor': 'Foreign Actor'},
                     template="plotly_white"
                 )
@@ -1448,6 +1474,7 @@ def countries(request):
 
     # --- 1. Top African Countries by total articles (Original) ---
     # This remains relevant as a baseline for volume.
+    # Uses selected_country_raw (unchanged)
     top_publishers = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).values('target_country').annotate(
@@ -1472,6 +1499,7 @@ def countries(request):
 
     # --- 2. Top Foreign Actors Mentioned (Original) ---
     # Shows overall activity by actors.
+    # Uses selected_country_raw (unchanged)
     top_subjects = MediaNarrative.objects.exclude(
         inferred_actor__in=['', 'Unknown', None]
     ).values('inferred_actor').annotate(
@@ -1490,6 +1518,7 @@ def countries(request):
 
     # --- 3. Top Actor-Country Pairings (Original) ---
     # Shows the most frequent topic combinations.
+    # Uses selected_country_raw (unchanged)
     ac_pairings = MediaNarrative.objects.exclude(
         target_country__in=['', 'Unknown', None]
     ).exclude(
@@ -1510,10 +1539,11 @@ def countries(request):
 
     # *** NEW: Intent Distribution for the Selected Country ***
     # Shows what types of strategic influence topics are most prevalent for the selected country.
+    # Uses selected_country_raw (unchanged)
     intent_distribution = []
-    if selected_country:
+    if selected_country_raw: # Use raw name for MN filtering
         intent_distribution = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country
+            target_country__iexact=selected_country_raw # Use raw name for MN filtering
         ).exclude(
             strategic_intent__in=['', 'Unknown', None]
         ).values('strategic_intent').annotate(
@@ -1525,19 +1555,20 @@ def countries(request):
             if not df_intent.empty:
                 fig_intent = px.pie(
                     df_intent, values='count', names='strategic_intent',
-                    title=f"Strategic Intent Distribution for {selected_country}",
+                    title=f"Strategic Intent Distribution for {selected_country_raw}", # Use raw name for display
                     template="plotly_white"
                 )
                 # Optional: Add a legend outside the plot
                 fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-        # Volume of Articles Over Time for the Selected Country 
+    # Volume of Articles Over Time for the Selected Country 
     # Shows trends - are certain topics or actors becoming more prominent?
+    # Uses selected_country_raw (unchanged)
     volume_over_time_data = []
-    if selected_country: # <-- CORRECT INDENTATION: Align with volume_over_time_data =
+    if selected_country_raw: # Use raw name for MN filtering # <-- CORRECT INDENTATION: Align with volume_over_time_data =
         # Filter and prepare data for the chart
-        articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time')
+        articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time') # qs is already filtered by selected_country_raw
         if articles_for_country.exists():
             # 1. Correctly assign the DataFrame
             df_time = pd.DataFrame(articles_for_country)
@@ -1553,7 +1584,7 @@ def countries(request):
                     daily_counts,
                     x='date',
                     y='count',
-                    title=f"Daily Article Volume for {selected_country}",
+                    title=f"Daily Article Volume for {selected_country_raw}", # Use raw name for display
                     labels={'count': 'Number of Articles', 'date': 'Date'},
                     template="plotly_white"
                 ) 
@@ -1564,17 +1595,20 @@ def countries(request):
                 ) 
                 # 7. Convert figure to HTML
                 volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn')
+
     # Additional Stats for Selected Country 
+    # Uses selected_country_raw (unchanged)
     country_stats = None
-    if selected_country:
-        country_stats = qs.aggregate(
+    if selected_country_raw: # Use raw name for MN filtering
+        country_stats = qs.aggregate( # qs is already filtered by selected_country_raw
             total_articles=Count('id'),
             avg_confidence=Avg('confidence'), # Average confidence of predictions
             # Potentially avg tone score if applicable
         )
 
     # Sample articles (limit for display)
-    sample_articles = qs[:10]
+    # Uses selected_country_raw (unchanged)
+    sample_articles = qs[:10] # qs is already filtered by selected_country_raw
 
     context = {
         'publisher_chart': publisher_chart,
@@ -1582,17 +1616,17 @@ def countries(request):
         'actor_country_chart': actor_country_chart,
     
         'risk_per_country_chart': risk_per_country_chart,
-        'risk_per_actor_chart': risk_per_actor_chart,
+        'risk_per_actor_chart': risk_per_actor_chart, # This should now show data if VI has it for the mapped country
         'intent_distribution_chart': intent_distribution_chart,
         'volume_over_time_chart': volume_over_time_chart,
         'sample_articles': sample_articles,
-        'selected_country': selected_country or "All Countries",
+        # Pass the RAW name for display in the template
+        'selected_country': selected_country_raw or "All Countries", 
         'african_countries': COUNTRIES,
         
         'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
-
 
 def authors(request):
     # 1. Capture the selected journalist name from URL
