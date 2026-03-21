@@ -1413,7 +1413,7 @@ def countries(request):
 
     # 4. Query MediaNarrative using the raw selected country name
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if selected_country_raw:
+    if selected_country_raw: # Use raw name for MediaNarrative filtering
         qs = qs.filter(target_country__iexact=selected_country_raw)
 
     # Initialize variables with placeholders to prevent NameErrors
@@ -1513,8 +1513,8 @@ def countries(request):
         if not df_sub.empty:
             df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
             df_sub = df_sub.sort_values('Mentions', ascending=True)
-            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white") # <-- CORRECTED LINE: Use correct template name
-            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside') # <-- MOVED: This is a method call on the figure object
+            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white")
+            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
             fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
@@ -1568,7 +1568,7 @@ def countries(request):
     # Shows trends - are certain topics or actors becoming more prominent?
     # Uses selected_country_raw (unchanged)
     volume_over_time_data = []
-    if selected_country_raw: # Use raw name for MN filtering 
+    if selected_country_raw: # Use raw name for MN filtering # <-- CORRECT INDENTATION: Align with volume_over_time_data =
         # Filter and prepare data for the chart
         articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time') # qs is already filtered by selected_country_raw
         if articles_for_country.exists():
