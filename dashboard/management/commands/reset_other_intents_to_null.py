@@ -1,4 +1,5 @@
 # dashboard/management/commands/reset_other_intents_to_null.py
+# dashboard/management/commands/reset_other_intents_to_null.py
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from dashboard.models import MediaNarrative
@@ -22,7 +23,9 @@ class Command(BaseCommand):
 
         # Find all articles where strategic_intent is literally 'Other'
         # Get IDs first to avoid issues with updating while iterating a filtered queryset
-        ids_to_update = list(MediaNarrative.objects.filter(strategic_intent='Other').values_list('id', total = len(ids_to_update)
+        ids_to_update = list(MediaNarrative.objects.filter(strategic_intent='Other').values_list('id', flat=True)) # Fixed: Added flat=True and closed parenthesis
+
+        total = len(ids_to_update)
         self.stdout.write(self.style.SUCCESS(f"Found {total} articles with strategic_intent = 'Other' to reset to NULL."))
 
         if total == 0:
