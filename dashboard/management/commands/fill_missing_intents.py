@@ -91,14 +91,13 @@ class Command(BaseCommand):
                 raw_intent = inference_result.get('strategic_intent', 'Unknown') # Get raw intent from result dict, default to 'Unknown'
                 canonical_intent = map_to_canonical_intent(raw_intent) # Apply the mapping function
 
-                # Update the article object in memory
+                # Update the article object in memory with the results from the inference
                 article.strategic_intent = canonical_intent # Save the canonical form
                 article.confidence = inference_result.get('confidence', 0.0) # Update confidence from result dict
-                # Update other fields if the inference service provides them (e.g., tone)
-                article.tone = inference_result.get('tone', 'Factual') # Example: update tone
-                # Add other fields as needed, e.g., inferred_actor, target_country if you want to overwrite them
-                # article.inferred_actor = inference_result.get('inferred_actor', 'Unknown')
-                # article.target_country = inference_result.get('target_country', 'Unknown')
+                article.tone = inference_result.get('tone', 'Factual') # Update tone from result dict
+                # Optionally update other fields like inferred_actor, target_country if needed
+                # article.inferred_actor = inference_result.get('inferred_actor', article.inferred_actor) # Keep original if not found
+                # article.target_country = inference_result.get('target_country', article.target_country) # Keep original if not found
 
                 results_to_update.append(article)
                 processed_count += 1
@@ -142,12 +141,12 @@ class Command(BaseCommand):
             # Use bulk_update to efficiently save all changes
             # Chunked save might be needed for very large datasets, but bulk_update often handles this well internally
             chunk_size = 1000
-            for j in range(0, len(results_to_update), chunk_size):
+            for j in range(0, len(results_to):
                 chunk = results_to_update[j : j + chunk_size]
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
-                    # Include 'tone' if you updated it above
-                    fields_toategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
+                    # Include 'tone' and 'confidence' if you updated them above
+                    fields_to_update = ['strategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
                     MediaNarrative.objects.bulk_update(
                         chunk,
                         fields_to_update,
