@@ -321,24 +321,117 @@ class DisinfoAnalysisChatbot:
         
     def get_context_from_db(self, query):
         """Generate clean, readable context for AI - NO formatting errors!"""
-        from django.db.models import Count
-        
+        from django.db.models import Count # Import moved here
         query_lower = query.lower()
+    
+        # ... (existing country_mapping, actor_mapping, intent_mapping dictionaries) ...
+        # Example values (adjust based on your actual file):
         country_mapping = {
-            "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", 
-            "ivory coast": "Côte d'Ivoire", "south africa": "South Africa", 
+            "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
+            "ivory coast": "Côte d'Ivoire", "south africa": "South Africa",
             "senegal": "Senegal", "drc": "DRC", "ethiopia": "Ethiopia"
         }
         actor_mapping = {
             "uae": "UAE", "china": "China", "france": "France", "us": "United States",
             "united states": "United States", "russia": "Russia", "saudi": "Saudi Arabia"
         }
+        # Define intent_mapping if not already defined in the class scope
+        # intent_mapping = { ... } # As defined elsewhere
     
+        # Determine target country from query
+        target_country = None
+        # Use the class attributes (defined in __init__ or as class vars)
+        for key, value in self.country_mapping.items(): # <--- Use self.
+            if key in query_lower:
+                target_country = value
+                break
+
+        # Determine foreign actor from query
+        foreign_actor = None
+        # Use the class attributes (defined in __init__ or as class vars)
+        for key, value in self.actor_mapping.items(): # <--- Use self.
+            if key in query_lower:
+                foreign_actor = value
+                break
+
+        # Determine intent from query (simplified mapping)
+        intent = None
+        # Use the class attributes (defined in __init__ or as class vars)
+        for key, value in self.intent_mapping.items(): # <--- Use self.
+            if key in query_lower:
+                intent = value
+                break
+                
+        # Build context based on detected elements
         context_parts = []
-        found_countries = [country_mapping.get(key) for key in country_mapping if key in query_lower]
-        found_actors = [actor_mapping.get(key) for key in actor_mapping if key in query_lower]
-        found_countries = [c for c in found_countries if c]  # Remove None
-        found_actors = [a for a in found_actors if a]        # Remove None
+    
+        # 1. General Statistics (Always included if no specific filters)
+        if not target_country and not foreign_actor and not intent:
+            total_articles = MediaNarrative.objects.count()
+            context_parts.append(f"DATABASE OVERVIEW: Total articles analyzed: {total_articles}. "
+                                 f"Monitored countries: {list(country_mapping.values())}. "
+                                 f"Monitored foreign actors: {list(actor_mapping.values())}. "
+                                 f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility.")
+    
+        # 2. Filtered Statistics based on detected query terms
+        base_query = MediaNarrative.objects.all()
+    
+        if target_country:
+            base_query = base_query.filter(target_country__iexact=target_country)
+            context_parts.append(f"TARGET COUNTRY: {target_country}.")
+            # Add specific stats for this country if needed
+    
+        if foreign_actor:
+            base_query = base_query.filter(inferred_actor__iexact=foreign_actor)
+            context_parts.append(f"FOREIGN ACTOR: {foreign_actor}.")
+            # Add specific stats for this actor if needed
+    
+        if intent:
+            base_query = base_query.filter(strategic_intent__iexact=intent)
+            context_parts.append(f"STRATEGIC INTENT: {intent}.")
+            # Add specific stats for this intent if needed
+    
+        # Add counts or summaries based on the filtered query
+        filtered_count = base_query.count()
+        context_parts.append(f"FILTERED ARTICLE COUNT: {filtered_count}.")
+    
+        # Example: Top intents for the target country (only if target_country is specified and intent is not already specified)
+        if target_country and not intent:
+            top_intents = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(c=Count('id')).order_by('-c')[:3]
+            top_intent_list = [f"{item['strategic_intent']} ({item['c']})" for item in top_intents]
+            if top_intent_list:
+                context_parts.append(f"TOP INTENTS FOR {target_country}: {', '.join(top_intent_list)}.")
+    
+        # Example: Top actors for the target country (only if target_country is specified and foreign_actor is not already specified)
+        if target_country and not foreign_actor:
+            top_actors = base_query.exclude(inferred_actor__in=['', None]).values('inferred_actor').annotate(c=Count('id')).order_by('-c')[:3]
+            top_actor_list = [f"{item['inferred_actor']} ({item['c']})" for item in top_actors]
+            if top_actor_list:
+                context_parts.append(f"TOP ACTORS FOR {target_country}: {', '.join(top_actor_list)}.")
+    
+        # Example: Top countries for the foreign actor (only if foreign_actor is specified and target_country is not already specified)
+        if foreign_actor and not target_country:
+            top_countries = base_query.exclude(target_country__in=['', None]).values('target_country').annotate(c=Count('id')).order_by('-c')[:3]
+            top_country_list = [f"{item['target_country']} ({item['c']})" for item in top_countries]
+            if top_country_list:
+                context_parts.append(f"TOP TARGET COUNTRIES FOR {foreign_actor}: {', '.join(top_country_list)}.")
+    
+        # *** ADD THIS BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
+        # This addresses the specific query "What are the key narratives around Senegal and France?"
+        if target_country and foreign_actor:
+            # Find top strategic intents for this specific country-actor combination
+            narrative_combinations = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
+            narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
+            if narrative_list:
+                context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}.")
+            else:
+                # Even if no specific narratives are found for the combo, report the count
+                context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5.")
+    
+    
+        # Combine all parts
+        context = " ".join(context_parts)
+        return context if context.strip() else "No specific data found for the query terms in the database."
     
         def safe_article_line(article):
             """Safe line builder - fetches VI from the new table based on article metadata"""
@@ -1724,7 +1817,7 @@ def authors(request):
             journalist_stats = MediaNarrative.objects.filter(journalist_fk=selected_journalist).aggregate(
                 total_articles=Count('id'),
                 # avg_vulnerability=Avg('vulnerability_index'), # REMOVED - VI not calculated per article contextually here
-                #avg_confidence=Avg('confidence'),
+                avg_confidence=Avg('confidence'),
                 # Potentially get most common intents/countries/actors via separate queries
             )
             # Get most common intents
