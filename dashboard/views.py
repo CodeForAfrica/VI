@@ -1390,11 +1390,13 @@ def countries(request):
     # 2. Define the mapping from MediaNarrative.target_country format to VulnerabilityIndex.country format
     VI_COUNTRY_MAP = {
         # From MediaNarrative.target_country (or UI) -> VulnerabilityIndex.country
-        "Côte d'Ivoire": "ivory coast",
+        "CoteIvoire": "Ivory Coast",
         "Cote d'Ivoire": "ivory coast", # Without accent
         "côte d'ivoire": "ivory coast",
         "cote d'ivoire": "ivory coast",
-        "ivory coast": "ivory coast", # Direct match
+        "ivory coast": "ivory coast", 
+        "ivory coast": "CoteIvoire",    # ✅ Key fix!
+        "Ivory Coast": "CoteIvoire",# Direct match
         "Senegal": "senegal",
         "senegal": "senegal",
         "DRC": "drc",
