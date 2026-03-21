@@ -1200,7 +1200,9 @@ class MLInferenceService:
 
         try:
             # 1. STRATEGIC INTENT
-            strategic_intent, si_confidence = self.perform_strategic_intent_inference(processed_text)
+            final_intent, final_confidence, vi_score_from_method, prediction_source, llm_notes = self.perform_strategic_intent_inference(processed_text)
+            strategic_intent = final_intent
+            si_confidence = final_confidence
             
             # 2. TONE
             tone, tone_confidence = self.perform_tone_inference(processed_text)
