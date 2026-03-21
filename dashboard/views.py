@@ -1542,28 +1542,49 @@ def countries(request):
     # *** NEW: Intent Distribution for the Selected Country ***
     # Shows what types of strategic influence topics are most prevalent for the selected country.
     # Uses selected_country_raw (unchanged)
+    #intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>" # Ensure it's initialized
     intent_distribution = []
-    if selected_country_raw: # Use raw name for MN filtering
-        intent_distribution = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country_raw # Use raw name for MN filtering
+    if selected_country_raw: 
+        # Fetch the raw intent counts for the selected country
+        raw_intent_counts = MediaNarrative.objects.filter(
+            target_country__iexact=selected_country_raw # <-- CORRECT: Use selected_country_raw for MN filtering
         ).exclude(
             strategic_intent__in=['', 'Unknown', None]
         ).values('strategic_intent').annotate(
             count=Count('id')
         ).order_by('-count')
-
-        if intent_distribution.exists():
-            df_intent = pd.DataFrame(list(intent_distribution))
+    
+        # Create a dictionary to hold canonical intent counts
+        canonical_intent_counts = {}
+        for item in raw_intent_counts:
+            raw_intent = item['strategic_intent']
+            count = item['count']
+            # Map the raw intent to its canonical form
+            canonical_intent = map_to_canonical_intent(raw_intent)
+            # Add the count to the canonical intent bucket
+            if canonical_intent in canonical_intent_counts:
+                canonical_intent_counts[canonical_intent] += count
+            else:
+                canonical_intent_counts[canonical_intent] = count
+    
+        # Convert the dictionary back to a list of dictionaries for the DataFrame
+        processed_intent_data = [{'strategic_intent': k, 'count': v} for k, v in canonical_intent_counts.items()]
+    
+        # Sort the processed data by count descending
+        processed_intent_data.sort(key=lambda x: x['count'], reverse=True)
+    
+        if processed_intent_data:
+            df_intent = pd.DataFrame(processed_intent_data)
             if not df_intent.empty:
                 fig_intent = px.pie(
-                    df_intent, values='count', names='strategic_intent',
-                    title=f"Strategic Intent Distribution for {selected_country_raw}", # Use raw name for display
+                    df_intent, values='count', names='strategic_intent', # 'names' is now canonical
+                    title=f"Strategic Intent Distribution for {selected_country_raw}", # <-- CORRECT: Use selected_country_raw for display
                     template="plotly_white"
                 )
                 # Optional: Add a legend outside the plot
                 fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
-
+                
     # Volume of Articles Over Time for the Selected Country
     # Shows trends - are certain topics or actors becoming more prominent?
     # Uses selected_country_raw (unchanged)
