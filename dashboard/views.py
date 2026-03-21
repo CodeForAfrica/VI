@@ -1389,24 +1389,22 @@ def countries(request):
 
     # 2. Define the mapping from MediaNarrative.target_country format to VulnerabilityIndex.country format
     VI_COUNTRY_MAP = {
-        # From MediaNarrative.target_country (or UI) -> VulnerabilityIndex.country
-        "CoteIvoire": "Ivory Coast",
-        "Cote d'Ivoire": "ivory coast", # Without accent
-        "côte d'ivoire": "ivory coast",
-        "cote d'ivoire": "ivory coast",
-        "ivory coast": "ivory coast", 
-        "ivory coast": "CoteIvoire",    # ✅ Key fix!
-        "Ivory Coast": "CoteIvoire",# Direct match
-        "Senegal": "senegal",
-        "senegal": "senegal",
-        "DRC": "drc",
-        "Democratic Republic of Congo": "drc",
-        "drc": "drc",
-        "Ethiopia": "ethiopia",
-        "ethiopia": "ethiopia",
-        "South Africa": "south africa",
-        "south africa": "south africa",
-        # Add other mappings if needed based on your VI table content
+        # From MediaNarrative.target_country -> VulnerabilityIndex.country
+        "Côte d'Ivoire": "CoteIvoire", 
+        "Cote d'Ivoire": "CoteIvoire", # Without ô accent, with space and apostrophe -> CoteIvoire
+        "côte d'ivoire": "CoteIvoire", # Lowercase with ô -> CoteIvoire
+        "cote d'ivoire": "CoteIvoire", # Lowercase without ô -> CoteIvoire
+        "ivory coast": "CoteIvoire", # Alternative mapping if someone types/sends "ivory coast" -> CoteIvoire
+        "Ivory Coast": "CoteIvoire", # Capitalized alternative -> CoteIvoire
+        "Senegal": "Senegal", # Assuming these match, adjust if VI format differs
+        "senegal": "Senegal",
+        "DRC": "DRC",
+        "drc": "DRC",
+        "Ethiopia": "Ethiopia",
+        "ethiopia": "Ethiopia",
+        "South Africa": "SouthAfrica", # Check VI table for exact format, might be "South Africa" or "southafrica"
+        "south africa": "SouthAfrica",
+        # Add other mappings based on the exact values found in VulnerabilityIndex.country
     }
 
     # 3. Get the mapped country name for VulnerabilityIndex queries
