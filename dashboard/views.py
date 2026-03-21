@@ -1385,8 +1385,10 @@ def generate_report(request):
 
 
 def countries(request):
-    selected_country = request.GET.get('country', '').strip() 
+    # 1. Get the raw selected country from the request
+    selected_country_raw = request.GET.get('country', '').strip()
 
+    # 2. Define the mapping from MediaNarrative.target_country format to VulnerabilityIndex.country format
     VI_COUNTRY_MAP = {
         # From MediaNarrative.target_country (or UI) -> VulnerabilityIndex.country
         "Côte d'Ivoire": "ivory coast",
@@ -1405,13 +1407,15 @@ def countries(request):
         "south africa": "south africa",
         # Add other mappings if needed based on your VI table content
     }
-    # Use the mapping, defaulting to the raw input if no mapping is found
-    selected_country_for_vi = VI_COUNTRY_MAP.get(selected_country, selected_country.lower())  # ← Mapped name for VI table
 
-    # Use selected_country_raw for MediaNarrative queries (as it should match target_country format)
+    # 3. Get the mapped country name for VulnerabilityIndex queries
+    # Use the mapping, defaulting to the raw input lowercased if no mapping is found
+    selected_country_for_vi = VI_COUNTRY_MAP.get(selected_country_raw, selected_country_raw.lower())
+
+    # 4. Query MediaNarrative using the raw selected country name
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if selected_country:
-        qs = qs.filter(target_country__iexact=selected_country)
+    if selected_country_raw:
+        qs = qs.filter(target_country__iexact=selected_country_raw)
 
     # Initialize variables with placeholders to prevent NameErrors
     publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
@@ -1423,15 +1427,16 @@ def countries(request):
     intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>"
     volume_over_time_chart = "<p class='text-center py-5 text-muted'>No volume data available</p>"
 
-    # Aggregate Risk Scores from VulnerabilityIndex Table 
+    # 5. Aggregate Risk Scores from VulnerabilityIndex Table
     # This shows the *calculated risk* per country/actor combination, not just raw article counts.
     # It uses the pre-calculated scores from the VulnerabilityIndex model.
-    # Use selected_country_for_vi for VulnerabilityIndex queries
+    # Use the MAPPED name for VulnerabilityIndex queries
     risk_scores_per_combo = VulnerabilityIndex.objects.all()
-    if selected_country_for_vi:  # ← Use the mapped name
+    if selected_country_for_vi: # Use the mapped name
         risk_scores_per_combo = risk_scores_per_combo.filter(country__iexact=selected_country_for_vi)
 
-    # Chart 1: Risk Score Distribution by Country (if no specific country is selected)
+    # Chart 1: Risk Score Distribution by Country (if no specific country is selected via VI mapping)
+    # Use the MAPPED name for VulnerabilityIndex queries
     if not selected_country_for_vi: # Check the mapped name for "All Countries"
         country_risk_data = risk_scores_per_combo.values('country').annotate(
             avg_risk=Avg('final_risk')
@@ -1450,8 +1455,8 @@ def countries(request):
                 fig_risk_country.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 risk_per_country_chart = fig_risk_country.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Chart 2: Risk Score Distribution by Actor (for the selected country)
-    # Use selected_country_for_vi for VI filtering and selected_country_raw for display
+    # Chart 2: Risk Score Distribution by Actor (for the selected country via VI mapping)
+    # Use the MAPPED name for VulnerabilityIndex queries and the RAW name for display
     if selected_country_for_vi: # Check the mapped name for specific country
         actor_risk_data = risk_scores_per_combo.values('actor').annotate(
             avg_risk=Avg('final_risk')
@@ -1470,7 +1475,7 @@ def countries(request):
                 fig_risk_actor.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 risk_per_actor_chart = fig_risk_actor.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 1. Top African Countries by total articles (Original) ---
+    # --- 1. Top African Countries by total articles ---
     # This remains relevant as a baseline for volume.
     # Uses selected_country_raw (unchanged)
     top_publishers = MediaNarrative.objects.exclude(
@@ -1495,7 +1500,7 @@ def countries(request):
             fig.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
             publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 2. Top Foreign Actors Mentioned (Original) ---
+    # --- 2. Top Foreign Actors Mentioned  ---
     # Shows overall activity by actors.
     # Uses selected_country_raw (unchanged)
     top_subjects = MediaNarrative.objects.exclude(
@@ -1514,7 +1519,7 @@ def countries(request):
             fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 3. Top Actor-Country Pairings (Original) ---
+    # --- 3. Top Actor-Country Pairings ---
     # Shows the most frequent topic combinations.
     # Uses selected_country_raw (unchanged)
     ac_pairings = MediaNarrative.objects.exclude(
@@ -1536,7 +1541,7 @@ def countries(request):
             actor_country_chart = fig_ac.to_html(full_html=False, include_plotlyjs='cdn')
 
     # *** NEW: Intent Distribution for the Selected Country ***
-    # Shows what types of strategic influence topics are most prevalent for the selected country.
+ types of strategic influence topics are most prevalent for the selected country.
     # Uses selected_country_raw (unchanged)
     intent_distribution = []
     if selected_country_raw: # Use raw name for MN filtering
@@ -1560,7 +1565,7 @@ def countries(request):
                 fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Volume of Articles Over Time for the Selected Country 
+    # Volume of Articles Over Time for the Selected Country
     # Shows trends - are certain topics or actors becoming more prominent?
     # Uses selected_country_raw (unchanged)
     volume_over_time_data = []
@@ -1585,16 +1590,16 @@ def countries(request):
                     title=f"Daily Article Volume for {selected_country_raw}", # Use raw name for display
                     labels={'count': 'Number of Articles', 'date': 'Date'},
                     template="plotly_white"
-                ) 
+                )
                 # 6. Update the layout, ensuring parentheses match for update_layout and margin
                 fig_time.update_layout(
                     height=400,
-                    margin=dict(l=20, r=20, t=40, b=20) 
-                ) 
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
                 # 7. Convert figure to HTML
                 volume_over_time_chart = fig_time.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # Additional Stats for Selected Country 
+    # Additional Stats for Selected Country
     # Uses selected_country_raw (unchanged)
     country_stats = None
     if selected_country_raw: # Use raw name for MN filtering
@@ -1612,16 +1617,16 @@ def countries(request):
         'publisher_chart': publisher_chart,
         'subject_chart': subject_chart,
         'actor_country_chart': actor_country_chart,
-    
+
         'risk_per_country_chart': risk_per_country_chart,
         'risk_per_actor_chart': risk_per_actor_chart, # This should now show data if VI has it for the mapped country
         'intent_distribution_chart': intent_distribution_chart,
         'volume_over_time_chart': volume_over_time_chart,
         'sample_articles': sample_articles,
         # Pass the RAW name for display in the template
-        'selected_country': selected_country_raw or "All Countries", 
+        'selected_country': selected_country_raw or "All Countries",
         'african_countries': COUNTRIES,
-        
+
         'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
