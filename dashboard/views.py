@@ -33,7 +33,6 @@ import plotly.graph_objects as go
 import os
 import re
 import io
-import pandas as pd
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
@@ -879,7 +878,6 @@ def media(request):
     # Generate the main chart HTML using the top_outlets data
     if top_outlets:
         # Convert the QuerySet (list of dicts) to a Pandas DataFrame
-        import pandas as pd
         df = pd.DataFrame(list(top_outlets))
 
         if not df.empty and len(df) > 0: # Double-check DataFrame is not empty
@@ -1697,8 +1695,7 @@ def authors(request):
             # *** OPTIONAL: Generate Mini Chart for Selected Journalist ***
             # Example: Pie chart for intent distribution
             if common_intents: # Check if the list is not empty
-                import plotly.express as px # Ensure imported
-                import pandas as pd
+                
                 df_intent = pd.DataFrame(common_intents) # Use the data calculated above
                 if not df_intent.empty:
                     fig_intent = px.pie(df_intent, values='count', names='strategic_intent', title=f"Focus Areas for {selected_journalist.name}")
