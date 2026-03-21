@@ -10,7 +10,7 @@ from dashboard.utils import map_to_canonical_intent # Import the mapping functio
 from django.db.models import Q # Import Q for complex queries
 
 class Command(BaseCommand):
-    help = 'Runs ML inference to MediaNarrative'
+    help = 'Runs ML inference to fill missing strategic_intent values in MediaNarrative'
 
     def add_arguments(self, parser):
         # Optional argument to specify number of articles to process (for testing)
@@ -134,8 +134,8 @@ class Command(BaseCommand):
         if results_to_update:
             self.stdout.write(self.style.SUCCESS(f"🏁 Inference complete. Syncing {len(results_to_update)} articles to the database..."))
             
-            # Final CSV save
-            if backup_
+            # Final CSV save (CORRECTED)
+            if backup_data: # <-- CORRECTED: Check if backup_data list is not empty
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
 
@@ -147,7 +147,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
                     # Include 'tone' if you updated it above
-                    fields_to_update = ['strategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
+                    fields_toategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
                     MediaNarrative.objects.bulk_update(
                         chunk,
                         fields_to_update,
