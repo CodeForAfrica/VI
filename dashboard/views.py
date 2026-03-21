@@ -1614,12 +1614,10 @@ def authors(request):
             articles__isnull=False # Only journalists with linked articles
         ).annotate(
             article_count=Count('articles'),
-            # avg_strategic_confidence=Avg('articles__confidence'), # Assuming confidence relates to strategic intent
-            # avg_vulnerability_index=Avg('articles__vulnerability_index'), # REMOVED - VI not calculated per article contextually here
+            avg_strategic_confidence=Avg('articles__confidence'), # 
             # Add other averages like avg_tone_score if applicable
-        ).filter(article_count__gt=0).order_by('-article_count', '-avg_strategic_confidence')[:10] # Order by article count first, then potentially by avg confidence
-
-        # Generate the Plotly Chart HTML - Adapted for article count focus
+        ).filter(article_count__gt=0).order_by('-avg_strategic_confidence', '-article_count')[:10] # Order by avg confidence first, then count
+                # Generate the Plotly Chart HTML - Adapted for article count focus
         authors_chart = None
         if top_journalists:
             df = pd.DataFrame(list(top_journalists.values(
