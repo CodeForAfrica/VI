@@ -7,9 +7,10 @@ from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
 # Use the mapping logic from utils (assuming map_to_canonical_intent is the correct function name)
 from dashboard.utils import map_to_canonical_intent # Import the mapping function
+from django.db.models import Q # Import Q for complex queries
 
 class Command(BaseCommand):
-    help = 'Runs ML inference to fill missing strategic_intent values in MediaNarrative'
+    help = 'Runs ML inference to MediaNarrative'
 
     def add_arguments(self, parser):
         # Optional argument to specify number of articles to process (for testing)
@@ -33,8 +34,9 @@ class Command(BaseCommand):
         ml_service = get_ml_service() 
 
         # Build the queryset to find articles with missing strategic_intent
+        # NOW CHECKS FOR BOTH NULL AND EMPTY STRING
         articles_query = MediaNarrative.objects.filter(
-            strategic_intent__isnull=True # Checks for NULL
+            Q(strategic_intent__isnull=True) | Q(strategic_intent='') # Checks for NULL or empty string
         ).exclude(
             article_text__isnull=True # Exclude if article_text is NULL too
         ).exclude(
@@ -75,10 +77,9 @@ class Command(BaseCommand):
         
         for i, article in enumerate(articles_query):
             try:
-                # Run inference on the article text
-                # The exact method call depends on your MLInferenceService implementation
-                # Assume it returns a dictionary like {'intent': '...', 'confidence': 0.XX, 'tone': '...'}
-                inference_result = ml_service.predict_intent(article.article_text) # Replace 'predict_intent' with the actual method name
+                # Run inference on the article text using the CORRECT method
+                # perform_inference returns a dictionary
+                inference_result = ml_service.perform_inference(article.article_text) # <-- USE perform_inference
 
                 if i % 10 == 0: # Print progress every 10 articles
                     elapsed = time.time() - start_time
@@ -87,15 +88,17 @@ class Command(BaseCommand):
                     self.stdout.write(f"🔍 ID: {article.id} | Progress: {i+1}/{total} | Est. Remaining: {remaining/60:.1f} mins")
 
                 # Extract raw prediction and apply canonical mapping
-                raw_intent = inference_result.get('intent', 'Unknown') # Get raw intent, default to 'Unknown'
+                raw_intent = inference_result.get('strategic_intent', 'Unknown') # Get raw intent from result dict, default to 'Unknown'
                 canonical_intent = map_to_canonical_intent(raw_intent) # Apply the mapping function
 
                 # Update the article object in memory
                 article.strategic_intent = canonical_intent # Save the canonical form
-                article.confidence = inference_result.get('confidence', 0.0) # Update confidence if available
+                article.confidence = inference_result.get('confidence', 0.0) # Update confidence from result dict
                 # Update other fields if the inference service provides them (e.g., tone)
-                # article.tone = inference_result.get('tone', 'Neutral') # Example
-                # Add other fields as needed
+                article.tone = inference_result.get('tone', 'Factual') # Example: update tone
+                # Add other fields as needed, e.g., inferred_actor, target_country if you want to overwrite them
+                # article.inferred_actor = inference_result.get('inferred_actor', 'Unknown')
+                # article.target_country = inference_result.get('target_country', 'Unknown')
 
                 results_to_update.append(article)
                 processed_count += 1
@@ -106,6 +109,7 @@ class Command(BaseCommand):
                     'raw_intent': raw_intent,
                     'canonical_intent': canonical_intent,
                     'confidence': article.confidence,
+                    'tone': article.tone, # Add tone to backup if updated
                     'status': 'SUCCESS'
                 })
 
@@ -131,7 +135,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"🏁 Inference complete. Syncing {len(results_to_update)} articles to the database..."))
             
             # Final CSV save
-            if backup_data:
+            if backup_
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
 
@@ -142,9 +146,11 @@ class Command(BaseCommand):
                 chunk = results_to_update[j : j + chunk_size]
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
+                    # Include 'tone' if you updated it above
+                    fields_to_update = ['strategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
                     MediaNarrative.objects.bulk_update(
-                        chunk, 
-                        ['strategic_intent', 'confidence'], # Add other fields updated above if any, e.g., 'tone'
+                        chunk,
+                        fields_to_update,
                         batch_size=chunk_size # Use batch_size argument of bulk_update
                     )
                 self.stdout.write(f"✅ Synced chunk {j//chunk_size + 1} ({len(chunk)} articles)")
