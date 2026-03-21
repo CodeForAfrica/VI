@@ -1544,7 +1544,8 @@ def countries(request):
         "ethiopia": "Ethiopia",
         "South Africa": "SouthAfrica", # Check VI table for exact format, might be "South Africa" or "southafrica"
         "south africa": "SouthAfrica",
-        # Add other mappings based on the exact values found in VulnerabilityIndex.country
+        "South Africa": "South Africa",
+        "south africa": "South Africa",
     }
 
     # 3. Get the mapped country name for VulnerabilityIndex queries
