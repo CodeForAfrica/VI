@@ -444,7 +444,7 @@ class MLInferenceService:
         groq_api_key = getattr(settings, 'GROQ_API_KEY', '')
         if not groq_api_key:
             return "unknown", 0.0, "API key missing"
-
+    
         try:
             client = Groq(api_key=groq_api_key)
             system_msg = (
@@ -461,48 +461,80 @@ class MLInferenceService:
                 ],
                 temperature=0.0 
             )
-
+    
             raw_content = response.choices[0].message.content.strip()
             
-            # 1. Extract all JSON-like blocks
+            # 1. Extract all JSON-like blocks using regex
             json_blocks = re.findall(r'\{.*?\}', raw_content, re.DOTALL)
             
             if not json_blocks:
-                clean_text = re.sub(r'```json|```', '', raw_content).strip()
-                js = json.loads(clean_text)
-            else:
-                last_block = json_blocks[-1]
+                # No {...} blocks found, try parsing the raw content directly after cleaning
+                clean_content = re.sub(r'```json|```', '', raw_content).strip()
                 try:
-                    js = json.loads(last_block)
+                    js = json.loads(clean_content) # <--- FIXED: Use 'clean_content'
                 except json.JSONDecodeError:
-                    # Attempt silent fix for unescaped quotes
+                    # If direct parsing fails, move to recovery strategies
                     try:
-                        fixed_block = re.sub(r'(?<!\\)"', r'\"', last_block) 
-                        fixed_block = fixed_block.replace('\"strategic_intent\"', '"strategic_intent"')
-                        fixed_block = fixed_block.replace('\"strategic_intent_conf\"', '"strategic_intent_conf"')
-                        fixed_block = fixed_block.replace('\"notes\"', '"notes"')
+                        # 2. Use GREEDY matching to find the outermost brackets { ... }
+                        # This avoids cutting off if '}' appears inside the "notes" field.
+                        match = re.search(r'(\{.*\})', raw_content, re.DOTALL)
+                        if match:
+                            js = json.loads(match.group(1))
+                        else:
+                            raise ValueError("No complete JSON object brackets found in response") # More specific error
+                    except (json.JSONDecodeError, ValueError): # Catch both types of errors from strategy 2
+                        # 3. FINAL SAFETY: Extract values via Regex if JSON is totally broken
+                        # This works even with unescaped quotes or missing commas.
+                        intent_match = re.search(r'"strategic_intent":\s*"([^"]+)"', raw_content)
+                        conf_match = re.search(r'"strategic_intent_conf":\s*([\d\.]+)', raw_content)
+                        notes_match = re.search(r'"notes":\s*"([^"]*)"', raw_content) # Allow empty notes
                         
-                        if fixed_block.startswith('\"'): fixed_block = '{' + fixed_block[2:]
-                        if fixed_block.endswith('\"'): fixed_block = fixed_block[:-2] + '}'
+                        js = {
+                            'strategic_intent': intent_match.group(1) if intent_match else 'Neutral',
+                            'strategic_intent_conf': float(conf_match.group(1)) if conf_match else 0.0,
+                            'notes': notes_match.group(1) if notes_match else "Extracted via Regex"
+                        }
+            else:
+                # JSON blocks were found
+                last_block = json_blocks[-1] # Take the last block found
+                try:
+                    js = json.loads(last_block) # Try parsing the last block directly
+                except json.JSONDecodeError:
+                    # If parsing the last block fails, try recovery strategies on it
+                    try:
+                        # 2. Use GREEDY matching on the last block specifically
+                        match = re.search(r'(\{.*\})', last_block, re.DOTALL)
+                        if match:
+                            js = json.loads(match.group(1))
+                        else:
+                            raise ValueError("No complete JSON object brackets found in the last block") # More specific error
+                    except (json.JSONDecodeError, ValueError): # Catch errors from strategy 2 on the block
+                        # 3. FINAL SAFETY: Extract values via Regex from the last block if JSON is totally broken
+                        intent_match = re.search(r'"strategic_intent":\s*"([^"]+)"', last_block)
+                        conf_match = re.search(r'"strategic_intent_conf":\s*([\d\.]+)', last_block)
+                        notes_match = re.search(r'"notes":\s*"([^"]*)"', last_block) # Allow empty notes
                         
-                        js = json.loads(fixed_block)
-                    except:
-                        js = json.loads(json_blocks[0])
-
-            # 2. Extract values
+                        js = {
+                            'strategic_intent': intent_match.group(1) if intent_match else 'Neutral',
+                            'strategic_intent_conf': float(conf_match.group(1)) if conf_match else 0.0,
+                            'notes': notes_match.group(1) if notes_match else "Extracted via Regex from block"
+                        }
+    
+            # 2. Extract values from the successfully parsed 'js' object (regardless of which strategy worked)
             intent = js.get('strategic_intent', 'Neutral')
             conf = js.get('strategic_intent_conf', 0.0)
             notes = js.get('notes', '')
-
+    
             try:
                 conf = float(conf)
             except (TypeError, ValueError):
                 conf = 0.0
-
+    
             return intent, conf, notes
-
+    
         except Exception as e:
             # We only log if it fails COMPLETELY after all recovery attempts
+            # Note: This could catch errors from the Groq API call itself too, which is generally okay.
             logger.error(f"❌ LLM Final Parse Failure: {str(e)}")
             return "Neutral", 0.0, f"Error: {str(e)}"
         
