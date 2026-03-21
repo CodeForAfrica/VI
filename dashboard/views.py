@@ -1383,7 +1383,6 @@ def generate_report(request):
     return HttpResponse("Unexpected error during report generation.", status=500)
 
 
-
 def countries(request):
     # 1. Get the raw selected country from the request
     selected_country_raw = request.GET.get('country', '').strip()
@@ -1475,7 +1474,7 @@ def countries(request):
                 fig_risk_actor.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 risk_per_actor_chart = fig_risk_actor.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 1. Top African Countries by total articles ---
+    # --- 1. Top African Countries by total articles (Original) ---
     # This remains relevant as a baseline for volume.
     # Uses selected_country_raw (unchanged)
     top_publishers = MediaNarrative.objects.exclude(
@@ -1500,7 +1499,7 @@ def countries(request):
             fig.update_layout(height=400, template="plotly_white", margin=dict(l=20, r=20, t=20, b=20))
             publisher_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 2. Top Foreign Actors Mentioned  ---
+    # --- 2. Top Foreign Actors Mentioned (Original) ---
     # Shows overall activity by actors.
     # Uses selected_country_raw (unchanged)
     top_subjects = MediaNarrative.objects.exclude(
@@ -1514,12 +1513,11 @@ def countries(request):
         if not df_sub.empty:
             df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
             df_sub = df_sub.sort_values('Mentions', ascending=True)
-            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white")
-            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside')
+            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white.update_traces(marker_color='#f59e0b', textposition='outside')
             fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # --- 3. Top Actor-Country Pairings ---
+    # --- 3. Top Actor-Country Pairings (Original) ---
     # Shows the most frequent topic combinations.
     # Uses selected_country_raw (unchanged)
     ac_pairings = MediaNarrative.objects.exclude(
@@ -1541,7 +1539,7 @@ def countries(request):
             actor_country_chart = fig_ac.to_html(full_html=False, include_plotlyjs='cdn')
 
     # *** NEW: Intent Distribution for the Selected Country ***
- types of strategic influence topics are most prevalent for the selected country.
+    # Shows what types of strategic influence topics are most prevalent for the selected country.
     # Uses selected_country_raw (unchanged)
     intent_distribution = []
     if selected_country_raw: # Use raw name for MN filtering
@@ -1569,7 +1567,7 @@ def countries(request):
     # Shows trends - are certain topics or actors becoming more prominent?
     # Uses selected_country_raw (unchanged)
     volume_over_time_data = []
-    if selected_country_raw: # Use raw name for MN filtering # <-- CORRECT INDENTATION: Align with volume_over_time_data =
+    if selected_country_raw: # Use raw name for MN filtering 
         # Filter and prepare data for the chart
         articles_for_country = qs.exclude(posting_time__isnull=True).values('posting_time') # qs is already filtered by selected_country_raw
         if articles_for_country.exists():
