@@ -1385,10 +1385,8 @@ def generate_report(request):
 
 
 def countries(request):
-    selected_country_raw = request.GET.get('country', '').strip() # Get the raw input from the dropdown/filter
+    selected_country = request.GET.get('country', '').strip() 
 
-    # *** MAP: Normalize selected_country_raw to match VulnerabilityIndex.country format ***
-    # This mapping should correspond to the exact strings in VulnerabilityIndex.country
     VI_COUNTRY_MAP = {
         # From MediaNarrative.target_country (or UI) -> VulnerabilityIndex.country
         "Côte d'Ivoire": "ivory coast",
@@ -1408,7 +1406,7 @@ def countries(request):
         # Add other mappings if needed based on your VI table content
     }
     # Use the mapping, defaulting to the raw input if no mapping is found
-    selected_country_for_vi = VI_COUNTRY_MAP.get(selected_country_raw, selected_country_raw.lower())
+    selected_country_for_vi = VI_COUNTRY_MAP.get(selected_country, selected_country.lower())  # ← Mapped name for VI table
 
     # Use selected_country_raw for MediaNarrative queries (as it should match target_country format)
     qs = MediaNarrative.objects.all().order_by('-posting_time')
@@ -1430,7 +1428,7 @@ def countries(request):
     # It uses the pre-calculated scores from the VulnerabilityIndex model.
     # Use selected_country_for_vi for VulnerabilityIndex queries
     risk_scores_per_combo = VulnerabilityIndex.objects.all()
-    if selected_country_for_vi: # Use the mapped name for VI filtering
+    if selected_country_for_vi:  # ← Use the mapped name
         risk_scores_per_combo = risk_scores_per_combo.filter(country__iexact=selected_country_for_vi)
 
     # Chart 1: Risk Score Distribution by Country (if no specific country is selected)
