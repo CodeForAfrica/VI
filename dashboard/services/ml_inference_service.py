@@ -160,12 +160,12 @@ class MLInferenceService:
         mapped_intent = intent_mapping.get(normalized_intent, intent) 
 
         # --- START REPLACED SECTION ---
-        from dashboard.models import ContextualRisk
+        from dashboard.models import VulnerabilityIndex
         
         try:
             # A. DATABASE LOOKUP (Priority 1)
             # This matches the calculations from update_vulnerability_indexes.py
-            risk_record = ContextualRisk.objects.filter(
+            risk_record = VulnerabilityIndex.objects.filter(
                 country__iexact=str(country).strip(),
                 intent__iexact=str(mapped_intent).strip(),
                 actor__iexact=str(actor).strip()
