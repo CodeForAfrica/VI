@@ -1348,11 +1348,9 @@ class MLInferenceService:
             mask = (df['country'].str.strip().str.lower() == formatted_country.strip().lower()) & \
                    (df['actor'].str.strip().str.lower() == formatted_actor.strip().lower()) & \
                    (df['intent'].str.strip().str.lower() == formatted_intent.strip().lower())
-            
             matching_row = df[mask]
-
             if not matching_row.empty:
-                score = float(matching_row.iloc[0]['FinalRisk'])
+                score = float(matching_row.iloc[0]['final_risk']) # <-- CORRECTED
                 print(f"✅ SUCCESS: Found exact match. Score: {score}")
                 return score
 
@@ -1363,7 +1361,7 @@ class MLInferenceService:
             
             matching_rows = df[fallback_mask]
             if not matching_rows.empty:
-                score = float(matching_rows['FinalRisk'].max())
+                score = float(matching_rows['final_risk'].max())
                 print(f"✅ SUCCESS: Using Max Risk for {formatted_country}-{formatted_actor}: {score}")
                 return score
 
