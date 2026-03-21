@@ -1410,8 +1410,8 @@ def countries(request):
 
     # Use selected_country_raw for MediaNarrative queries (as it should match target_country format)
     qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if selected_country_raw:
-        qs = qs.filter(target_country__iexact=selected_country_raw)
+    if selected_country:
+        qs = qs.filter(target_country__iexact=selected_country)
 
     # Initialize variables with placeholders to prevent NameErrors
     publisher_chart = "<p class='text-center py-5 text-muted'>No publishing data available</p>"
