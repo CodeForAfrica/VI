@@ -134,7 +134,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"🏁 Inference complete. Syncing {len(results_to_update)} articles to the database..."))
             
             # Final CSV save (CORRECTED)
-            if backup_ # <-- CORRECTED: Check if backup_data list is not empty
+            if backup_data: # <-- CORRECTED: Check if backup_data list is not empty, added ':'
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
 
@@ -167,4 +167,3 @@ class Command(BaseCommand):
         self.stdout.write(self.style.NOTICE(f"Failed to process: {failed_count}"))
         self.stdout.write(self.style.NOTICE(f"Duration: {duration_minutes:.2f} minutes"))
         self.stdout.write(self.style.SUCCESS(f"🎉 Command completed."))
-
