@@ -134,14 +134,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"🏁 Inference complete. Syncing {len(results_to_update)} articles to the database..."))
             
             # Final CSV save (CORRECTED)
-            if backup_data: # <-- CORRECTED: Check if backup_data list is not empty
+            if backup_ # <-- CORRECTED: Check if backup_data list is not empty
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
 
             # Use bulk_update to efficiently save all changes
             # Chunked save might be needed for very large datasets, but bulk_update often handles this well internally
             chunk_size = 1000
-            for j in range(0, len(results_to):
+            for j in range(0, len(results_to_update), chunk_size): # <-- CORRECTED: Added missing ']' and ':'
                 chunk = results_to_update[j : j + chunk_size]
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
@@ -167,3 +167,4 @@ class Command(BaseCommand):
         self.stdout.write(self.style.NOTICE(f"Failed to process: {failed_count}"))
         self.stdout.write(self.style.NOTICE(f"Duration: {duration_minutes:.2f} minutes"))
         self.stdout.write(self.style.SUCCESS(f"🎉 Command completed."))
+
