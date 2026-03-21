@@ -1513,7 +1513,8 @@ def countries(request):
         if not df_sub.empty:
             df_sub = df_sub.rename(columns={'inferred_actor': 'Actor', 'mention_count': 'Mentions'})
             df_sub = df_sub.sort_values('Mentions', ascending=True)
-            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white.update_traces(marker_color='#f59e0b', textposition='outside')
+            fig_sub = px.bar(df_sub, x='Mentions', y='Actor', orientation='h', template="plotly_white") # <-- CORRECTED LINE: Use correct template name
+            fig_sub.update_traces(marker_color='#f59e0b', textposition='outside') # <-- MOVED: This is a method call on the figure object
             fig_sub.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             subject_chart = fig_sub.to_html(full_html=False, include_plotlyjs='cdn')
 
