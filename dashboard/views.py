@@ -415,7 +415,7 @@ class DisinfoAnalysisChatbot:
                                  f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility.")
 
         # 2. Filtered Statistics based on detected query terms
-        base_query = MediaNarrative.objects.all()
+        base_query = MediaNarrative.objects.filter(target_country__in=FOCUS_COUNTRIES) # Apply focus country filter here too, if applicable globally
 
         if target_country:
             base_query = base_query.filter(target_country__iexact=target_country)
@@ -439,35 +439,67 @@ class DisinfoAnalysisChatbot:
         # Example: Top intents for the target country (only if target_country is specified and intent is not already specified)
         if target_country and not intent:
             top_intents = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(c=Count('id')).order_by('-c')[:3]
-            top_intent_list = [f"{item['strategic_intent']} ({item['c']})" for item in top_intents]
+            top_intent_list = [f"{item['strategic_intent']} ({item['c']} articles)" for item in top_intents]
             if top_intent_list:
                 context_parts.append(f"TOP INTENTS FOR {target_country}: {', '.join(top_intent_list)}.")
 
         # Example: Top actors for the target country (only if target_country is specified and foreign_actor is not already specified)
         if target_country and not foreign_actor:
             top_actors = base_query.exclude(inferred_actor__in=['', None]).values('inferred_actor').annotate(c=Count('id')).order_by('-c')[:3]
-            top_actor_list = [f"{item['inferred_actor']} ({item['c']})" for item in top_actors]
+            top_actor_list = [f"{item['inferred_actor']} ({item['c']} articles)" for item in top_actors]
             if top_actor_list:
                 context_parts.append(f"TOP ACTORS FOR {target_country}: {', '.join(top_actor_list)}.")
 
         # Example: Top countries for the foreign actor (only if foreign_actor is specified and target_country is not already specified)
         if foreign_actor and not target_country:
             top_countries = base_query.exclude(target_country__in=['', None]).values('target_country').annotate(c=Count('id')).order_by('-c')[:3]
-            top_country_list = [f"{item['target_country']} ({item['c']})" for item in top_countries]
+            top_country_list = [f"{item['target_country']} ({item['c']} articles)" for item in top_countries]
             if top_country_list:
                 context_parts.append(f"TOP TARGET COUNTRIES FOR {foreign_actor}: {', '.join(top_country_list)}.")
 
-        # *** ADD THIS BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
+        # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
         # This addresses the specific query "What are the key narratives around Senegal and France?"
         if target_country and foreign_actor:
             # Find top strategic intents for this specific country-actor combination
             narrative_combinations = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
             narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
             if narrative_list:
-                context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}.")
+                # Construct a more specific summary based on the top narratives
+                top_narrative = narrative_combinations.first()
+                if top_narrative:
+                    summary_detail = f"Primarily driven by {top_narrative['strategic_intent']} narratives ({top_narrative['count']} articles)"
+                else:
+                    summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
+
+                context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship.")
             else:
                 # Even if no specific narratives are found for the combo, report the count
-                context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5.")
+                context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {filtered_count}.")
+
+        # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
+        # This aims to provide more specific, example-based information to the AI
+        # Only add samples if we have a specific filter (country, actor, or intent)
+        if target_country or foreign_actor or intent:
+            # Fetch a limited number of recent articles matching the current filters
+            sample_articles = base_query.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:3] # Limit to 3 samples
+            sample_details = []
+            for article in sample_articles:
+                # Extract limited, relevant details from each sample article
+                source = getattr(article, 'media_outlet', 'N/A')
+                target = getattr(article, 'target_country', 'N/A')
+                actor = getattr(article, 'inferred_actor', 'N/A')
+                article_intent = getattr(article, 'strategic_intent', 'N/A')
+                # Take a short snippet of the article text (e.g., first 100 chars)
+                text_snippet = getattr(article, 'article_text', '')[:100] + "..." if getattr(article, 'article_text', '') else "No content available"
+                # Append a concise line representing this sample
+                sample_details.append(f"SOURCE: {source} | INTENT: {article_intent} | ACTOR: {actor} | SNIPPET: {text_snippet}")
+
+            if sample_details:
+                # Add the sample details to the context
+                context_parts.append(f"SAMPLE ARTICLES FOR FILTERS (Country: {target_country or 'Any'}, Actor: {foreign_actor or 'Any'}, Intent: {intent or 'Any'}):")
+                context_parts.extend(sample_details) # Add each sample line as a separate part
+            else:
+                context_parts.append(" for the applied filters.")
 
 
         # Combine all parts
@@ -475,40 +507,40 @@ class DisinfoAnalysisChatbot:
         return context if context.strip() else "No specific data found for the query terms in the database."
 
     
-        def safe_article_line(article):
-            """Safe line builder - fetches VI from the new table based on article metadata"""
-            text_snippet = (article.article_text[:150] + "...") if getattr(article, 'article_text', '') else "No content"
+        #def safe_article_line(article):
+         #   """Safe line builder - fetches VI from the new table based on article metadata"""
+        #    text_snippet = (article.article_text[:150] + "...") if getattr(article, 'article_text', '') else "No content"
             
-            # 1. FIELD EXTRACTION
-            source = getattr(article, 'media_outlet', 'N/A')
-            target = getattr(article, 'target_country', 'N/A')
-            actor = getattr(article, 'inferred_actor', 'N/A')
-            intent = getattr(article, 'strategic_intent', 'N/A')
-            tone = getattr(article, 'tone', 'N/A')
+        #    # 1. FIELD EXTRACTION
+        #    source = getattr(article, 'media_outlet', 'N/A')
+        #    target = getattr(article, 'target_country', 'N/A')
+        #    actor = getattr(article, 'inferred_actor', 'N/A')
+        #    intent = getattr(article, 'strategic_intent', 'N/A')
+        #    tone = getattr(article, 'tone', 'N/A')
             
-            # 2. DYNAMIC VI LOOKUP (The part you are changing)
-            vi_score = "N/A"
-            if target != 'N/A' and actor != 'N/A':
-                # Normalize the intent to match the Anchor CSV/Table categories
+         #   # 2. DYNAMIC VI LOOKUP (The part you are changing)
+         #   vi_score = "N/A"
+         #   if target != 'N/A' and actor != 'N/A':
+         #       # Normalize the intent to match the Anchor CSV/Table categories
                 # Note: map_to_canonical_intent should be accessible here
-                canonical_intent = map_to_canonical_intent(intent, getattr(article, 'title', ''))
+         #       canonical_intent = map_to_canonical_intent(intent, getattr(article, 'title', ''))
                 
-                try:
-                    from .models import VulnerabilityIndex
-                    # Find the risk score for this specific combo
-                    record = VulnerabilityIndex.objects.filter(
-                        country__iexact=target,
-                        actor__iexact=actor,
-                        intent__iexact=canonical_intent
-                    ).first()
+           #     try:
+           #         from .models import VulnerabilityIndex
+           #         # Find the risk score for this specific combo
+           #         record = VulnerabilityIndex.objects.filter(
+           #             country__iexact=target,
+           #             actor__iexact=actor,
+           #             intent__iexact=canonical_intent
+           #         ).first()
                     
-                    if record:
-                        vi_score = f"{float(record.final_risk):.3f}"
-                except:
-                    vi_score = "N/A"
-            
+           #         if record:
+           #             vi_score = f"{float(record.final_risk):.3f}"
+            #    except:
+            #        vi_score = "N/A"
+           # 
             # 3. CLEAN, READABLE FORMAT
-            return f"{source} | {target} | {actor} | {intent} | {tone} | VI:{vi_score} | {text_snippet}"
+           # return f"{source} | {target} | {actor} | {intent} | {tone} | VI:{vi_score} | {text_snippet}"
     
     def get_insights_from_ai(self, query, context):
         system_prompt = """You are a Senior Geopolitical Analyst specializing in Foreign Influence and Media Narrative Analysis.
@@ -519,25 +551,28 @@ class DisinfoAnalysisChatbot:
     3. If the CONTEXT does not contain the specific information requested, clearly state: "The database context does not contain specific information about [aspect requested]."
     4. NEVER use general knowledge beyond the provided context.
     5. NEVER invent statistics, numbers, or details not present in the context.
-    6. Format your response in plain text, using simple dashes (-) for bullet points if needed.
-    7. Do not use markdown symbols like *, _, or #.
-    RULES:
-    - NO markdown: No **bold**, no *italics**, no ### headers
-    - Use simple - dashes for bullets
-    - Short sentences
-    - Numbers where possible
-    - Country names in CAPS
+    6. When specific article details (SOURCE, INTENT, ACTOR, SNIPPET) are available in the context, prioritize referencing them directly in your response.
+    7. Format your response in plain text.
+    8. Use simple dashes (-) for bullet points if needed.
+    9. Use short sentences.
+    10. Include numbers where possible.
+    11. Use CAPITALS for country and actor names.
+    12. Separate sections (SUMMARY, KEY FINDINGS, RECOMMENDATION) with clear line breaks.
+
     FORMAT:
     1. SUMMARY (1 sentence)
     2. KEY FINDINGS (3-5 bullets max)
     3. RECOMMENDATION (1 sentence)
-    EXAMPLE:
-    SUMMARY: France dominates Senegal coverage.
+
+    EXAMPLE (Referencing specific context details):
+    SUMMARY: The key narrative involving SENEGAL appears to be one of vulnerability to foreign influence, particularly from FRANCE, through reputational damage.
     KEY FINDINGS:
-    - 45 articles vs China's 12
-    - France avg VI score: 0.67
-    - Senegal most vulnerable
-    RECOMMENDATION: Monitor France-Senegal relations closely."""
+    - SOURCE: Viralmag, Afrik, Tv5Monde reported on judicial affairs (Aliou Sall) linking to corruption and influence trafficking.
+    - Sovereignty-related narratives dominate (X articles between SENEGAL and FRANCE).
+    - Specific article snippet: [Brief quote or topic from the provided snippet].
+    - SAUDI ARABIA shows economic focus but lower VI score (0.018).
+    RECOMMENDATION: Analyze SENEGAL's leadership reputation concerns linked to FRANCE's influence."""
+        # Note: The EXAMPLE now demonstrates referencing specific details like SOURCE, ACTOR, INTENT, and SNIPPET from the context.
 
         try:
             chat_completion = self.client.chat.completions.create(
