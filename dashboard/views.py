@@ -415,7 +415,7 @@ class DisinfoAnalysisChatbot:
                                  f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility.")
 
         # 2. Filtered Statistics based on detected query terms
-        base_query = MediaNarrative.objects.filter(target_country__in=FOCUS_COUNTRIES) # Apply focus country filter here too, if applicable globally
+        base_query = MediaNarrative.objects.filter(target_country__in=COUNTRIES) # Apply focus country filter here too, if applicable globally
 
         if target_country:
             base_query = base_query.filter(target_country__iexact=target_country)
