@@ -566,7 +566,8 @@ class DisinfoAnalysisChatbot:
     3. RECOMMENDATION (1 sentence)
 
     EXAMPLE (Referencing specific context details, excluding sports):
-    The key narrative involving SENEGAL appears to be one of vulnerability to foreign influence, particularly from FRANCE, through reputational damage. Multiple sources (Viralmag, Afrik, and Tv5Monde) report on a judicial affair involving Aliou Sall, brother of former President Macky Sall, and allegations of corruption, blanchiment de capitaux, and traffic d'influence. This narrative could be used to undermine the reputation of Senegal's leadership and create an environment conducive to foreign influence. In contrast, SAUDI ARABIA's involvement (as reported by okaz.com.sa) seems to focus on economic dependency, but with a lower Vulnerability Index (VI) score of 0.018, indicating a relatively lower level of influence. Overall, the dominant narrative involving SENEGAL seems to be one of reputational damage and potential vulnerability to # Note: This example demonstrates synthesizing narrative from specific context details like sources, topics, and actors, while implicitly focusing on non-sports content."""
+    The key narrative involving SENEGAL appears to be one of vulnerability to foreign influence, particularly from FRANCE, through reputational damage. Multiple sources (Viralmag, Afrik, and Tv5Monde) report on a judicial affair involving Aliou Sall, brother of former President Macky Sall, and allegations of corruption, blanchiment de capitaux, and traffic d'influence. This narrative could be used to undermine the reputation of Senegal's leadership and create an environment conducive to foreign influence. In contrast, SAUDI ARABIA's involvement (as reported by okaz.com.sa) seems to focus on economic dependency, but with a lower Vulnerability Index (VI) score of 0.018, indicating a relatively lower level of influence. Overall, the dominant narrative involving SENEGAL seems to be one of reputational damage and potential vulnerability to French influence.
+    # Note: This example demonstrates synthesizing narrative from specific context details like sources, topics, and actors, while implicitly focusing on non-sports content."""
 
         try:
             chat_completion = self.client.chat.completions.create(
@@ -622,7 +623,7 @@ class DisinfoAnalysisChatbot:
         except Exception as e:
             # Catch any exception during the API call or processing
             print(f"DEBUG: Exception in get_insights_from_ai: {e}, Type: {type(e).__name__}") 
-            return Error: {str(e)}"
+            return f"AI Error: {str(e)}" 
             
     def get_actor_stats(self, country=None):
         """Get aggregated stats for actors"""
