@@ -43,6 +43,12 @@ class Command(BaseCommand):
                 raw_intent = inference_result.get('strategic_intent', 'Unknown')
                 final_intent = map_raw_intent_to_contextual(raw_intent) or "Other"
 
+                # 🚫 FILTER: Skip if actor or target is invalid/unknown
+                actor = article.inferred_actor
+                target = article.target_country
+                if not actor or actor.lower() in ['unknown', 'none', 'null', '']: continue
+                if not target or target.lower() in ['unknown', 'none', 'null', '']: continue
+
                 # Update memory object
                 article.strategic_intent = final_intent
                 article.tone = inference_result.get('tone', 'Factual')
