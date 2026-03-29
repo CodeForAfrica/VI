@@ -81,6 +81,28 @@ scraper = cloudscraper.create_scraper()
 # ────────────────────────────────────────────────
 # HELPERS
 # ────────────────────────────────────────────────
+def check_collection_health():
+    """Diagnostic tool to see if the IDs are returning any data at all."""
+    print("\n--- 🏥 Collection Health Check (Total Stories since Jan 1) ---")
+    mc = mediacloud.api.SearchApi(API_KEY)
+    
+    print("Checking Target Countries (National Collections):")
+    for name, coll_id in TARGET_COLLECTION_IDS.items():
+        try:
+            res = mc.story_count(query="*", start_date=START_DATE, end_date=END_DATE, collection_ids=[coll_id])
+            print(f"  Target ID {coll_id} ({name}): {res['total']} stories total")
+        except Exception as e:
+            print(f"  Target ID {coll_id} ({name}): ❌ Error: {str(e)[:30]}")
+            
+    print("\nChecking Actor Sources (International Collections):")
+    for name, coll_id in ACTOR_COLLECTION_IDS.items():
+        try:
+            res = mc.story_count(query="*", start_date=START_DATE, end_date=END_DATE, collection_ids=[coll_id])
+            print(f"  Actor ID {coll_id} ({name}): {res['total']} stories total")
+        except Exception as e:
+            print(f"  Actor ID {coll_id} ({name}): ❌ Error: {str(e)[:30]}")
+    print("-----------------------------------------------------------\n")
+    
 def url_exists(url):
     query = text(f"SELECT 1 FROM {DB_TABLE} WHERE url = :url LIMIT 1")
     try:
@@ -108,6 +130,7 @@ def print_progress(current, total, saved, failed):
 # MAIN
 # ────────────────────────────────────────────────
 def main():
+    check_collection_health()
     all_records = []
     print(f"🛰️  Querying MediaCloud API...")       
     
