@@ -61,7 +61,7 @@ TARGET_COLLECTION_IDS = {
     "Senegal":        38380807,
     "DRC":            34412042,
     "South_Africa":   34412238,      
-    "Cote_dIvoire":   34412173,     
+    "Côte d'Ivoire":   34412173,     
 }
 
 QUERY_BY_COUNTRY = {
@@ -109,19 +109,17 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    # This is the primary 2026 Search Gateway
-    #BASE_URL = "https://directory.mediacloud.org/api/v3/stories/search"
-    
-    print(f"🛰️  Attempting Gateway Query at ...")       
+    print(f"🛰️  Querying MediaCloud API with production queries...")       
     
     for target_country, target_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(target_country)
-        if not base_query:
-            continue
+        if not base_query: continue
             
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                stories, count = mc_search.story_list(
+                # Small sleep to avoid hitting API too fast
+                time.sleep(0.5)
+                stories, _ = mc_search.story_list(
                     query=base_query,
                     start_date=START_DATE,
                     end_date=END_DATE,
@@ -140,30 +138,18 @@ def main():
                             "target_country": target_country,
                             "lang_detect": s.get("language"),
                             "pseudo_kept": True,
-                            "confidence": 1.0
+                            "pseudo_weight": 1.0,
+                            "confidence": 1.0,
+                            "use_afrolm": False
                         })
                         all_records.append(record)
                 else:
                     print(f"  🔎 0 results for {actor_name}")
                     
             except Exception as e:
-                error_msg = str(e)
-                if "Expecting value" in error_msg or "line 1 column 1" in error_msg or "429" in error_msg:
-                    print(f"  ⚠️  Rate limit for {actor_name} - waiting 5 seconds")
-                    time.sleep(5)
-                    continue
-                elif "401" in error_msg or "Unauthorized" in error_msg:
-                    print(f"  ❌ Skipping {actor_name} - API key lacks permission")
-                    continue
-                elif "404" in error_msg or "Not found" in error_msg:
-                    print(f"  ❌ Skipping {actor_name} - collection ID not found")
-                    continue
-                else:
-                    print(f"  ❌ Error for {target_country}/{actor_name}: {error_msg[:150]}")
-                    continue
-            
-            # ✅ CRITICAL: Wait between ALL API calls to avoid rate limiting
-            time.sleep(3)
+                logging.error(f"MediaCloud Error {target_country}-{actor_name}: {e}")
+                print(f"  ⚠️  Error fetching {actor_name}: {str(e)[:100]}")
+                continue
                 
     df = pd.DataFrame(all_records)
     if df.empty:
@@ -173,7 +159,7 @@ def main():
     total_attempted = len(df)
     saved_count = 0
     failed_count = 0
-    print(f"\n✅ Found {total_attempted} articles. Starting Scraper...")
+    print(f"\n✅ Ready: {total_attempted} articles found. Starting Scraper...")
 
     for idx, row in df.iterrows():
         url = row['url']
@@ -186,6 +172,10 @@ def main():
             row_data = row.to_dict()
             row_data['article_text'] = content
             
+            # Specific Actor Correction logic
+            if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
+                row_data['inferred_actor'] = 'USA'
+            
             try:
                 with engine.begin() as conn:
                     final_df = pd.DataFrame([row_data])[db_columns]
@@ -197,10 +187,12 @@ def main():
         else:
             failed_count += 1
 
-        print_progress(idx + 1, total_attempted, saved_count, failed_count)
+        if idx % 5 == 0 or idx == total_attempted - 1:
+            print_progress(idx + 1, total_attempted, saved_count, failed_count)
+        
         time.sleep(1.2)
 
-    print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed: {failed_count}")
+    print(f"\n\n🏁 Session Finished. Saved: {saved_count}, Failed: {failed_count}")
 
 if __name__ == "__main__":
     main()
