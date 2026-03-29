@@ -116,40 +116,56 @@ def main():
         if not base_query: continue
             
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-            try:
-                # Small sleep to avoid hitting API too fast
-                time.sleep(0.5)
-                stories, _ = mc_search.story_list(
-                    query=base_query,
-                    start_date=START_DATE,
-                    end_date=END_DATE,
-                    collection_ids=[actor_coll_id]
-                )
-                
-                if stories:
-                    print(f"  ✅ Found {len(stories)} stories for {target_country} ({actor_name})")
-                    for s in stories:
-                        record = {col: None for col in db_columns}
-                        record.update({
-                            "url": s.get("url"),
-                            "posting_time": str(s.get("publish_date")),
-                            "media_outlet": s.get("media_name"),
-                            "inferred_actor": actor_name,
-                            "target_country": target_country,
-                            "lang_detect": s.get("language"),
-                            "pseudo_kept": True,
-                            "pseudo_weight": 1.0,
-                            "confidence": 1.0,
-                            "use_afrolm": False
-                        })
-                        all_records.append(record)
-                else:
-                    print(f"  🔎 0 results for {actor_name}")
+            stories = None
+            retries = 0
+            max_retries = 2
+            
+            while retries <= max_retries:
+                try:
+                    # Small sleep to avoid hitting API too fast
+                    time.sleep(0.8)
+                    stories, _ = mc_search.story_list(
+                        query=base_query,
+                        start_date=START_DATE,
+                        end_date=END_DATE,
+                        collection_ids=[actor_coll_id]
+                    )
+                    break # Success!
                     
-            except Exception as e:
-                logging.error(f"MediaCloud Error {target_country}-{actor_name}: {e}")
-                print(f"  ⚠️  Error fetching {actor_name}: {str(e)[:100]}")
-                continue
+                except Exception as e:
+                    err_msg = str(e)
+                    # If we get the JSON decoding error or a clear rate limit, wait and retry
+                    if "Expecting value" in err_msg or "429" in err_msg:
+                        retries += 1
+                        if retries <= max_retries:
+                            wait_sec = 5 * retries
+                            print(f"  ⚠️  Connection hiccup for {actor_name}. Retrying in {wait_sec}s... ({retries}/{max_retries})")
+                            time.sleep(wait_sec)
+                            continue
+                    
+                    logging.error(f"MediaCloud Error {target_country}-{actor_name}: {e}")
+                    print(f"  ❌ Error fetching {actor_name}: {err_msg[:100]}")
+                    break
+            
+            if stories:
+                print(f"  ✅ Found {len(stories)} stories for {target_country} ({actor_name})")
+                for s in stories:
+                    record = {col: None for col in db_columns}
+                    record.update({
+                        "url": s.get("url"),
+                        "posting_time": str(s.get("publish_date")),
+                        "media_outlet": s.get("media_name"),
+                        "inferred_actor": actor_name,
+                        "target_country": target_country,
+                        "lang_detect": s.get("language"),
+                        "pseudo_kept": True,
+                        "pseudo_weight": 1.0,
+                        "confidence": 1.0,
+                        "use_afrolm": False
+                    })
+                    all_records.append(record)
+            elif stories is not None:
+                print(f"  🔎 0 results for {actor_name}")
                 
     df = pd.DataFrame(all_records)
     if df.empty:
