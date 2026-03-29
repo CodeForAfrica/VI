@@ -118,48 +118,35 @@ def main():
             
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # Build params with correct variable names
-                params = {
-                    "q": f"({base_query}) AND tags_id_media:{actor_coll_id}",
-                    "start_date": START_DATE.isoformat(),
-                    "end_date": END_DATE.isoformat(),
-                    "rows": 50,
-                    "api_key": API_KEY,
-                }
+                # ✅ LIBRARY CALL - replaces manual requests.get()
+                stories, count = mc_search.story_list(
+                    query=base_query,
+                    start_date=START_DATE,
+                    end_date=END_DATE,
+                    collection_ids=[actor_coll_id]
+                )
                 
-                headers = {"Authorization": f"Token {API_KEY}"}
-
-                # We add a 30s timeout to prevent the script from hanging
-                response = requests.get(BASE_URL, params=params, headers=headers, timeout=30)
-                
-                if response.status_code == 200:
-                    stories = response.json().get('results', [])
-                    if stories:
-                        print(f"  ✅ Found {len(stories)} stories for {country} ({actor})")
-                        for s in stories:
-                            record = {col: None for col in db_columns}
-                            record.update({
-                                "url": s.get("url"),
-                                "posting_time": str(s.get("publish_date")),
-                                "media_outlet": s.get("media_name"),
-                                "inferred_actor": actor,
-                                "target_country": country,
-                                "lang_detect": s.get("language"),
-                                "pseudo_kept": True,
-                                "confidence": 1.0
-                            })
-                            all_records.append(record)
-                    else:
-                        print(f"  🔎 0 results for {actor}")
+                if stories:
+                    print(f"  ✅ Found {len(stories)} stories for {target_country} ({actor_name})")
+                    for s in stories:
+                        record = {col: None for col in db_columns}
+                        record.update({
+                            "url": s.get("url"),
+                            "posting_time": str(s.get("publish_date")),
+                            "media_outlet": s.get("media_name"),
+                            "inferred_actor": actor_name,
+                            "target_country": target_country,
+                            "lang_detect": s.get("language"),
+                            "pseudo_kept": True,
+                            "confidence": 1.0
+                        })
+                        all_records.append(record)
                 else:
-                    print(f"  ❌ Server Response {response.status_code}")
-
-            except requests.exceptions.ConnectionError:
-                # If this still fails, it's a network/DNS issue on your machine
-                print(f"  ❌ Network Error: Could not reach MediaCloud. Check your VPN or Firewall.")
+                    print(f"  🔎 0 results for {actor_name}")
+                    
             except Exception as e:
-                print(f"  ❌ Error: {e}")
-                         
+                print(f"  ❌ Error for {target_country}/{actor_name}: {e}") 
+                
     df = pd.DataFrame(all_records)
     if df.empty:
         print("\n❌ No articles found.")
