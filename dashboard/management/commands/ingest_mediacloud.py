@@ -121,7 +121,6 @@ def main():
             
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             try:
-                # ✅ LIBRARY CALL - replaces manual requests.get()
                 stories, count = mc_search.story_list(
                     query=base_query,
                     start_date=START_DATE,
@@ -149,26 +148,22 @@ def main():
                     
             except Exception as e:
                 error_msg = str(e)
-                
-                # Handle JSON parse errors (invalid collection IDs)
-                if "Expecting value" in error_msg or "line 1 column 1" in error_msg:
-                    print(f"  ⚠️  Skipping {actor_name} - invalid collection ID or API response")
+                if "Expecting value" in error_msg or "line 1 column 1" in error_msg or "429" in error_msg:
+                    print(f"  ⚠️  Rate limit for {actor_name} - waiting 5 seconds")
+                    time.sleep(5)
                     continue
-                
-                # Handle auth/permission errors
                 elif "401" in error_msg or "Unauthorized" in error_msg:
-                    print(f"  ⚠️  Skipping {actor_name} - API key lacks permission")
+                    print(f"  ❌ Skipping {actor_name} - API key lacks permission")
                     continue
-                
-                # Handle not-found errors
                 elif "404" in error_msg or "Not found" in error_msg:
-                    print(f"  ⚠️  Skipping {actor_name} - collection ID not found")
+                    print(f"  ❌ Skipping {actor_name} - collection ID not found")
                     continue
-                
-                # All other errors - log and skip
                 else:
                     print(f"  ❌ Error for {target_country}/{actor_name}: {error_msg[:150]}")
-                    continue 
+                    continue
+            
+            # ✅ CRITICAL: Wait between ALL API calls to avoid rate limiting
+            time.sleep(3)
                 
     df = pd.DataFrame(all_records)
     if df.empty:
