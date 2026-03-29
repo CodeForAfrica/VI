@@ -111,20 +111,21 @@ def main():
     
     print(f"🛰️  Attempting Gateway Query at {BASE_URL}...")       
     
-    for country, country_coll_id in TARGET_COLLECTION_IDS.items():
-        base_query = QUERY_BY_COUNTRY.get(country)
-        if not base_query: continue
+    for target_country, target_coll_id in TARGET_COLLECTION_IDS.items():
+        base_query = QUERY_BY_COUNTRY.get(target_country)
+        if not base_query:
+            continue
             
-        for country, country_id in TARGETS.items():
-            for actor, actor_id in ACTORS.items():
-                try:
-                    current_params = {
-                        "q": f"({QUERY}) AND tags_id_media:{actor_id}",
-                        "start_date": START_DATE.isoformat(),
-                        "end_date": END_DATE.isoformat(),
-                        "rows": 50,
-                        "api_key": API_KEY,
-                    }
+        for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
+            try:
+                # Build params with correct variable names
+                params = {
+                    "q": f"({base_query}) AND tags_id_media:{actor_coll_id}",
+                    "start_date": START_DATE.isoformat(),
+                    "end_date": END_DATE.isoformat(),
+                    "rows": 50,
+                    "api_key": API_KEY,
+                }
                 
                 headers = {"Authorization": f"Token {API_KEY}"}
 
