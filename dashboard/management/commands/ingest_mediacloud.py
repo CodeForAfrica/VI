@@ -57,8 +57,11 @@ ACTOR_COLLECTION_IDS = {
 }
 
 TARGET_COLLECTION_IDS = {
-    "Ethiopia": 34412034, "Senegal": 38380807, "DRC": 34412042,
-    "South_Africa": 34412238, "Côte d'Ivoire": 34412173,
+    "Ethiopia":       34412034,
+    "Senegal":        38380807,
+    "DRC":            34412042,
+    "South_Africa":   34412238,      
+    "Cote_dIvoire":   34412173,     
 }
 
 QUERY_BY_COUNTRY = {
