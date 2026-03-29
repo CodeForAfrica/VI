@@ -109,8 +109,12 @@ def print_progress(current, total, saved, failed):
 # ────────────────────────────────────────────────
 def main():
     all_records = []
-    print(f"🛰️  Querying MediaCloud API with production queries...")       
+    print(f"🛰️  Querying MediaCloud API...")       
     
+    # Use a persistent session to help with headers/stability
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+
     for target_country, target_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(target_country)
         if not base_query: continue
@@ -118,34 +122,36 @@ def main():
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             stories = None
             retries = 0
-            max_retries = 2
+            max_retries = 3
             
             while retries <= max_retries:
                 try:
-                    # Small sleep to avoid hitting API too fast
-                    time.sleep(0.8)
-                    stories, _ = mc_search.story_list(
+                    # Longer delay for problematic actors
+                    time.sleep(2.0 if retries == 0 else 10.0)
+                    
+                    # Re-init search API inside the loop
+                    current_mc = mediacloud.api.SearchApi(API_KEY)
+                    
+                    stories, _ = current_mc.story_list(
                         query=base_query,
                         start_date=START_DATE,
                         end_date=END_DATE,
                         collection_ids=[actor_coll_id]
                     )
-                    break # Success!
+                    break 
                     
                 except Exception as e:
                     err_msg = str(e)
-                    # If we get the JSON decoding error or a clear rate limit, wait and retry
-                    if "Expecting value" in err_msg or "429" in err_msg:
-                        retries += 1
-                        if retries <= max_retries:
-                            wait_sec = 5 * retries
-                            print(f"  ⚠️  Connection hiccup for {actor_name}. Retrying in {wait_sec}s... ({retries}/{max_retries})")
-                            time.sleep(wait_sec)
-                            continue
+                    retries += 1
                     
-                    logging.error(f"MediaCloud Error {target_country}-{actor_name}: {e}")
-                    print(f"  ❌ Error fetching {actor_name}: {err_msg[:100]}")
-                    break
+                    if retries <= max_retries:
+                        wait_sec = (retries ** 2) * 10
+                        print(f"  ⚠️  {actor_name} fail ({err_msg[:25]}). Retry in {wait_sec}s...")
+                        time.sleep(wait_sec)
+                    else:
+                        logging.error(f"MediaCloud Permanent Failure {target_country}-{actor_name}: {e}")
+                        print(f"  ❌ Failed {actor_name} after {max_retries} tries.")
+                        break
             
             if stories:
                 print(f"  ✅ Found {len(stories)} stories for {target_country} ({actor_name})")
@@ -164,8 +170,6 @@ def main():
                         "use_afrolm": False
                     })
                     all_records.append(record)
-            elif stories is not None:
-                print(f"  🔎 0 results for {actor_name}")
                 
     df = pd.DataFrame(all_records)
     if df.empty:
@@ -175,7 +179,7 @@ def main():
     total_attempted = len(df)
     saved_count = 0
     failed_count = 0
-    print(f"\n✅ Ready: {total_attempted} articles found. Starting Scraper...")
+    print(f"\n✅ Found {total_attempted} total articles. Starting Scraper...")
 
     for idx, row in df.iterrows():
         url = row['url']
@@ -188,7 +192,6 @@ def main():
             row_data = row.to_dict()
             row_data['article_text'] = content
             
-            # Specific Actor Correction logic
             if "nytimes.com" in url or row['media_outlet'] == 'The New York Times':
                 row_data['inferred_actor'] = 'USA'
             
@@ -208,7 +211,7 @@ def main():
         
         time.sleep(1.2)
 
-    print(f"\n\n🏁 Session Finished. Saved: {saved_count}, Failed: {failed_count}")
+    print(f"\n\n🏁 Done. Saved: {saved_count}, Failed: {failed_count}")
 
 if __name__ == "__main__":
     main()
