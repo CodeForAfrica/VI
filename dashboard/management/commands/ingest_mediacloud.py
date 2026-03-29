@@ -107,9 +107,9 @@ def print_progress(current, total, saved, failed):
 def main():
     all_records = []
     # This is the primary 2026 Search Gateway
-    BASE_URL = "https://directory.mediacloud.org/api/v3/stories/search"
+    #BASE_URL = "https://directory.mediacloud.org/api/v3/stories/search"
     
-    print(f"🛰️  Attempting Gateway Query at {BASE_URL}...")       
+    print(f"🛰️  Attempting Gateway Query at ...")       
     
     for target_country, target_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(target_country)
@@ -145,7 +145,27 @@ def main():
                     print(f"  🔎 0 results for {actor_name}")
                     
             except Exception as e:
-                print(f"  ❌ Error for {target_country}/{actor_name}: {e}") 
+                error_msg = str(e)
+                
+                # Handle JSON parse errors (invalid collection IDs)
+                if "Expecting value" in error_msg or "line 1 column 1" in error_msg:
+                    print(f"  ⚠️  Skipping {actor_name} - invalid collection ID or API response")
+                    continue
+                
+                # Handle auth/permission errors
+                elif "401" in error_msg or "Unauthorized" in error_msg:
+                    print(f"  ⚠️  Skipping {actor_name} - API key lacks permission")
+                    continue
+                
+                # Handle not-found errors
+                elif "404" in error_msg or "Not found" in error_msg:
+                    print(f"  ⚠️  Skipping {actor_name} - collection ID not found")
+                    continue
+                
+                # All other errors - log and skip
+                else:
+                    print(f"  ❌ Error for {target_country}/{actor_name}: {error_msg[:150]}")
+                    continue 
                 
     df = pd.DataFrame(all_records)
     if df.empty:
