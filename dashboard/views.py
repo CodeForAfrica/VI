@@ -186,6 +186,134 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
 
+        country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
+        actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
+        
+        country_match = re.search(country_pattern, query_l, re.IGNORECASE)
+        actor_match = re.search(actor_pattern, query_l, re.IGNORECASE)
+        
+        if country_match and actor_match and any(kw in query_l for kw in ['narrative', 'involving', 'about', 'discuss', 'claim', 'topic', 'theme']):
+            
+            db_country_map = {
+                'ethiopia': 'Ethiopia', 'senegal': 'Senegal', 'drc': 'DRC',
+                'south africa': 'South Africa', 'cote d\'ivoire': 'Côte d\'Ivoire',
+                'ivory coast': 'Côte d\'Ivoire'
+            }
+            db_actor_map = {
+                'usa': 'USA', 'united states': 'USA', 'us': 'USA',
+                'china': 'China', 'france': 'France', 'russia': 'Russia',
+                'saudi': 'Saudi Arabia', 'turkey': 'Turkey', 'uae': 'UAE',
+                'israel': 'Israel', 'iran': 'Iran', 'rwanda': 'Rwanda'
+            }
+            
+            db_country = db_country_map.get(country_match.group(1).lower())
+            db_actor = db_actor_map.get(actor_match.group(1).lower())
+            
+            if db_country and db_actor:
+                articles = MediaNarrative.objects.filter(
+                    target_country__iexact=db_country,
+                    inferred_actor__iexact=db_actor,
+                    article_text__isnull=False,
+                    strategic_intent__isnull=False
+                ).exclude(
+                    article_text='', strategic_intent='', article_text__icontains='football'
+                ).order_by('-posting_time')[:20]
+                
+                if articles.exists():
+                    context_parts = []
+                    for i, a in enumerate(articles[:12]):
+                        snippet = a.article_text[:250] + "..." if len(a.article_text) > 250 else a.article_text
+                        context_parts.append(
+                            f"[{i+1}] SOURCE: {a.media_outlet} | INTENT: {a.strategic_intent} | TONE: {a.tone} | CONF: {a.confidence:.2f}\n{snippet}"
+                        )
+                    context_text = "\n\n---\n\n".join(context_parts)
+                    
+                    from groq import Groq
+                    client = Groq(api_key=settings.GROQ_API_KEY)
+                    
+                    prompt = f"""You are a Senior Geopolitical Analyst specializing in foreign influence narratives.
+
+TASK: Analyze these media articles about {db_country} involving {db_actor} and synthesize the KEY NARRATIVES, CLAIMS, and TOPICS being discussed.
+
+ARTICLES:
+{context_text}
+
+INSTRUCTIONS:
+1. Identify the 2-3 DOMINANT themes or narratives across these articles.
+2. Extract specific CLAIMS, allegations, or arguments made about {db_country} by {db_actor}-linked sources.
+3. Note any recurring TOPICS (e.g., infrastructure, elections, security, economy, culture).
+4. Mention representative MEDIA OUTLETS that push these narratives.
+
+RESPOND IN THIS EXACT FORMAT (plain text, NO markdown, NO asterisks, NO emojis):
+
+The key narratives involving {db_country.upper()} and {db_actor.upper()} center on [main theme 1] and [main theme 2]. Multiple sources including [outlet 1], [outlet 2], and [outlet 3] emphasize claims about [specific claim 1] and [specific claim 2]. Recurring topics include [topic 1], [topic 2], and [topic 3]. These narratives appear to [potential impact or strategic goal]. Overall, the dominant framing suggests [synthesis of the narrative landscape].
+
+Keep your response concise (under 200 words) and factual.
+"""
+                    
+                    try:
+                        response = client.chat.completions.create(
+                            model="meta-llama/llama-4-scout-17b-16e-instruct",
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.15,
+                            max_tokens=700
+                        )
+                        return response.choices[0].message.content.strip()
+                        
+                    except Exception as e:
+                        logger.error(f"Narrative analysis error: {e}")
+                        return f"⚠️ Narrative analysis unavailable. However, I found {articles.count()} articles about {db_country} involving {db_actor}."
+                
+                else:
+                    return f"I couldn't find articles specifically about {db_country} involving {db_actor} in the current database."
+
+        # ============================================
+        # General Narratives Overview #####################
+        # ============================================
+        narrative_keywords = ['key narratives', 'narratives', 'strategic intent', 'what narratives', 'main narratives', 'list narratives']
+        if any(keyword in query_l for keyword in narrative_keywords):
+            from django.db.models import Count
+            narratives = MediaNarrative.objects.filter(
+                strategic_intent__isnull=False
+            ).exclude(strategic_intent='').exclude(strategic_intent='Unknown')
+            
+            narrative_stats = narratives.values('strategic_intent').annotate(
+                count=Count('id'),
+                countries=Count('target_country', distinct=True),
+                actors=Count('inferred_actor', distinct=True)
+            ).order_by('-count')
+            
+            narrative_list = []
+            for item in narrative_stats:
+                narrative_list.append(
+                    f"• **{item['strategic_intent']}**: {item['count']} articles "
+                    f"(across {item['countries']} countries, {item['actors']} actors)"
+                )
+            
+            total = sum(item['count'] for item in narrative_stats)
+            
+            return f"""📊 **Key Narratives in Our Database:**
+
+We've identified {len(narrative_list)} main strategic narratives across {total} articles:
+
+{chr(10).join(narrative_list)}
+
+💡 **What each narrative means:**
+• **Economic**: Trade, investment, debt, infrastructure projects, economic influence
+• **Sovereignty**: Political influence, governance, territorial issues, autonomy
+• **SocialFragility**: Social unrest, human rights, cultural tensions, information warfare
+• **MilitaryPresence**: Military bases, security cooperation, arms, defense partnerships
+• **ResourceDependency**: Natural resources, energy, minerals, resource control
+• **ElectionInfluence**: Electoral interference, democratic processes, voting
+• **Religious**: Religious influence, cultural values, faith-based narratives
+• **LGBTQ**: LGBTQ rights narratives, social values
+
+💬 **Try asking:**
+• "What are Economic narratives around Ethiopia?"
+• "Which countries use Sovereignty narratives most?"
+• "Narratives involving Senegal and France"
+"""
+
         import re
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
