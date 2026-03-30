@@ -193,80 +193,60 @@ class DisinfoAnalysisChatbot:
         country_match = re.search(country_pattern, query_l, re.IGNORECASE)
         actor_match = re.search(actor_pattern, query_l, re.IGNORECASE)
         
-        if country_match and actor_match and any(kw in query_l for kw in ['narrative', 'involving', 'about', 'discuss', 'claim', 'topic', 'theme']):
+        if country_match and any(kw in query_l for kw in ['narrative', 'talked about', 'claims', 'topic', 'involving']):
+            db_country = self.country_mapping.get(country_match.group(1).lower())
+            db_actor = None
+            if actor_match:
+                db_actor = self.actor_mapping.get(actor_match.group(1).lower())
+
+            # Fetch actual article content to synthesize the story
+            queryset = MediaNarrative.objects.filter(target_country__iexact=db_country).exclude(
+                article_text=''
+            )
             
-            db_country_map = {
-                'ethiopia': 'Ethiopia', 'senegal': 'Senegal', 'drc': 'DRC',
-                'south africa': 'South Africa', 'cote d\'ivoire': 'Côte d\'Ivoire',
-                'ivory coast': 'Côte d\'Ivoire'
-            }
-            db_actor_map = {
-                'usa': 'USA', 'united states': 'USA', 'us': 'USA',
-                'china': 'China', 'france': 'France', 'russia': 'Russia',
-                'saudi': 'Saudi Arabia', 'turkey': 'Turkey', 'uae': 'UAE',
-                'israel': 'Israel', 'iran': 'Iran', 'rwanda': 'Rwanda'
-            }
-            
-            db_country = db_country_map.get(country_match.group(1).lower())
-            db_actor = db_actor_map.get(actor_match.group(1).lower())
-            
-            if db_country and db_actor:
-                articles = MediaNarrative.objects.filter(
-                    target_country__iexact=db_country,
-                    inferred_actor__iexact=db_actor,
-                    article_text__isnull=False,
-                    strategic_intent__isnull=False
-                ).exclude(
-                    article_text='', strategic_intent='', article_text__icontains='football'
-                ).order_by('-posting_time')[:20]
+            # If a specific actor was mentioned, filter by them; otherwise, exclude domestic noise
+            if db_actor:
+                queryset = queryset.filter(inferred_actor__iexact=db_actor)
+            else:
+                queryset = queryset.exclude(inferred_actor__in=['Local', 'Domestic', ''])
+
+            articles = queryset.order_by('-posting_time')[:12]
+
+            if articles.exists():
+                context_parts = []
+                for i, a in enumerate(articles):
+                    # We give the AI enough text to understand the story (first 400 chars)
+                    snippet = a.article_text[:400].replace('\n', ' ')
+                    context_parts.append(
+                        f"SOURCE: {a.media_outlet} | ACTOR: {a.inferred_actor} | INTENT: {a.strategic_intent} | TEXT: {snippet}"
+                    )
                 
-                if articles.exists():
-                    context_parts = []
-                    for i, a in enumerate(articles[:12]):
-                        snippet = a.article_text[:250] + "..." if len(a.article_text) > 250 else a.article_text
-                        context_parts.append(
-                            f"[{i+1}] SOURCE: {a.media_outlet} | INTENT: {a.strategic_intent} | TONE: {a.tone} | CONF: {a.confidence:.2f}\n{snippet}"
-                        )
-                    context_text = "\n\n---\n\n".join(context_parts)
-                    
-                    from groq import Groq
-                    client = Groq(api_key=settings.GROQ_API_KEY)
-                    
-                    prompt = f"""You are a Senior Geopolitical Analyst specializing in foreign influence narratives.
+                context_text = "\n\n".join(context_parts)
 
-TASK: Analyze these media articles about {db_country} involving {db_actor} and synthesize the KEY NARRATIVES, CLAIMS, and TOPICS being discussed.
-
-ARTICLES:
-{context_text}
-
-INSTRUCTIONS:
-1. Identify the 2-3 DOMINANT themes or narratives across these articles.
-2. Extract specific CLAIMS, allegations, or arguments made about {db_country} by {db_actor}-linked sources.
-3. Note any recurring TOPICS (e.g., infrastructure, elections, security, economy, culture).
-4. Mention representative MEDIA OUTLETS that push these narratives.
-
-RESPOND IN THIS EXACT FORMAT (plain text, NO markdown, NO asterisks, NO emojis):
-
-The key narratives involving {db_country.upper()} and {db_actor.upper()} center on [main theme 1] and [main theme 2]. Multiple sources including [outlet 1], [outlet 2], and [outlet 3] emphasize claims about [specific claim 1] and [specific claim 2]. Recurring topics include [topic 1], [topic 2], and [topic 3]. These narratives appear to [potential impact or strategic goal]. Overall, the dominant framing suggests [synthesis of the narrative landscape].
-
-Keep your response concise (under 200 words) and factual.
-"""
-                    
-                    try:
-                        response = client.chat.completions.create(
-                            model="meta-llama/llama-4-scout-17b-16e-instruct",
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0.15,
-                            max_tokens=700
-                        )
-                        return response.choices[0].message.content.strip()
-                        
-                    except Exception as e:
-                        logger.error(f"Narrative analysis error: {e}")
-                        return f"⚠️ Narrative analysis unavailable. However, I found {articles.count()} articles about {db_country} involving {db_actor}."
+                prompt = f"""You are a Senior Geopolitical Analyst. 
+                TASK: Synthesize the actual NARRATIVE (the story and specific claims) regarding {db_country} {f'and {db_actor}' if db_actor else ''}.
                 
-                else:
-                    return f"I couldn't find articles specifically about {db_country} involving {db_actor} in the current database."
+                INSTRUCTIONS:
+                1. Identify the specific events, people, or allegations being reported (e.g., judicial affairs, corruption claims).
+                2. Explain how these stories link to foreign actors and strategic intents.
+                3. Describe the potential impact on {db_country}'s reputation or stability.
+                4. USE PLAIN TEXT ONLY. NO BOLDING. NO ASTERISKS. NO MARKDOWN.
+                
+                ARTICLE DATA:
+                {context_text}
+                """
+                
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.2
+                    )
+                    return response.choices[0].message.content.strip()
+                except Exception:
+                    return f"I found {articles.count()} articles for {db_country}, but I'm currently unable to synthesize the narrative. Most stories involve {articles[0].inferred_actor}."
+            else:
+                return f"I couldn't find any recent foreign influence narratives for {db_country} in the database."
 
         # ============================================
         # General Narratives Overview #####################
