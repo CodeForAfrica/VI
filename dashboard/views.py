@@ -272,30 +272,26 @@ class DisinfoAnalysisChatbot:
             
             total = sum(item['count'] for item in narrative_stats)
             
-            return f"""📊 **Key Narratives in Our Database:**
+            return f"""📊 Key Narratives in Our Database:
 
 We've identified {len(narrative_list)} main strategic narratives across {total} articles:
 
 {chr(10).join(narrative_list)}
 
 💡 **What each narrative means:**
-• **Economic**: Trade, investment, debt, infrastructure projects, economic influence
-• **Sovereignty**: Political influence, governance, territorial issues, autonomy
-• **SocialFragility**: Social unrest, human rights, cultural tensions, information warfare
-• **MilitaryPresence**: Military bases, security cooperation, arms, defense partnerships
-• **ResourceDependency**: Natural resources, energy, minerals, resource control
-• **ElectionInfluence**: Electoral interference, democratic processes, voting
-• **Religious**: Religious influence, cultural values, faith-based narratives
-• **LGBTQ**: LGBTQ rights narratives, social values
+• Economic: Trade, investment, debt, infrastructure projects, economic influence
+• Sovereignty: Political influence, governance, territorial issues, autonomy
+• SocialFragility: Social unrest, human rights, cultural tensions, information warfare
+• MilitaryPresence: Military bases, security cooperation, arms, defense partnerships
+• ResourceDependency: Natural resources, energy, minerals, resource control
+• ElectionInfluence: Electoral interference, democratic processes, voting
+• Religious: Religious influence, cultural values, faith-based narratives
+• LGBTQ: LGBTQ rights narratives, social values
 
 💬 **Try asking:**
 • "What are Economic narratives around Ethiopia?"
 • "Which countries use Sovereignty narratives most?"
 • "Narratives involving Senegal and France"
-
-INSTRUCTIONS:
-1. USE PLAIN TEXT ONLY AND - FOR NEW LINES. NO BOLDING (**). NO ASTERISKS (*). NO EMOJIS. NO MARKDOWN.
-
 """
 
         import re
