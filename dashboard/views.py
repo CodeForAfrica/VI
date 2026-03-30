@@ -190,21 +190,20 @@ class DisinfoAnalysisChatbot:
         country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
         actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
         
+         # Triggered if country + narrative-related keywords are mentioned
         country_match = re.search(country_pattern, query_l, re.IGNORECASE)
         actor_match = re.search(actor_pattern, query_l, re.IGNORECASE)
         
-        if country_match and any(kw in query_l for kw in ['narrative', 'talked about', 'claims', 'topic', 'involving']):
+        if country_match and any(kw in query_l for kw in ['narrative', 'talked about', 'claims', 'topic', 'involving', 'analyze', 'about']):
             db_country = self.country_mapping.get(country_match.group(1).lower())
             db_actor = None
             if actor_match:
                 db_actor = self.actor_mapping.get(actor_match.group(1).lower())
 
-            # Fetch actual article content to synthesize the story
             queryset = MediaNarrative.objects.filter(target_country__iexact=db_country).exclude(
                 article_text=''
             )
             
-            # If a specific actor was mentioned, filter by them; otherwise, exclude domestic noise
             if db_actor:
                 queryset = queryset.filter(inferred_actor__iexact=db_actor)
             else:
@@ -215,8 +214,7 @@ class DisinfoAnalysisChatbot:
             if articles.exists():
                 context_parts = []
                 for i, a in enumerate(articles):
-                    # We give the AI enough text to understand the story (first 400 chars)
-                    snippet = a.article_text[:400].replace('\n', ' ')
+                    snippet = a.article_text[:450].replace('\n', ' ')
                     context_parts.append(
                         f"SOURCE: {a.media_outlet} | ACTOR: {a.inferred_actor} | INTENT: {a.strategic_intent} | TEXT: {snippet}"
                     )
@@ -227,12 +225,12 @@ class DisinfoAnalysisChatbot:
                 TASK: Synthesize the actual NARRATIVE (the story and specific claims) regarding {db_country} {f'and {db_actor}' if db_actor else ''}.
                 
                 INSTRUCTIONS:
-                1. Identify the specific events, people, or allegations being reported (e.g., judicial affairs, corruption claims).
-                2. Explain how these stories link to foreign actors and strategic intents.
-                3. Describe the potential impact on {db_country}'s reputation or stability.
-                4. USE PLAIN TEXT ONLY. NO BOLDING. NO ASTERISKS. NO MARKDOWN.
+                1. Identify specific events, names, and allegations (e.g., corruption, judicial cases, infrastructure deals).
+                2. Explain how these stories link to foreign actors.
+                3. Mention 2-3 specific media sources from the data.
+                4. USE PLAIN TEXT ONLY AND - FOR NEW LINES. NO BOLDING (**). NO ASTERISKS (*). NO EMOJIS. NO MARKDOWN.
                 
-                ARTICLE DATA:
+                DATA:
                 {context_text}
                 """
                 
@@ -240,11 +238,11 @@ class DisinfoAnalysisChatbot:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=[{"role": "user", "content": prompt}],
-                        temperature=0.2
+                        temperature=0.1
                     )
                     return response.choices[0].message.content.strip()
                 except Exception:
-                    return f"I found {articles.count()} articles for {db_country}, but I'm currently unable to synthesize the narrative. Most stories involve {articles[0].inferred_actor}."
+                    return f"I found {articles.count()} articles for {db_country}, but the AI synthesis is currently unavailable. Most stories involve {articles[0].inferred_actor}."
             else:
                 return f"I couldn't find any recent foreign influence narratives for {db_country} in the database."
 
@@ -294,6 +292,10 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 • "What are Economic narratives around Ethiopia?"
 • "Which countries use Sovereignty narratives most?"
 • "Narratives involving Senegal and France"
+
+INSTRUCTIONS:
+1. USE PLAIN TEXT ONLY AND - FOR NEW LINES. NO BOLDING (**). NO ASTERISKS (*). NO EMOJIS. NO MARKDOWN.
+
 """
 
         import re
