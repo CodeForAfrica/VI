@@ -186,6 +186,7 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
 
+        import re
         country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
         actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
         
@@ -270,6 +271,7 @@ Keep your response concise (under 200 words) and factual.
         # ============================================
         # General Narratives Overview #####################
         # ============================================
+        import re
         narrative_keywords = ['key narratives', 'narratives', 'strategic intent', 'what narratives', 'main narratives', 'list narratives']
         if any(keyword in query_l for keyword in narrative_keywords):
             from django.db.models import Count
