@@ -1009,6 +1009,106 @@ def overview(request):
             'target_country': sub['target_country'],
             'total': sub['total']
         }) # Cache for 1 hour
+    # Generate Content-Based Topic Cluster Chart 
+    # This chart visualizes topics derived directly from article text using clustering.
+    # Only run this if no specific filters (country, actor, intent) are applied for performance.
+    topic_cluster_chart = None
+    if not calc_target_country and not calc_foreign_actor and not calc_strategic_intent:
+        topic_cluster_chart_cache_key = "overview_topic_cluster_chart"
+        topic_cluster_chart = cache.get(topic_cluster_chart_cache_key)
+
+        if topic_cluster_chart is None:
+            logger.info(f"Cache MISS for topic cluster chart: {topic_cluster_chart_cache_key}")
+            try:
+                # Fetch the text data from the already filtered queryset (full_stats_qs, which is clean and filtered by COUNTRIES)
+                # Limit the number of articles processed for clustering to manage performance
+                sample_size = 5000 # Adjust this number based on performance testing
+                article_texts = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').values_list('article_text', flat=True)[:sample_size]
+
+                if article_texts.count() < 10: # Require a minimum number of articles to cluster meaningfully
+                     logger.info("Insufficient articles for topic clustering.")
+                     topic_cluster_chart = "<p class='text-center py-5 text-muted'>Insufficient data for topic clustering.</p>"
+                else:
+                    logger.info(f"Starting topic clustering on {article_texts.count()} articles.")
+                    # --- Preprocessing (Basic Example) ---
+                    # More sophisticated preprocessing (stopword removal, stemming, lemmatization) could improve results
+                    # if NLTK or spaCy were used.
+                    processed_texts = [text.lower() for text in article_texts] # Basic lowering
+                    # Example of simple stopword removal (you can expand this list or use NLTK)
+                    # common_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'up', 'about', ...])
+                    # processed_texts = [' '.join([word for word in text.split() if word not in common_words]) for text in processed_texts]
+
+                    # --- Vectorization ---
+                    # Use TF-IDF to convert text to numerical vectors
+                    from sklearn.feature_extraction.text import TfidfVectorizer
+                    vectorizer = TfidfVectorizer(max_features=1000, stop_words='english', max_df=0.95, min_df=2) # Adjust parameters as needed
+                    tfidf_matrix = vectorizer.fit_transform(processed_texts)
+
+                    # --- Clustering ---
+                    # Use K-Means to find clusters
+                    from sklearn.cluster import KMeans
+                    import numpy as np
+                    num_clusters = min(10, len(processed_texts)) # Cap clusters or set a fixed number
+                    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10) # Increase n_init for newer sklearn versions if needed
+                    cluster_labels = kmeans.fit_predict(tfidf_matrix)
+
+                    # --- Topic Interpretation ---
+                    # Find the most common words in each cluster to label it
+                    feature_names = vectorizer.get_feature_names_out()
+                    cluster_topics = {}
+                    for i in range(num_clusters):
+                         # Get the indices of articles in this cluster
+                         cluster_indices = np.where(cluster_labels == i)[0]
+                         if len(cluster_indices) > 0:
+                            # Get the mean TF-IDF score for words in this cluster
+                            cluster_centroid = kmeans.cluster_centers_[i]
+                            # Get the top 5 words by TF-IDF score
+                            top_indices = cluster_centroid.argsort()[-5:][::-1]
+                            top_words = [feature_names[idx] for idx in top_indices]
+                            # Create a label for the cluster based on top words
+                            cluster_label = f"Cluster {i} ({len(cluster_indices)} docs): " + ", ".join(top_words)
+                            cluster_topics[i] = cluster_label
+                         else:
+                            cluster_topics[i] = f"Cluster {i} (0 docs)"
+
+                    # --- Visualization ---
+                    # Prepare data for Plotly (Bar chart showing cluster sizes and labels)
+                    cluster_counts = np.bincount(cluster_labels)
+                    cluster_labels_list = [cluster_topics[i] for i in range(len(cluster_counts))]
+
+                    df_clusters = pd.DataFrame({
+                        'Cluster': cluster_labels_list,
+                        'Count': cluster_counts
+                    })
+
+                    # Create a horizontal bar chart
+                    fig_clusters = px.bar(
+                        df_clusters,
+                        x='Count',
+                        y='Cluster',
+                        orientation='h',
+                        title="Detected Topics from Article Content (K-Means Clustering)",
+                        labels={'Count': 'Number of Articles', 'Cluster': 'Topic Cluster'},
+                        template="plotly_white"
+                    )
+                    fig_clusters.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                    topic_cluster_chart = fig_clusters.to_html(full_html=False, include_plotlyjs='cdn')
+
+                    logger.info(f"Topic clustering completed. Generated chart for {num_clusters} clusters.")
+                    # Cache the generated chart HTML for 6 hours (or longer if results are stable)
+                    cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*6)
+
+            except Exception as e:
+                logger.error(f"Topic Cluster Chart Error: {e}")
+                # Set a fallback error message and cache it briefly
+                topic_cluster_chart = "<p class='text-center py-5 text-muted'>Error generating topic cluster chart.</p>"
+                cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*15) # Cache error for 15 mins
+        else:
+            logger.info(f"Cache HIT for topic cluster chart: {topic_cluster_chart_cache_key}")
+    else:
+        # If filters are applied, clustering might be less meaningful or very slow.
+        # Optionally, show a message or skip the chart entirely.
+        topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
 
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
@@ -1115,7 +1215,9 @@ def overview(request):
             'target_country': calc_target_country,
             'inferred_actor': calc_foreign_actor,
             'strategic_intent': calc_strategic_intent,
-        }
+        },
+
+        'topic_cluster_chart': topic_cluster_chart,
     }
     return render(request, 'overview.html', context)        
    
