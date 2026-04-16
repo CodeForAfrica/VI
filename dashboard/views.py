@@ -1163,7 +1163,7 @@ def overview(request):
     # --- NEW: Generate Top Recent Narrative Themes ---
     recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:20]
     top_themes = extract_top_themes(recent_articles_for_themes, n_themes=5)
-    context['top_recent_themes'] = top_themes
+    #context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
