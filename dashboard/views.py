@@ -879,13 +879,17 @@ def extract_top_themes(articles, n_themes=5):
             theme_counter[theme] += 1
         else:
             # Fallback: use first 4 words of title/summary
-            fallback = art.display_title or art.article_text[:30].strip()
+            # Use the 'title' field from the model, or fall back to article_text if title is empty
+            fallback = getattr(art, 'title', '') or art.article_text[:30].strip() # OPTION 1
+            # OR just use article text directly:
+            # fallback = art.article_text[:30].strip() # OPTION 2
             theme = fallback.split()[:4]
             if theme:
                 theme_counter[" ".join(theme)] += 1
 
     # Return top N themes with counts
     return [f"{theme} ({count} articles)" for theme, count in theme_counter.most_common(n_themes)]
+    
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
