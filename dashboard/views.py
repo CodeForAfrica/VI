@@ -838,58 +838,91 @@ def chatbot_response(request):
         'query': user_query
     })
         
-def extract_top_themes(articles, n_themes=5):
+def extract_recent_themes(articles, n_themes=5):
     """
-    Extract top narrative themes from a list of MediaNarrative objects.
-    Returns a list of strings like: "Theme name (X articles)"
+    Extract 5 concise, human-readable narrative themes from the most recent articles
+    using a lightweight LLM prompt (Llama 3/4-scout). Only processes top 5 articles.
+    Returns list of strings like: "Theme description (X articles)"
     """
     if not articles:
         return ["No recent articles available."]
+
+    # Limit to top 5 articles for speed & relevance
+    sample_articles = list(articles[:5])
+    theme_phrases = []
+
+    # Build a compact context for the LLM
+    context_lines = []
+    for i, art in enumerate(sample_articles):
+        title = getattr(art, 'title', '').strip() or art.article_text[:60].strip()
+        snippet = art.article_text[:120].replace('\n', ' ').strip()
+        context_lines.append(f"[Article {i+1}]: Title: '{title}' | Snippet: '{snippet}'")
     
-    # Simple strategy: collect top 3 most frequent *meaningful* phrases per article,
-    # then deduplicate and rank by article count.
-    from collections import Counter
-    import re
+    context_str = "\n".join(context_lines)
 
-    theme_counter = Counter()
+    # Prompt for thematic summarization
+    prompt = f"""You are a geopolitical analyst. Based on the following 5 recent news articles, identify the top 3-5 overarching narrative themes. 
+Each theme should be a short, clear phrase (e.g., 'Judicial corruption allegations in Senegal', 'UAE military base negotiations in Djibouti').
+Do NOT list article titles or repeat phrases like 'The UAE Ministry of'. Focus on the core issue, actor, and intent.
+Return ONLY a numbered list (1., 2., ...) with no explanations.
 
-    for art in articles:
-        text = art.article_text or ""
-        if not text.strip():
-            continue
+Articles:
+{context_str}
 
-        # Basic cleaning & tokenization
-        text = re.sub(r'[^\w\s]', '', text.lower())
-        words = [w for w in text.split() if len(w) > 2 and w not in {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an'}]
+Themes:"""
+
+    try:
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=200
+        )
+        raw_output = response.choices[0].message.content.strip()
+
+        # Parse the numbered list
+        themes = []
+        for line in raw_output.splitlines():
+            line = line.strip()
+            if line.startswith(('1.', '2.', '3.', '4.', '5.')):
+                theme = line.split('.', 1)[1].strip().rstrip('.')
+                themes.append(theme)
         
-        # Get top 3 most frequent *non-generic* words (or noun phrases if you have spaCy)
-        # For now, use simple word frequency + domain keywords
-        word_freq = Counter(words)
-        # Prioritize words related to our intent categories
-        domain_keywords = {
-            'sovereignty', 'election', 'military', 'debt', 'resource', 'corruption',
-            'judicial', 'influence', 'diplomatic', 'infrastructure', 'oil', 'gas',
-            'trade', 'investment', 'refugee', 'migration', 'human rights'
-        }
-        relevant_words = [w for w, _ in word_freq.most_common(5) if w in domain_keywords or w.endswith('ion') or w.endswith('ment')]
-        
-        if relevant_words:
-            # Form a simple theme label
-            theme = " ".join(relevant_words[:3])
-            theme_counter[theme] += 1
-        else:
-            # Fallback: use first 4 words of title/summary
-            # Use the 'title' field from the model, or fall back to article_text if title is empty
-            fallback = getattr(art, 'title', '') or art.article_text[:30].strip() # OPTION 1
-            # OR just use article text directly:
-            # fallback = art.article_text[:30].strip() # OPTION 2
-            theme = fallback.split()[:4]
-            if theme:
-                theme_counter[" ".join(theme)] += 1
+        # Fallback: if LLM fails or returns empty, use a simple heuristic
+        if not themes:
+            # Try to extract from titles again, but more robustly
+            for art in sample_articles:
+                title = getattr(art, 'title', '').strip() or art.article_text[:80].strip()
+                # Remove common prefixes
+                title = re.sub(r'^\s*(The|A|An|AP\s*—\s*)', '', title, flags=re.IGNORECASE)
+                title = re.sub(r'\s*\([^)]*\)', '', title)  # Remove parentheticals
+                if title and len(title) > 10:
+                    themes.append(title)
+                    if len(themes) >= n_themes:
+                        break
+            if not themes:
+                themes = ["Narrative analysis pending..."]
 
-    # Return top N themes with counts
-    return [f"{theme} ({count} articles)" for theme, count in theme_counter.most_common(n_themes)]
-    
+        # Deduplicate and limit
+        seen = set()
+        final_themes = []
+        for t in themes:
+            t_clean = t.strip()
+            if t_clean and t_clean not in seen:
+                seen.add(t_clean)
+                final_themes.append(t_clean)
+                if len(final_themes) >= n_themes:
+                    break
+
+        # Format with counts (approximate — all sample articles are included)
+        return [f"{theme} ({len(sample_articles)} articles)" for theme in final_themes]
+
+    except Exception as e:
+        logger.error(f"LLM theme extraction failed: {e}")
+        # Fallback: return a safe placeholder
+        return ["Thematic analysis unavailable. Please check API key or retry."]
+        
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
@@ -1162,7 +1195,7 @@ def overview(request):
         topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
     # --- NEW: Generate Top Recent Narrative Themes ---
     recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:20]
-    top_themes = extract_top_themes(recent_articles_for_themes, n_themes=5)
+    top_themes = extract_recent_themes(recent_articles_for_themes, n_themes=5)
     #context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
