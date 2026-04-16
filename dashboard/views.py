@@ -838,7 +838,54 @@ def chatbot_response(request):
         'query': user_query
     })
         
+def extract_top_themes(articles, n_themes=5):
+    """
+    Extract top narrative themes from a list of MediaNarrative objects.
+    Returns a list of strings like: "Theme name (X articles)"
+    """
+    if not articles:
+        return ["No recent articles available."]
+    
+    # Simple strategy: collect top 3 most frequent *meaningful* phrases per article,
+    # then deduplicate and rank by article count.
+    from collections import Counter
+    import re
 
+    theme_counter = Counter()
+
+    for art in articles:
+        text = art.article_text or ""
+        if not text.strip():
+            continue
+
+        # Basic cleaning & tokenization
+        text = re.sub(r'[^\w\s]', '', text.lower())
+        words = [w for w in text.split() if len(w) > 2 and w not in {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an'}]
+        
+        # Get top 3 most frequent *non-generic* words (or noun phrases if you have spaCy)
+        # For now, use simple word frequency + domain keywords
+        word_freq = Counter(words)
+        # Prioritize words related to our intent categories
+        domain_keywords = {
+            'sovereignty', 'election', 'military', 'debt', 'resource', 'corruption',
+            'judicial', 'influence', 'diplomatic', 'infrastructure', 'oil', 'gas',
+            'trade', 'investment', 'refugee', 'migration', 'human rights'
+        }
+        relevant_words = [w for w, _ in word_freq.most_common(5) if w in domain_keywords or w.endswith('ion') or w.endswith('ment')]
+        
+        if relevant_words:
+            # Form a simple theme label
+            theme = " ".join(relevant_words[:3])
+            theme_counter[theme] += 1
+        else:
+            # Fallback: use first 4 words of title/summary
+            fallback = art.display_title or art.article_text[:30].strip()
+            theme = fallback.split()[:4]
+            if theme:
+                theme_counter[" ".join(theme)] += 1
+
+    # Return top N themes with counts
+    return [f"{theme} ({count} articles)" for theme, count in theme_counter.most_common(n_themes)]
 def overview(request):
     # 1. Initialize Safety Defaults
     chart = "<div>No data available</div>"
@@ -1109,7 +1156,10 @@ def overview(request):
         # If filters are applied, clustering might be less meaningful or very slow.
         # Optionally, show a message or skip the chart entirely.
         topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
-
+    # --- NEW: Generate Top Recent Narrative Themes ---
+    recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:20]
+    top_themes = extract_top_themes(recent_articles_for_themes, n_themes=5)
+    context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
