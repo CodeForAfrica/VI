@@ -565,25 +565,30 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             if top_country_list:
                 context_parts.append(f"TOP TARGET COUNTRIES FOR {foreign_actor}: {', '.join(top_country_list)}.")
 
-        # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
-        # This addresses the specific query "What are the key narratives around Senegal and France?"
-        if target_country and foreign_actor:
-            # Find top strategic intents for this specific country-actor combination
-            narrative_combinations = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
-            narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
-            if narrative_list:
-                # Construct a more specific summary based on the top narratives
-                top_narrative = narrative_combinations.first()
-                if top_narrative:
-                    summary_detail = f"Primarily driven by {top_narrative['strategic_intent']} narratives ({top_narrative['count']} articles)"
-                else:
-                    summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
-
-                context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship.")
-            else:
-                # Even if no specific narratives are found for the combo, report the count
-                context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {filtered_count}.")
-
+                # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
+                # This addresses the specific query "What are the key narratives around Senegal and France?"
+                if target_country and foreign_actor:
+                    # Find top strategic intents for this specific country-actor combination
+                    # Break the chain for clarity and to avoid potential parsing issues
+                    excluded_query = base_query.exclude(strategic_intent__in=['', None])
+                    values_query = excluded_query.values('strategic_intent')
+                    annotated_query = values_query.annotate(count=Count('id'))
+                    ordered_query = annotated_query.order_by('-count')
+                    narrative_combinations = ordered_query[:5] # Get the top 5
+                    narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
+                    if narrative_list:
+                        # Construct a more specific summary based on the top narratives
+                        top_narrative = narrative_combinations.first()
+                        if top_narrative:
+                            summary_detail = f"Primarily driven by {top_narrative['strategic_intent']} narratives ({top_narrative['count']} articles)"
+                        else:
+                            summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
+        
+                        context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship.")
+                    else:
+                        # Even if no specific narratives are found for the combo, report the count
+                        context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {filtered_count}.")
+                        
         # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
         # This aims to provide more specific, example-based information to the AI
         # Only add samples if we have a specific filter (country, actor, or intent)
