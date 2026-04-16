@@ -1237,8 +1237,8 @@ def overview(request):
         "environment that may increase vulnerability."
     )
 
-    # 11. Context Assembly
-    context = {
+        # 11. Context Assembly
+    context = { # <-- Context dictionary is defined here
         'chart': chart,
         'page_obj': page_obj,
         'total_articles': total_articles,
@@ -1272,9 +1272,12 @@ def overview(request):
         },
 
         'topic_cluster_chart': topic_cluster_chart,
-    }
+    } 
+
+    # Add Top Recent Narrative Themes to Context 
+    context['top_recent_themes'] = top_themes 
     return render(request, 'overview.html', context)        
-   
+      
 
 from django.core.paginator import Paginator
 from django.db.models import Q, Count, F
