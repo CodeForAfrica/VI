@@ -580,16 +580,18 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                 top_count_str = top_narrative_item.get('count', 0)
                 summary_detail_str = f"Primarily driven by {top_intent_str} narratives ({top_count_str} articles)"
                 
-                summary_part = f"Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}."
-                rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_str}) for strategic insights."
-                
-                key_narratives_final_text = (
-                    f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: "
-                    f"{', '.join(narrative_list)}. "
-                    f"SUMMARY: {summary_part} "
-                    f"RECOMMENDATION: {rec_part}"
-                )
-                context_parts.append(key_narratives_final_text)
+                summary_text = "Articles predominantly discuss {} between {} and {}.".format(summary_detail_str, foreign_actor, target_country)
+                        rec_text = "Focus analysis on the areas represented by the top narrative(s) ({}) for strategic insights regarding this relationship.".format(top_intent_for_rec_str)
+                        # Concatenate the parts into the final string.
+                        key_narratives_final_text = (
+                            "KEY NARRATIVES FOR {} INVOLVING {}: "
+                            "{}. "
+                            "SUMMARY: {} "
+                            "RECOMMENDATION: {}".format(
+                                target_country, foreign_actor, narrative_list_str, summary_text, rec_text
+                            )
+                        )
+                        context_parts.append(key_narratives_final_text) 
 
         # *** NEW SECTION: Add Sample Articles ***
         if target_country or foreign_actor or intent:
