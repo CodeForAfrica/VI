@@ -601,7 +601,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                         # This is safer than a complex multi-line f-string.
                         summary_part = f"Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}."
                         rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_for_rec_str}) for strategic insights regarding this relationship."
-                        # Concatenate the parts into the final string.
+                        # Retype this part:
                         key_narratives_final_text = (
                             f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: "
                             f"{narrative_list_str}. "
