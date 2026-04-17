@@ -517,13 +517,11 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
         if not target_country and not foreign_actor and not intent:
             total_articles = MediaNarrative.objects.count()
             # Use self. attributes here too for consistency
-            db_overview_text = (
-                f"DATABASE OVERVIEW: Total articles analyzed: {total_articles}. "
-                f"Monitored countries: {list(self.country_mapping.values())}. " 
-                f"Monitored foreign actors: {list(self.actor_mapping.values())}. " 
-                f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility."
-            )
-            context_parts.append(db_overview_text)
+            context_parts.append(f"DATABASE OVERVIEW: Total articles analyzed: {total_articles}. "
+                                 f"Monitored countries: {list(self.country_mapping.values())}. " # <--- Uses self.
+                                 f"Monitored foreign actors: {list(self.actor_mapping.values())}. " # <--- Uses self.
+                                 f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility.")
+
         # 2. Filtered Statistics based on detected query terms
         base_query = MediaNarrative.objects.filter(target_country__in=COUNTRIES) # Apply focus country filter here too, if applicable globally
 
@@ -561,7 +559,6 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                 context_parts.append(f"TOP ACTORS FOR {target_country}: {', '.join(top_actor_list)}.")
 
         # Example: Top countries for the foreign actor (only if foreign_actor is specified and target_country is not already specified)
-        # Example: Top countries for the foreign actor
         if foreign_actor and not target_country:
             top_countries = base_query.exclude(target_country__in=['', None]).values('target_country').annotate(c=Count('id')).order_by('-c')[:3]
             top_country_list = [f"{item['target_country']} ({item['c']} articles)" for item in top_countries]
@@ -569,66 +566,24 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                 context_parts.append(f"TOP TARGET COUNTRIES FOR {foreign_actor}: {', '.join(top_country_list)}.")
 
         # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
+        # This addresses the specific query "What are the key narratives around Senegal and France?"
         if target_country and foreign_actor:
-                    # Find top strategic intents for this specific country-actor combination
-                    # Break the chain for clarity and to avoid potential parsing issues
-                    excluded_query = base_query.exclude(strategic_intent__in=['', None])
-                    values_query = excluded_query.values('strategic_intent')
-                    annotated_query = values_query.annotate(count=Count('id'))
-                    ordered_query = annotated_query.order_by('-count')
-                    narrative_combinations = ordered_query[:5] # Get the top 5
-                    narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
-                    
-                    if narrative_list:
-                        # Construct a more specific summary based on the top narratives
-                        # Ensure narrative_combinations is a QuerySet or list of dicts
-                        top_narrative_item = narrative_combinations.first() if hasattr(narrative_combinations, 'first') else (narrative_combinations[0] if narrative_combinations else None)
-                        
-                        # Ensure top_narrative_item exists and is a dictionary-like object before accessing keys
-                        if top_narrative_item and isinstance(top_narrative_item, dict):
-                            top_intent_str = top_narrative_item.get('strategic_intent', 'N/A') # Use .get() for safety
-                            top_count_str = top_narrative_item.get('count', 0) # Use .get() for safety
-                            summary_detail_str = f"Primarily driven by {top_intent_str} narratives ({top_count_str} articles)"
-                        else:
-                            summary_detail_str = "No specific dominant narrative identified or data unavailable" # Handle case where top_narrative_item is None or not a dict
+            # Find top strategic intents for this specific country-actor combination
+            narrative_combinations = base_query.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
+            narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
+            if narrative_list:
+                # Construct a more specific summary based on the top narratives
+                top_narrative = narrative_combinations.first()
+                if top_narrative:
+                    summary_detail = f"Primarily driven by {top_narrative['strategic_intent']} narratives ({top_narrative['count']} articles)"
+                else:
+                    summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
 
-                        # Safely construct the string parts BEFORE using them in the final f-string
-                        # This avoids potential parsing issues caused by complex expressions or hidden characters within the f-string itself.
-                        narrative_list_str = ', '.join(narrative_list)
-                        # Validate/sanitize the top_intent_str for use in the recommendation part
-                        # Use the validated/safe top_intent_str, defaulting if necessary
-                        top_intent_for_rec_str = top_intent_str if 'top_intent_str' in locals() and top_intent_str != 'N/A' else 'N/A'
+                context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship.")
+            else:
+                # Even if no specific narratives are found for the combo, report the count
+                context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {filtered_count}.")
 
-                        # Build the summary and recommendation parts as simple strings first.
-                        # This ensures that the variables summary_detail_str, foreign_actor, target_country, and top_intent_for_rec_str are correctly defined and escaped.
-                        summary_text_content = summary_detail_str # Ensure summary_detail_str is defined from earlier logic
-                        foreign_actor_content = foreign_actor # Ensure foreign_actor is defined
-                        target_country_content = target_country # Ensure target_country is defined
-                        top_intent_content = top_intent_for_rec_str # Ensure top_intent_for_rec_str is defined
-
-                        # Construct the summary part string
-                        summary_part = f"Articles predominantly discuss {summary_text_content} between {foreign_actor_content} and {target_country_content}."
-                        # Construct the recommendation part string
-                        rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_content}) for strategic insights regarding this relationship."
-
-                        # Now, build the final string using an f-string with the pre-sanitized parts.
-                        # This is safer because the complex parts (summary_part, rec_part) are already resolved.
-                        key_narratives_final_text = (
-                            f"KEY NARRATIVES FOR {target_country_content} INVOLVING {foreign_actor_content}: "
-                            f"{narrative_list_str}. "
-                            f"SUMMARY: {summary_part} "
-                            f"RECOMMENDATION: {rec_part}"
-                        )
-                        context_parts.append(key_narratives_final_text) # Append the pre-built string
-                    else:
-                        # Even if no specific narratives are found for the combo, report the count
-                        # Use the count from the base_query which represents the current filters applied up to this point in the function
-                        current_filter_count = base_query.count() # Represents the count after target_country and foreign_actor filters are applied in the main logic path leading here.
-                        context_parts.append( # Append the string directly here
-                            f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. "
-                            f"FILTERED ARTICLE COUNT: {current_filter_count}."
-                        )
-                        
         # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
         # This aims to provide more specific, example-based information to the AI
         # Only add samples if we have a specific filter (country, actor, or intent)
