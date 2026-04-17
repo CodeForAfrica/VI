@@ -584,10 +584,12 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                         else:
                             summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
         
-                        context_parts.append(f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship.")
+                        key_narratives_text = f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship."
+                        context_parts.append(key_narratives_text)
                     else:
                         # Even if no specific narratives are found for the combo, report the count
-                        context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {filtered_count}.")
+                        current_filter_count = base_query.count() # Represents the count after target_country and foreign_actor filters
+                        context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {current_filter_count}.")
                         
         # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
         # This aims to provide more specific, example-based information to the AI
