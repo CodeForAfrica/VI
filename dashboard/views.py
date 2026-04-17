@@ -613,42 +613,6 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
         # Combine all parts
         context = " ".join(context_parts)
         return context if context.strip() else "No specific data found for the query terms in the database."
-
-    
-        #def safe_article_line(article):
-         #   """Safe line builder - fetches VI from the new table based on article metadata"""
-        #    text_snippet = (article.article_text[:150] + "...") if getattr(article, 'article_text', '') else "No content"
-            
-        #    # 1. FIELD EXTRACTION
-        #    source = getattr(article, 'media_outlet', 'N/A')
-        #    target = getattr(article, 'target_country', 'N/A')
-        #    actor = getattr(article, 'inferred_actor', 'N/A')
-        #    intent = getattr(article, 'strategic_intent', 'N/A')
-        #    tone = getattr(article, 'tone', 'N/A')
-            
-         #   # 2. DYNAMIC VI LOOKUP (The part you are changing)
-         #   vi_score = "N/A"
-         #   if target != 'N/A' and actor != 'N/A':
-         #       # Normalize the intent to match the Anchor CSV/Table categories
-                # Note: map_to_canonical_intent should be accessible here
-         #       canonical_intent = map_to_canonical_intent(intent, getattr(article, 'title', ''))
-                
-           #     try:
-           #         from .models import VulnerabilityIndex
-           #         # Find the risk score for this specific combo
-           #         record = VulnerabilityIndex.objects.filter(
-           #             country__iexact=target,
-           #             actor__iexact=actor,
-           #             intent__iexact=canonical_intent
-           #         ).first()
-                    
-           #         if record:
-           #             vi_score = f"{float(record.final_risk):.3f}"
-            #    except:
-            #        vi_score = "N/A"
-           # 
-            # 3. CLEAN, READABLE FORMAT
-           # return f"{source} | {target} | {actor} | {intent} | {tone} | VI:{vi_score} | {text_snippet}"
     
     def get_insights_from_ai(self, query, context):
         
