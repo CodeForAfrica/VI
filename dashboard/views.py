@@ -1309,7 +1309,7 @@ def overview(request):
             'strategic_intent': calc_strategic_intent,
         },
 
-        'topic_cluster_chart': topic_cluster_chart,
+        'topic_cluster_chart': topic_cluster_chart
     } 
 
     # Add Top Recent Narrative Themes to Context 
