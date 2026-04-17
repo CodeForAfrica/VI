@@ -1133,7 +1133,7 @@ def overview(request):
             'inferred_actor': sub['inferred_actor'],
             'target_country': sub['target_country'],
             'total': sub['total']
-        }) # Cache for 1 hour
+        })  # Cache for 1 hour
     # Generate Content-Based Topic Cluster Chart 
     # This chart visualizes topics derived directly from article text using clustering.
     # Only run this if no specific filters (country, actor, intent) are applied for performance.
