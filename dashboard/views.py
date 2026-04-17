@@ -578,19 +578,26 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                     narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
                     if narrative_list:
                         # Construct a more specific summary based on the top narratives
-                        top_narrative = narrative_combinations.first()
-                        if top_narrative:
-                            summary_detail = f"Primarily driven by {top_narrative['strategic_intent']} narratives ({top_narrative['count']} articles)"
+                        top_narrative_item = narrative_combinations.first()
+                        # Ensure top_narrative_item exists before accessing its keys
+                        if top_narrative_item:
+                            top_intent_str = top_narrative_item['strategic_intent']
+                            top_count_str = top_narrative_item['count']
+                            summary_detail_str = f"Primarily driven by {top_intent_str} narratives ({top_count_str} articles)"
                         else:
-                            summary_detail = "No specific dominant narrative identified" # Should not happen if narrative_list exists
-        
-                        key_narratives_text = f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {', '.join(narrative_list)}. SUMMARY: Articles predominantly discuss {summary_detail} between {foreign_actor} and {target_country}. RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_narrative['strategic_intent'] if top_narrative else 'N/A'}) for strategic insights regarding this relationship."
-                        context_parts.append(key_narratives_text)
-                    else:
-                        # Even if no specific narratives are found for the combo, report the count
-                        current_filter_count = base_query.count() # Represents the count after target_country and foreign_actor filters
-                        context_parts.append(f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. FILTERED ARTICLE COUNT: {current_filter_count}.")
-                        
+                            summary_detail_str = "No specific dominant narrative identified" # Should not happen if narrative_list exists
+
+                        # Safely construct the string parts
+                        narrative_list_str = ', '.join(narrative_list)
+                        top_intent_for_rec_str = top_narrative_item['strategic_intent'] if top_narrative_item else 'N/A'
+
+                        # Build the final string using an f-string with pre-validated variables
+                        key_narratives_final_text = (
+                            f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: {narrative_list_str}. "
+                            f"SUMMARY: Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}. "
+                            f"RECOMMENDATION: Focus analysis on the areas represented by the top narrative(s) ({top_intent_for_rec_str}) for strategic insights regarding this relationship."
+                        )
+                        context_parts.append(key_narratives_final_text)
         # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
         # This aims to provide more specific, example-based information to the AI
         # Only add samples if we have a specific filter (country, actor, or intent)
