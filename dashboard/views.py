@@ -592,18 +592,29 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                         else:
                             summary_detail_str = "No specific dominant narrative identified or data unavailable" # Handle case where top_narrative_item is None or not a dict
 
-                        # Safely construct the string parts
+                        # Safely construct the string parts BEFORE using them in the final f-string
+                        # This avoids potential parsing issues caused by complex expressions or hidden characters within the f-string itself.
                         narrative_list_str = ', '.join(narrative_list)
+                        # Validate/sanitize the top_intent_str for use in the recommendation part
                         # Use the validated/safe top_intent_str, defaulting if necessary
                         top_intent_for_rec_str = top_intent_str if 'top_intent_str' in locals() and top_intent_str != 'N/A' else 'N/A'
 
-                        # Build the final string using a standard string concatenation to avoid potential f-string parsing issues
-                        # This is safer than a complex multi-line f-string.
-                        summary_part = f"Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}."
-                        rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_for_rec_str}) for strategic insights regarding this relationship."
-                        # Retype this part:
+                        # Build the summary and recommendation parts as simple strings first.
+                        # This ensures that the variables summary_detail_str, foreign_actor, target_country, and top_intent_for_rec_str are correctly defined and escaped.
+                        summary_text_content = summary_detail_str # Ensure summary_detail_str is defined from earlier logic
+                        foreign_actor_content = foreign_actor # Ensure foreign_actor is defined
+                        target_country_content = target_country # Ensure target_country is defined
+                        top_intent_content = top_intent_for_rec_str # Ensure top_intent_for_rec_str is defined
+
+                        # Construct the summary part string
+                        summary_part = f"Articles predominantly discuss {summary_text_content} between {foreign_actor_content} and {target_country_content}."
+                        # Construct the recommendation part string
+                        rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_content}) for strategic insights regarding this relationship."
+
+                        # Now, build the final string using an f-string with the pre-sanitized parts.
+                        # This is safer because the complex parts (summary_part, rec_part) are already resolved.
                         key_narratives_final_text = (
-                            f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: "
+                            f"KEY NARRATIVES FOR {target_country_content} INVOLVING {foreign_actor_content}: "
                             f"{narrative_list_str}. "
                             f"SUMMARY: {summary_part} "
                             f"RECOMMENDATION: {rec_part}"
