@@ -609,9 +609,8 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                         context_parts.append(key_narratives_final_text) # Append the pre-built string
                     else:
                         # Even if no specific narratives are found for the combo, report the count
-                        # Use the count from the base_query which represents the current filters applied up to this point in the function
-                        current_filter_count = base_query.count() # Represents the count after target_country and foreign_actor filters are applied in the main logic path leading here.
-                        context_parts.append( # Append the string directly here
+                        current_filter_count = base_query.count() 
+                        context_parts.append(
                             f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. "
                             f"FILTERED ARTICLE COUNT: {current_filter_count}."
                         )
