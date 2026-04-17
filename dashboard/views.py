@@ -911,7 +911,7 @@ Themes:"""
                     }
                     for art in sample_articles
                 ]
-            ] 
+            }]
 
         # Ensure count is accurate
         for t in themes:
