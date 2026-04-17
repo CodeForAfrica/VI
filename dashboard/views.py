@@ -561,90 +561,54 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                 context_parts.append(f"TOP ACTORS FOR {target_country}: {', '.join(top_actor_list)}.")
 
         # Example: Top countries for the foreign actor (only if foreign_actor is specified and target_country is not already specified)
+        # Example: Top countries for the foreign actor
         if foreign_actor and not target_country:
             top_countries = base_query.exclude(target_country__in=['', None]).values('target_country').annotate(c=Count('id')).order_by('-c')[:3]
             top_country_list = [f"{item['target_country']} ({item['c']} articles)" for item in top_countries]
             if top_country_list:
                 context_parts.append(f"TOP TARGET COUNTRIES FOR {foreign_actor}: {', '.join(top_country_list)}.")
 
-                # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
-                # This addresses the specific query "What are the key narratives around Senegal and France?"
-                if target_country and foreign_actor:
-                    # Find top strategic intents for this specific country-actor combination
-                    # Break the chain for clarity and to avoid potential parsing issues
-                    excluded_query = base_query.exclude(strategic_intent__in=['', None])
-                    values_query = excluded_query.values('strategic_intent')
-                    annotated_query = values_query.annotate(count=Count('id'))
-                    ordered_query = annotated_query.order_by('-count')
-                    narrative_combinations = ordered_query[:5] # Get the top 5
-                    narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
-                    if narrative_list:
-                        # Construct a more specific summary based on the top narratives
-                        # Ensure narrative_combinations is a QuerySet or list of dicts
-                        top_narrative_item = narrative_combinations.first() if hasattr(narrative_combinations, 'first') else (narrative_combinations[0] if narrative_combinations else None)
-                        
-                        # Ensure top_narrative_item exists and is a dictionary-like object before accessing keys
-                        if top_narrative_item and isinstance(top_narrative_item, dict):
-                            top_intent_str = top_narrative_item.get('strategic_intent', 'N/A') # Use .get() for safety
-                            top_count_str = top_narrative_item.get('count', 0) # Use .get() for safety
-                            summary_detail_str = f"Primarily driven by {top_intent_str} narratives ({top_count_str} articles)"
-                        else:
-                            summary_detail_str = "No specific dominant narrative identified or data unavailable" # Handle case where top_narrative_item is None or not a dict
+        # *** REVISED BLOCK TO GENERATE KEY NARRATIVES FOR COUNTRY-ACTOR COMBINATIONS ***
+        if target_country and foreign_actor:
+            excluded_query = base_query.exclude(strategic_intent__in=['', None])
+            narrative_combinations = excluded_query.values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
+            narrative_list = [f"{item['strategic_intent']} ({item['count']} articles)" for item in narrative_combinations]
+            
+            if narrative_list:
+                top_narrative_item = narrative_combinations[0]
+                top_intent_str = top_narrative_item.get('strategic_intent', 'N/A')
+                top_count_str = top_narrative_item.get('count', 0)
+                summary_detail_str = f"Primarily driven by {top_intent_str} narratives ({top_count_str} articles)"
+                
+                summary_part = f"Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}."
+                rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_str}) for strategic insights."
+                
+                key_narratives_final_text = (
+                    f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: "
+                    f"{', '.join(narrative_list)}. "
+                    f"SUMMARY: {summary_part} "
+                    f"RECOMMENDATION: {rec_part}"
+                )
+                context_parts.append(key_narratives_final_text)
 
-                        # Safely construct the string parts
-                        narrative_list_str = ', '.join(narrative_list)
-                        # Use the validated/safe top_intent_str, defaulting if necessary
-                        top_intent_for_rec_str = top_intent_str if 'top_intent_str' in locals() and top_intent_str != 'N/A' else 'N/A'
-
-                        # Build the final string using a standard string concatenation to avoid potential f-string parsing issues
-                        # This is safer than a complex multi-line f-string.
-                        summary_part = f"Articles predominantly discuss {summary_detail_str} between {foreign_actor} and {target_country}."
-                        rec_part = f"Focus analysis on the areas represented by the top narrative(s) ({top_intent_for_rec_str}) for strategic insights regarding this relationship."
-                        key_narratives_final_text = (
-                            f"KEY NARRATIVES FOR {target_country} INVOLVING {foreign_actor}: "
-                            f"{narrative_list_str}. "
-                            f"SUMMARY: {summary_part} "
-                            f"RECOMMENDATION: {rec_part}"
-                        )
-                        context_parts.append(key_narratives_final_text) # Append the pre-built string
-                    else:
-                        # Even if no specific narratives are found for the combo, report the count
-                        current_filter_count = base_query.count() 
-                        context_parts.append(
-                            f"No specific top narratives found for {target_country} involving {foreign_actor} in the top 5. "
-                            f"FILTERED ARTICLE COUNT: {current_filter_count}."
-                        )
-                        
-        # *** NEW SECTION: Add Sample Articles to Context (Limited Details) ***
-        # This aims to provide more specific, example-based information to the AI
-        # Only add samples if we have a specific filter (country, actor, or intent)
+        # *** NEW SECTION: Add Sample Articles ***
         if target_country or foreign_actor or intent:
-            # Fetch a limited number of recent articles matching the current filters
-            sample_articles = base_query.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:3] # Limit to 3 samples
+            sample_articles = base_query.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:3]
             sample_details = []
             for article in sample_articles:
-                # Extract limited, relevant details from each sample article
                 source = getattr(article, 'media_outlet', 'N/A')
-                target = getattr(article, 'target_country', 'N/A')
-                actor = getattr(article, 'inferred_actor', 'N/A')
                 article_intent = getattr(article, 'strategic_intent', 'N/A')
-                # Take a short snippet of the article text (e.g., first 100 chars)
-                text_snippet = getattr(article, 'article_text', '')[:100] + "..." if getattr(article, 'article_text', '') else "No content available"
-                # Append a concise line representing this sample
+                actor = getattr(article, 'inferred_actor', 'N/A')
+                text_snippet = getattr(article, 'article_text', '')[:100] + "..."
                 sample_details.append(f"SOURCE: {source} | INTENT: {article_intent} | ACTOR: {actor} | SNIPPET: {text_snippet}")
 
             if sample_details:
-                # Add the sample details to the context
-                context_parts.append(f"SAMPLE ARTICLES FOR FILTERS (Country: {target_country or 'Any'}, Actor: {foreign_actor or 'Any'}, Intent: {intent or 'Any'}):")
-                context_parts.extend(sample_details) # Add each sample line as a separate part
-            else:
-                context_parts.append(" for the applied filters.")
+                context_parts.append("SAMPLE ARTICLES FOR FILTERS:")
+                context_parts.extend(sample_details)
 
-
-        # Combine all parts
+        # Final Combine and Return
         context = " ".join(context_parts)
-        return context if context.strip() else "No specific data found for the query terms in the database."
-
+        return context if context.strip() else "No specific data found for the query terms."
     
         #def safe_article_line(article):
          #   """Safe line builder - fetches VI from the new table based on article metadata"""
