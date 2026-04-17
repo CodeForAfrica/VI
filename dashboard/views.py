@@ -481,7 +481,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
         context = self.get_context_from_db(query)
         return self.get_insights_from_ai(query, context)
         
-        def get_context_from_db(self, query):
+    def get_context_from_db(self, query):
         """Generate clean, readable context for AI - NO formatting errors!"""
         from django.db.models import Count # Import moved here
         query_lower = query.lower()
