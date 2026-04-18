@@ -1198,7 +1198,7 @@ def overview(request):
     else:
         top_themes = [{"theme": "No articles for theme analysis", "article_count": 0, "articles": []}]
 
-    #context['top_recent_themes'] = top_themes
+    context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
