@@ -1211,7 +1211,7 @@ def overview(request):
         top_articles = []
         for art in recent_articles_for_themes[:5]:
             top_articles.append({
-                'title': (art.title or art.article_text[:80] + '...'),
+                'title': (getattr(art, 'title', '') or art.article_text[:80] + '...'),
                 'source': art.media_outlet,
                 'url': art.url,
                 'posting_time': art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A',
