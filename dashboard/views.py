@@ -1187,18 +1187,7 @@ def overview(request):
         # If filters are applied, clustering might be less meaningful or very slow.
         # Optionally, show a message or skip the chart entirely.
         topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
-    # --- NEW: Generate Top Recent Narrative Themes ---
-    recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:30]
-
-    print(f"🔍 DEBUG: Found {recent_articles_for_themes.count()} articles for LLM themes")
     
-    if recent_articles_for_themes.exists():
-        top_themes = extract_recent_themes_with_links(recent_articles_for_themes, n_themes=5)
-        print(f"✅ LLM Generated {len(top_themes)} themes")
-    else:
-        top_themes = [{"theme": "No articles for theme analysis", "article_count": 0, "articles": []}]
-
-    context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
@@ -1308,6 +1297,17 @@ def overview(request):
 
         'topic_cluster_chart': topic_cluster_chart
     } 
+
+    # Generate themes (AFTER context is defined)
+    recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:30]
+    print(f"🔍 DEBUG: Found {recent_articles_for_themes.count()} articles for LLM themes")
+    
+    if recent_articles_for_themes.exists():
+        top_themes = extract_recent_themes_with_links(recent_articles_for_themes, n_themes=5)
+        print(f"✅ LLM Generated {len(top_themes)} themes")
+    else:
+        top_themes = [{"theme": "No articles for theme analysis", "article_count": 0, "articles": []}]
+
 
     # Add Top Recent Narrative Themes to Context 
     context['top_recent_themes'] = top_themes 
