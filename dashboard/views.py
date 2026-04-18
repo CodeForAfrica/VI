@@ -1270,8 +1270,14 @@ def overview(request):
                             logger.error(f"Cluster chart error: {cluster_error}")
                             topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>Clustering error</small></div>"
                         
-                        # Cache the result (OUTSIDE try/except - executes regardless of success/failure)
-                        cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+                    # Cache the result (OUTSIDE try/except - executes regardless of success/failure)
+                    cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+                    
+            except Exception as clustering_error:  # ← 👈 MAIN EXCEPT BLOCK - ADD THIS!
+                logger.error(f"Topic clustering failed: {clustering_error}")
+                topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering unavailable.</p>"
+                cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+        
 
                         
     # 8. Pagination (This is inherently fast as it limits the final result set)
