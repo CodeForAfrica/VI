@@ -56,6 +56,29 @@
     #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
     #chat-box { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
     .typing { font-style: italic; color: #888; font-size: 0.8rem; }
+
+
+    /* 🌟 Theme Cards  */
+    .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; margin: 3rem 0; }
+    .theme-card { background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 20px; padding: 2rem; box-shadow: 0 10px 40px rgba(0,0,0,0.08); transition: all 0.3s ease; position: relative; overflow: hidden; }
+    .theme-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #3b82f6, #1d4ed8); }
+    .theme-card:hover { transform: translateY(-8px); box-shadow: 0 25px 60px rgba(0,0,0,0.15); border-color: #2563eb; }
+    .theme-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .theme-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; color: white; }
+    .economic { background: linear-gradient(135deg, #10b981, #059669); }
+    .sovereignty { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .military { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .election { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    .social { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+    .theme-title { font-size: 1.4rem; font-weight: 800; background: linear-gradient(135deg, #1e293b, #334155); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 0; line-height: 1.3; }
+    .theme-stats { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .article-card { background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.1); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; transition: all 0.2s ease; text-decoration: none; display: block; }
+    .article-card:hover { background: rgba(37, 99, 235, 0.08); border-color: #2563eb; transform: translateX(4px); }
+    .article-title { font-weight: 600; font-size: 0.95rem; color: #1e293b; margin-bottom: 0.25rem; line-height: 1.4; }
+    .article-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #64748b; }
+    .article-source { font-weight: 600; color: #2563eb; }
+    .view-more { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #2563eb; text-decoration: none; font-size: 0.9rem; transition: color 0.2s ease; margin-top: 1rem; }
+    .view-more:hover { color: #1d4ed8; }
 </style>
 
 <div class="row g-3 mb-5">
@@ -183,29 +206,47 @@
         </div>
     </div>
 </div>
-<!-- Top Themes Section -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+<section class="theme-grid">
     {% for theme in top_recent_themes %}
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 class="font-bold text-xl mb-4 text-gray-900">{{ theme.theme }}</h3>
-        <p class="text-sm text-gray-500 mb-4">{{ theme.article_count }} articles</p>
+    <div class="theme-card">
+        <div class="theme-header">
+            <div class="theme-icon {% if 'economic' in theme.theme|lower %}economic{% elif 'sovereignty' in theme.theme|lower %}sovereignty{% elif 'military' in theme.theme|lower %}military{% elif 'election' in theme.theme|lower %}election{% else %}social{% endif %}">
+                {% if 'economic' in theme.theme|lower %}💰{% elif 'sovereignty' in theme.theme|lower %}🏛️{% elif 'military' in theme.theme|lower %}⚔️{% elif 'election' in theme.theme|lower %}🗳️{% else %}👥{% endif %}
+            </div>
+            <h3 class="theme-title">{{ theme.theme|title }}</h3>
+        </div>
+        
+        <div class="theme-stats">
+            <div class="badge bg-primary rounded-pill px-3 py-1">{{ theme.article_count }} articles</div>
+            <span class="text-muted">Latest coverage</span>
+        </div>
         
         {% for article in theme.articles|slice:":3" %}
-        <div class="mb-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
-            <a href="{{ article.url }}" target="_blank" class="font-medium text-blue-600 hover:text-blue-800 block mb-1">
-                {{ article.title }}
-            </a>
-            <div class="text-xs text-gray-500">
-                {{ article.source }} • {{ article.posting_time }}
+        <a href="{{ article.url }}" target="_blank" class="article-card">
+            <div class="article-title">{{ article.title }}</div>
+            <div class="article-meta">
+                <span class="article-source">{{ article.source }}</span>
+                <span>{{ article.posting_time }}</span>
             </div>
-        </div>
+        </a>
+        {% empty %}
+        <div class="text-center py-4 text-muted">No articles</div>
         {% endfor %}
         
         {% if theme.articles|length > 3 %}
-        <a href="#" class="text-xs text-blue-600 hover:text-blue-800">+{{ theme.articles|length|add:"-3" }} more</a>
+        <a href="#" class="view-more">
+            +{{ theme.articles|length|add:"-3" }} more <i class="fas fa-arrow-right"></i>
+        </a>
         {% endif %}
     </div>
+    {% empty %}
+    <div class="text-center py-12 text-muted col-span-full">
+        <i class="fas fa-search fa-3x mb-3 opacity-50"></i>
+        <h4>Refine your filters</h4>
+    </div>
     {% endfor %}
+</section>
+
 </div>
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
 <div class="row g-4 mb-3">
