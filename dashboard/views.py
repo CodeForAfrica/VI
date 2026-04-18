@@ -1261,11 +1261,11 @@ def overview(request):
                                     include_plotlyjs='cdn',
                                     config={'displayModeBar': False}
                                 )
-                            logger.info(f"✅ CLICKABLE chart: {len(df_clusters)} themes w/ {df_clusters['URLs'].sum()} URLs")
-                            
-                            cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
-                        else:
-                            topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>No themes (need 20+ articles)</small></div>"
+                                logger.info(f"✅ CLICKABLE chart: {len(df_clusters)} themes w/ {df_clusters['URLs'].sum()} URLs")
+                                
+                                cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+                            else:
+                                topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>No themes (need 20+ articles)</small></div>"
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
