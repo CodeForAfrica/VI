@@ -804,47 +804,35 @@ def chatbot_response(request):
     })
         
 def extract_recent_themes_with_links(articles, n_themes=5):
-    """
-    ✅ RETURNS: List of themes with clickable article links
-    [
-        {
-            'theme': 'Economic Influence in Senegal',
-            'article_count': 3,
-            'articles': [
-                {'title': 'China invests $2B...', 'source': 'BBC', 'url': 'https://...', 'posting_time': '2024-01-15'}
-            ]
-        }
-    ]
-    """
     if not articles:
-        return []
+        return [{"theme": "No recent articles", "article_count": 0, "articles": []}]
 
-    # Build rich context for LLM
+    sample_articles = list(articles[:8])
+    
     context_lines = []
-    for i, art in enumerate(articles[:8]):  # Top 8 most recent
-        title = (art.title or art.article_text.split('.')[0][:80] + "...")
-        snippet = art.article_text[:150].replace('\n', ' ')
+    for i, art in enumerate(sample_articles):
+        # ✅ FIXED: Safe title extraction
+        title = getattr(art, 'title', None)
+        if not title:
+            first_line = art.article_text.split('\n')[0].strip()
+            title = first_line[:80] + "..." if len(first_line) > 80 else first_line
+        
+        snippet = art.article_text[:150].replace('\n', ' ').strip()
+        date_str = art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A'
         context_lines.append(
             f"#{i+1} | TITLE: '{title}' | SOURCE: {art.media_outlet} | "
-            f"URL: {art.url} | DATE: {art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A'} | "
-            f"PREVIEW: {snippet}"
+            f"URL: {art.url} | DATE: {date_str} | PREVIEW: {snippet}"
         )
-    
     context_str = "\n".join(context_lines)
 
-    # LLM extracts themes + matches articles
-    prompt = f"""From these {len(articles)} recent articles, identify 3-5 key themes.
+    prompt = f"""Analyze these {len(sample_articles)} recent articles. Extract 3-5 themes.
 
-RULES:
-1. Themes = 5-12 words max (e.g. "China economic deals Senegal")
-2. Link each theme to 1-3 SPECIFIC articles by #number
-3. Format EXACTLY:
-
+FORMAT EXACTLY:
 Economic Influence:
-#1 BBC, #3 Reuters
+#1, #3
 
-Sovereignty Threats:
-#2 AlJazeera, #5 LocalNews
+Sovereignty Issues:  
+#2, #4, #5
 
 Articles:
 {context_str}
@@ -859,55 +847,72 @@ THEMES:"""
             temperature=0.1,
             max_tokens=400
         )
-        
-        raw_themes = response.choices[0].message.content.strip()
-        
-        # Parse LLM output → Rich theme objects
+        raw = response.choices[0].message.content.strip()
+
         themes = []
-        current_theme = None
+        lines = raw.split('\n')
+        i = 0
         
-        for line in raw_themes.split('\n'):
-            line = line.strip()
+        while i < len(lines):
+            line = lines[i].strip()
             if ':' in line and not line.startswith('#'):
-                # New theme
-                if current_theme:
+                if 'current_theme' in locals():
                     themes.append(current_theme)
+                
                 theme_name = line.split(':', 1)[0].strip()
-                current_theme = {
-                    "theme": theme_name,
-                    "article_count": 0,
-                    "articles": []
-                }
-            elif line.startswith('#') and current_theme:
-                # Article reference #1, #3 etc.
-                art_num = int(line.split('#')[1].split()[0]) - 1
-                if 0 <= art_num < len(articles):
-                    art = articles[art_num]
-                    current_theme["articles"].append({
-                        "title": art.title or art.article_text.split('.')[0][:100] + "...",
-                        "source": art.media_outlet,
-                        "url": art.url or "#",
-                        "posting_time": art.posting_time.strftime('%Y-%m-%d') if art.posting_time else None
-                    })
-        
-        if current_theme:
-            themes.append(current_theme)
+                current_theme = {"theme": theme_name, "article_count": 0, "articles": []}
             
-        # Ensure counts are accurate
+            elif line.startswith('#') and 'current_theme' in locals():
+                import re
+                nums = re.findall(r'#(\d+)', line)
+                for num_str in nums:
+                    art_idx = int(num_str) - 1
+                    if 0 <= art_idx < len(sample_articles):
+                        art = sample_articles[art_idx]
+                        # ✅ FIXED: Safe title extraction here too
+                        art_title = getattr(art, 'title', None)
+                        if not art_title:
+                            first_line = art.article_text.split('\n')[0].strip()
+                            art_title = first_line[:100] + "..." if len(first_line) > 100 else first_line
+                        
+                        current_theme["articles"].append({
+                            "title": art_title,
+                            "source": art.media_outlet,
+                            "url": art.url or "#",
+                            "posting_time": art.posting_time
+                        })
+            
+            i += 1
+        
+        if 'current_theme' in locals():
+            themes.append(current_theme)
+
         for theme in themes:
             theme["article_count"] = len(theme["articles"])
-            
+
+        if not themes:
+            themes = [{
+                "theme": f"Latest Articles ({len(sample_articles)})",
+                "article_count": len(sample_articles),
+                "articles": [{
+                    "title": (getattr(art, 'title', None) or art.article_text.split('\n')[0][:80] + "..."),
+                    "source": art.media_outlet,
+                    "url": art.url or "#",
+                    "posting_time": art.posting_time
+                } for art in sample_articles[:5]]
+            }]
+
         return themes[:n_themes]
-        
-    except:
-        # Fallback: Raw recent articles as "themes"
+
+    except Exception as e:
+        logger.error(f"Theme extraction failed: {e}")
         return [{
-            "theme": f"Recent Articles ({len(articles)})",
-            "article_count": len(articles),
+            "theme": f"Recent Coverage ({len(articles)} articles)",
+            "article_count": min(len(articles), 5),
             "articles": [{
-                "title": art.title or art.article_text[:80] + "...",
+                "title": (getattr(art, 'title', None) or art.article_text.split('\n')[0][:80] + "..."),
                 "source": art.media_outlet,
-                "url": art.url or "#", 
+                "url": art.url or "#",
                 "posting_time": art.posting_time
             } for art in articles[:5]]
         }]
