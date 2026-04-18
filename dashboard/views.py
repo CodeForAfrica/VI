@@ -1199,8 +1199,41 @@ def overview(request):
         # Optionally, show a message or skip the chart entirely.
         topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
     # --- NEW: Generate Top Recent Narrative Themes ---
-    recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:20]
-    top_themes = extract_recent_themes_with_links(recent_articles_for_themes, n_themes=5)
+    recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:10]
+
+    print(f"🔍 DEBUG: Found {recent_articles_for_themes.count()} recent articles for themes")
+    
+    # Create themes from TOP 5 recent articles directly
+    top_themes = []
+    
+    if recent_articles_for_themes.exists():
+        # Theme 1: Most Recent Articles
+        top_articles = []
+        for art in recent_articles_for_themes[:5]:
+            top_articles.append({
+                'title': (art.title or art.article_text[:80] + '...'),
+                'source': art.media_outlet,
+                'url': art.url,
+                'posting_time': art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A',
+                'intent': art.strategic_intent or 'Unknown',
+                'actor': art.inferred_actor or 'Unknown'
+            })
+        
+        top_themes = [{
+            'theme': f"Top {len(top_articles)} Recent Foreign Influence Articles",
+            'article_count': recent_articles_for_themes.count(),
+            'articles': top_articles
+        }]
+        
+        print(f"✅ Generated theme with {len(top_articles)} articles + {recent_articles_for_themes.count()} total")
+    else:
+        top_themes = [{
+            'theme': "No recent articles match current filters",
+            'article_count': 0,
+            'articles': []
+        }]
+        print("❌ No articles found for themes")
+
     #context['top_recent_themes'] = top_themes
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
