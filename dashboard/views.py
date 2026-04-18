@@ -1224,8 +1224,7 @@ def overview(request):
                                     color='Articles',
                                     color_continuous_scale=['#eff6ff','#0ea5e9','#1e40af']
                                 )
-
-                                
+                        
                                 # URLS IN BARS + HOVER
                                 fig_clusters.update_traces(
                                     text=[f"{row['Articles']} {row['UrlLabel']}" for _, row in df_clusters.iterrows()],
@@ -1271,8 +1270,10 @@ def overview(request):
                             logger.error(f"Cluster chart error: {cluster_error}")
                             topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>Clustering error</small></div>"
                         
-                        # Cache the result
-                        cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)    
+                        # Cache the result (OUTSIDE try/except - executes regardless of success/failure)
+                        cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+
+                        
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
