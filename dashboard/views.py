@@ -1391,7 +1391,7 @@ def overview(request):
         'topic_cluster_chart': topic_cluster_chart
     } 
 
-    # ✅ FIXED: Theme generation at CORRECT function level indentation (4 spaces from def overview)
+    # ✅ Theme generation at CORRECT function level indentation 
     recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:30]
     print(f"🔍 DEBUG: Found {recent_articles_for_themes.count()} articles for LLM themes")
     
