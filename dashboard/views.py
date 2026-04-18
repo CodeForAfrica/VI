@@ -1224,6 +1224,7 @@ def overview(request):
                                     color='Articles',
                                     color_continuous_scale=['#eff6ff','#0ea5e9','#1e40af']
                                 )
+
                                 
                                 # URLS IN BARS + HOVER
                                 fig_clusters.update_traces(
@@ -1247,7 +1248,7 @@ def overview(request):
                                 )
                                 
                                 fig_clusters.update_layout(
-                                    height=340,  # COMPACT
+                                    height=340,
                                     margin=dict(l=150, r=5, t=45, b=5),
                                     title_font=dict(size=13, family="Arial Black"),
                                     font_size=10.5,
@@ -1262,10 +1263,16 @@ def overview(request):
                                     config={'displayModeBar': False}
                                 )
                                 logger.info(f"✅ CLICKABLE chart: {len(df_clusters)} themes w/ {df_clusters['URLs'].sum()} URLs")
-                                
                                 cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
                             else:
                                 topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>No themes (need 20+ articles)</small></div>"
+                        
+                        except Exception as cluster_error:
+                            logger.error(f"Cluster chart error: {cluster_error}")
+                            topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>Clustering error</small></div>"
+                        
+                        # Cache the result
+                        cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)    
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
