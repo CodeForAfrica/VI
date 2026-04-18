@@ -182,25 +182,55 @@
         </div>
     </div>
 </div>
-<div class="row g-4 mb-5">
-    <div class="col-12">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Recent Narrative Themes</h5>
+<!-- Top Recent Narrative Themes -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-gradient-primary text-white p-3">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-fire me-2"></i>
+          {{ top_recent_themes.0.theme }}
+          <span class="badge bg-light text-dark ms-2 fs-6">
+            {{ top_recent_themes.0.article_count }} total articles
+          </span>
+        </h5>
+      </div>
+      <div class="card-body p-0">
+        {% for article in top_recent_themes.0.articles %}
+        <div class="article-item border-bottom py-3 px-4 hover-effect">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="flex-grow-1 pe-3">
+              <a href="{{ article.url }}" target="_blank" class="text-decoration-none fw-semibold h6 mb-1 d-block">
+                {{ article.title }}
+              </a>
+              <div class="small text-muted">
+                <i class="fas fa-newspaper me-1"></i>{{ article.source }} 
+                - <i class="fas fa-calendar me-1"></i>{{ article.posting_time }}
+              </div>
             </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for theme in top_recent_themes %}
-                    <li class="list-group-item d-flex justify-content-between align-items-start">
-                        <span>{{ theme }}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No recent narrative themes found.</li>
-                    {% endfor %}
-                </ul>
+            <div class="text-end">
+              <span class="badge bg-info text-xs">{{ article.intent }}</span>
+              <br><small class="badge bg-secondary">{{ article.actor }}</small>
             </div>
+          </div>
         </div>
+        {% empty %}
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-inbox fa-3x mb-3 opacity-50"></i>
+          <p class="mb-0">No recent articles match current filters</p>
+        </div>
+        {% endfor %}
+        
+        {% if top_recent_themes.0.article_count > 5 %}
+        <div class="text-center border-top p-3">
+          <a href="/dashboard/all_articles/" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-list me-1"></i>View All {{ top_recent_themes.0.article_count }} Articles
+          </a>
+        </div>
+        {% endif %}
+      </div>
     </div>
+  </div>
 </div>
 <h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
 <div class="row g-4 mb-3">
