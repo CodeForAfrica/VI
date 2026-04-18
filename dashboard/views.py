@@ -805,127 +805,111 @@ def chatbot_response(request):
         
 def extract_recent_themes_with_links(articles, n_themes=5):
     """
-    Returns list of dicts: {
-        'theme': str,
-        'article_count': int,
-        'articles': [{'title', 'source', 'url', 'posting_time'}]
-    }
-    Uses LLM for theme generation + links from top 5 articles.
+    ✅ RETURNS: List of themes with clickable article links
+    [
+        {
+            'theme': 'Economic Influence in Senegal',
+            'article_count': 3,
+            'articles': [
+                {'title': 'China invests $2B...', 'source': 'BBC', 'url': 'https://...', 'posting_time': '2024-01-15'}
+            ]
+        }
+    ]
     """
     if not articles:
-        return [{"theme": "No recent articles", "article_count": 0, "articles": []}]
+        return []
 
-    # Take top 5 most recent (most relevant)
-    sample_articles = list(articles[:5])
-
-    # Build context for LLM
+    # Build rich context for LLM
     context_lines = []
-    for i, art in enumerate(sample_articles):
-        title = getattr(art, 'title', '').strip() or art.article_text[:60].strip()
-        snippet = art.article_text[:120].replace('\n', ' ').strip()
+    for i, art in enumerate(articles[:8]):  # Top 8 most recent
+        title = (art.title or art.article_text.split('.')[0][:80] + "...")
+        snippet = art.article_text[:150].replace('\n', ' ')
         context_lines.append(
-            f"[Article {i+1}]: Title='{title}' | Source='{art.media_outlet}' | URL={art.url} | Date={art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A'} | Snippet='{snippet}'"
+            f"#{i+1} | TITLE: '{title}' | SOURCE: {art.media_outlet} | "
+            f"URL: {art.url} | DATE: {art.posting_time.strftime('%Y-%m-%d') if art.posting_time else 'N/A'} | "
+            f"PREVIEW: {snippet}"
         )
+    
     context_str = "\n".join(context_lines)
 
-    prompt = f"""You are a geopolitical analyst. From the following 5 recent articles, identify 3-5 overarching narrative themes.
-Each theme must be a concise phrase (max 12 words). For each theme, list the 1–2 article titles and sources that best exemplify it.
-Format strictly as:
-Theme 1: [theme phrase]
-- [Title] (Source)
-- [Title] (Source)
+    # LLM extracts themes + matches articles
+    prompt = f"""From these {len(articles)} recent articles, identify 3-5 key themes.
 
-Theme 2: ...
-Do NOT add explanations or markdown. Be precise.
+RULES:
+1. Themes = 5-12 words max (e.g. "China economic deals Senegal")
+2. Link each theme to 1-3 SPECIFIC articles by #number
+3. Format EXACTLY:
+
+Economic Influence:
+#1 BBC, #3 Reuters
+
+Sovereignty Threats:
+#2 AlJazeera, #5 LocalNews
 
 Articles:
 {context_str}
 
-Themes:"""
+THEMES:"""
 
     try:
         client = Groq(api_key=settings.GROQ_API_KEY)
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=300
+            temperature=0.1,
+            max_tokens=400
         )
-        raw = response.choices[0].message.content.strip()
-
+        
+        raw_themes = response.choices[0].message.content.strip()
+        
+        # Parse LLM output → Rich theme objects
         themes = []
         current_theme = None
-        for line in raw.splitlines():
+        
+        for line in raw_themes.split('\n'):
             line = line.strip()
-            if line.startswith("Theme ") and ": " in line:
+            if ':' in line and not line.startswith('#'):
+                # New theme
                 if current_theme:
                     themes.append(current_theme)
-                theme_text = line.split(":", 1)[1].strip()
+                theme_name = line.split(':', 1)[0].strip()
                 current_theme = {
-                    "theme": theme_text,
+                    "theme": theme_name,
                     "article_count": 0,
                     "articles": []
                 }
-            elif line.startswith("- ") and current_theme:
-                # Parse "- Title (Source)"
-                match = re.match(r"- (.+) \((.+)\)", line)
-                if match:
-                    title = match.group(1).strip()
-                    source = match.group(2).strip()
-                    # Try to link back to an article in sample_articles
-                    matched_art = None
-                    for art in sample_articles:
-                        if (title.lower() in art.title.lower() or
-                            title.lower() in art.article_text[:80].lower()):
-                            matched_art = art
-                            break
-                    if matched_art:
-                        current_theme["articles"].append({
-                            "title": matched_art.title or matched_art.article_text[:80],
-                            "source": matched_art.media_outlet,
-                            "url": matched_art.url,
-                            "posting_time": matched_art.posting_time
-                        })
-                    else:
-                        current_theme["articles"].append({
-                            "title": title,
-                            "source": source,
-                            "url": "#",
-                            "posting_time": None
-                        })
-
+            elif line.startswith('#') and current_theme:
+                # Article reference #1, #3 etc.
+                art_num = int(line.split('#')[1].split()[0]) - 1
+                if 0 <= art_num < len(articles):
+                    art = articles[art_num]
+                    current_theme["articles"].append({
+                        "title": art.title or art.article_text.split('.')[0][:100] + "...",
+                        "source": art.media_outlet,
+                        "url": art.url or "#",
+                        "posting_time": art.posting_time.strftime('%Y-%m-%d') if art.posting_time else None
+                    })
+        
         if current_theme:
             themes.append(current_theme)
-
-        # Fallback: if LLM returned nothing, use raw top articles
-        if not themes:
-            themes = [{
-                "theme": "Recent Articles",
-                "article_count": len(sample_articles),
-                "articles": [
-                    {
-                        "title": art.title or art.article_text[:80],
-                        "source": art.media_outlet,
-                        "url": art.url,
-                        "posting_time": art.posting_time
-                    }
-                    for art in sample_articles
-                ]
-            }]
-
-        # Ensure count is accurate
-        for t in themes:
-            t["article_count"] = len(t["articles"])
-
+            
+        # Ensure counts are accurate
+        for theme in themes:
+            theme["article_count"] = len(theme["articles"])
+            
         return themes[:n_themes]
-
-    except Exception as e:
-        logger.error(f"LLM theme+links extraction failed: {e}")
-        # Fallback: minimal structure
+        
+    except:
+        # Fallback: Raw recent articles as "themes"
         return [{
-            "theme": "Thematic analysis unavailable",
-            "article_count": 0,
-            "articles": []
+            "theme": f"Recent Articles ({len(articles)})",
+            "article_count": len(articles),
+            "articles": [{
+                "title": art.title or art.article_text[:80] + "...",
+                "source": art.media_outlet,
+                "url": art.url or "#", 
+                "posting_time": art.posting_time
+            } for art in articles[:5]]
         }]
         
 def overview(request):
