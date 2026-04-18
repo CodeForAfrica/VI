@@ -58,27 +58,27 @@
     .typing { font-style: italic; color: #888; font-size: 0.8rem; }
 
 
-    /* 🌟 Theme Cards  */
-    .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; margin: 3rem 0; }
-    .theme-card { background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 20px; padding: 2rem; box-shadow: 0 10px 40px rgba(0,0,0,0.08); transition: all 0.3s ease; position: relative; overflow: hidden; }
-    .theme-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #3b82f6, #1d4ed8); }
-    .theme-card:hover { transform: translateY(-8px); box-shadow: 0 25px 60px rgba(0,0,0,0.15); border-color: #2563eb; }
-    .theme-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
-    .theme-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; color: white; }
-    .economic { background: linear-gradient(135deg, #10b981, #059669); }
-    .sovereignty { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .military { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .election { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-    .social { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-    .theme-title { font-size: 1.4rem; font-weight: 800; background: linear-gradient(135deg, #1e293b, #334155); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 0; line-height: 1.3; }
-    .theme-stats { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
-    .article-card { background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.1); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; transition: all 0.2s ease; text-decoration: none; display: block; }
-    .article-card:hover { background: rgba(37, 99, 235, 0.08); border-color: #2563eb; transform: translateX(4px); }
-    .article-title { font-weight: 600; font-size: 0.95rem; color: #1e293b; margin-bottom: 0.25rem; line-height: 1.4; }
-    .article-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #64748b; }
-    .article-source { font-weight: 600; color: #2563eb; }
-    .view-more { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #2563eb; text-decoration: none; font-size: 0.9rem; transition: color 0.2s ease; margin-top: 1rem; }
-    .view-more:hover { color: #1d4ed8; }
+    /* 🌟LLM Themes - Dynamic Colors */
+    .theme-icon { 
+        width: 40px; height: 40px; border-radius: 10px; 
+        display: flex; align-items: center; justify-content: center; 
+        font-size: 1.1rem; font-weight: 700; color: white; 
+    }
+    
+    /* Keyword-based dynamic colors */
+    .economic, [class*="economic"], [class*="debt"], [class*="investment"] { 
+        background: linear-gradient(135deg, #10b981, #059669); 
+    }
+    .sovereignty, [class*="sovereignty"], [class*="influence"], [class*="interference"] { 
+        background: linear-gradient(135deg, #ef4444, #dc2626); 
+    }
+    .military, [class*="military"], [class*="base"], [class*="weapon"] { 
+        background: linear-gradient(135deg, #f59e0b, #d97706); 
+    }
+    .election, [class*="election"], [class*="vote"] { 
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed); 
+    }
+    .social { background: linear-gradient(135deg, #06b6d4, #0891b2); } /* Default */
 </style>
 
 <div class="row g-3 mb-5">
@@ -210,8 +210,18 @@
     {% for theme in top_recent_themes %}
     <div class="theme-card">
         <div class="theme-header">
-            <div class="theme-icon {% if 'economic' in theme.theme|lower %}economic{% elif 'sovereignty' in theme.theme|lower %}sovereignty{% elif 'military' in theme.theme|lower %}military{% elif 'election' in theme.theme|lower %}election{% else %}social{% endif %}">
-                {% if 'economic' in theme.theme|lower %}💰{% elif 'sovereignty' in theme.theme|lower %}🏛️{% elif 'military' in theme.theme|lower %}⚔️{% elif 'election' in theme.theme|lower %}🗳️{% else %}👥{% endif %}
+            <div class="theme-icon 
+                {% if 'economic' in theme.theme|lower or 'debt' in theme.theme|lower or 'investment' in theme.theme|lower %}economic
+                {% elif 'sovereignty' in theme.theme|lower or 'influence' in theme.theme|lower or 'interference' in theme.theme|lower %}sovereignty
+                {% elif 'military' in theme.theme|lower or 'base' in theme.theme|lower or 'weapon' in theme.theme|lower %}military
+                {% elif 'election' in theme.theme|lower or 'vote' in theme.theme|lower %}election
+                {% else %}social{% endif %}">
+                
+                {% if 'economic' in theme.theme|lower or 'debt' in theme.theme|lower or 'investment' in theme.theme|lower %}💰
+                {% elif 'sovereignty' in theme.theme|lower or 'influence' in theme.theme|lower or 'interference' in theme.theme|lower %}🏛️
+                {% elif 'military' in theme.theme|lower or 'base' in theme.theme|lower or 'weapon' in theme.theme|lower %}⚔️
+                {% elif 'election' in theme.theme|lower or 'vote' in theme.theme|lower %}🗳️
+                {% else %}👥{% endif %}
             </div>
             <h3 class="theme-title">{{ theme.theme|title }}</h3>
         </div>
