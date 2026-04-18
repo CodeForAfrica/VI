@@ -1092,102 +1092,203 @@ def overview(request):
     # Only run this if no specific filters (country, actor, intent) are applied for performance.
     topic_cluster_chart = None
     if not calc_target_country and not calc_foreign_actor and not calc_strategic_intent:
-        topic_cluster_chart_cache_key = "overview_topic_cluster_chart"
+        topic_cluster_chart_cache_key = "overview_topic_cluster_chart_v2"
         topic_cluster_chart = cache.get(topic_cluster_chart_cache_key)
-
-        if topic_cluster_chart is None:
-            logger.info(f"Cache MISS for topic cluster chart: {topic_cluster_chart_cache_key}")
-            try:
-                # Fetch the text data from the already filtered queryset (full_stats_qs, which is clean and filtered by COUNTRIES)
-                # Limit the number of articles processed for clustering to manage performance
-                sample_size = 5000 # Adjust this number based on performance testing
-                article_texts = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').values_list('article_text', flat=True)[:sample_size]
-
-                if article_texts.count() < 10: # Require a minimum number of articles to cluster meaningfully
-                     logger.info("Insufficient articles for topic clustering.")
-                     topic_cluster_chart = "<p class='text-center py-5 text-muted'>Insufficient data for topic clustering.</p>"
-                else:
-                    logger.info(f"Starting topic clustering on {article_texts.count()} articles.")
-                    # --- Preprocessing (Basic Example) ---
-                    # More sophisticated preprocessing (stopword removal, stemming, lemmatization) could improve results
-                    # if NLTK or spaCy were used.
-                    processed_texts = [text.lower() for text in article_texts] # Basic lowering
-                    # Example of simple stopword removal (you can expand this list or use NLTK)
-                    # common_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'up', 'about', ...])
-                    # processed_texts = [' '.join([word for word in text.split() if word not in common_words]) for text in processed_texts]
-
-                    # --- Vectorization ---
-                    # Use TF-IDF to convert text to numerical vectors
-                    from sklearn.feature_extraction.text import TfidfVectorizer
-                    vectorizer = TfidfVectorizer(max_features=1000, stop_words='english', max_df=0.95, min_df=2) # Adjust parameters as needed
-                    tfidf_matrix = vectorizer.fit_transform(processed_texts)
-
-                    # --- Clustering ---
-                    # Use K-Means to find clusters
-                    from sklearn.cluster import KMeans
-                    import numpy as np
-                    num_clusters = min(10, len(processed_texts)) # Cap clusters or set a fixed number
-                    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10) # Increase n_init for newer sklearn versions if needed
-                    cluster_labels = kmeans.fit_predict(tfidf_matrix)
-
-                    # --- Topic Interpretation ---
-                    # Find the most common words in each cluster to label it
-                    feature_names = vectorizer.get_feature_names_out()
-                    cluster_topics = {}
-                    for i in range(num_clusters):
-                         # Get the indices of articles in this cluster
-                         cluster_indices = np.where(cluster_labels == i)[0]
-                         if len(cluster_indices) > 0:
-                            # Get the mean TF-IDF score for words in this cluster
-                            cluster_centroid = kmeans.cluster_centers_[i]
-                            # Get the top 5 words by TF-IDF score
-                            top_indices = cluster_centroid.argsort()[-5:][::-1]
-                            top_words = [feature_names[idx] for idx in top_indices]
-                            # Create a label for the cluster based on top words
-                            cluster_label = f"Cluster {i} ({len(cluster_indices)} docs): " + ", ".join(top_words)
-                            cluster_topics[i] = cluster_label
-                         else:
-                            cluster_topics[i] = f"Cluster {i} (0 docs)"
-
-                    # --- Visualization ---
-                    # Prepare data for Plotly (Bar chart showing cluster sizes and labels)
-                    cluster_counts = np.bincount(cluster_labels)
-                    cluster_labels_list = [cluster_topics[i] for i in range(len(cluster_counts))]
-
-                    df_clusters = pd.DataFrame({
-                        'Cluster': cluster_labels_list,
-                        'Count': cluster_counts
-                    })
-
-                    # Create a horizontal bar chart
-                    fig_clusters = px.bar(
-                        df_clusters,
-                        x='Count',
-                        y='Cluster',
-                        orientation='h',
-                        title="Detected Topics from Article Content (K-Means Clustering)",
-                        labels={'Count': 'Number of Articles', 'Cluster': 'Topic Cluster'},
-                        template="plotly_white"
-                    )
-                    fig_clusters.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
-                    topic_cluster_chart = fig_clusters.to_html(full_html=False, include_plotlyjs='cdn')
-
-                    logger.info(f"Topic clustering completed. Generated chart for {num_clusters} clusters.")
-                    # Cache the generated chart HTML for 6 hours (or longer if results are stable)
-                    cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*6)
-
-            except Exception as e:
-                logger.error(f"Topic Cluster Chart Error: {e}")
-                # Set a fallback error message and cache it briefly
-                topic_cluster_chart = "<p class='text-center py-5 text-muted'>Error generating topic cluster chart.</p>"
-                cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*15) # Cache error for 15 mins
-        else:
-            logger.info(f"Cache HIT for topic cluster chart: {topic_cluster_chart_cache_key}")
-    else:
-        # If filters are applied, clustering might be less meaningful or very slow.
-        # Optionally, show a message or skip the chart entirely.
-        topic_cluster_chart = "<p class='text-center py-5 text-muted'>Topic clustering is shown for the overall dataset without filters.</p>"
     
+        if topic_cluster_chart is None:
+            logger.info(f"Cache MISS for improved topic cluster chart: {topic_cluster_chart_cache_key}")
+            try:
+                # Fetch raw text data from the already filtered queryset (full_stats_qs)
+                sample_size = 3000  # Reduced for better performance
+                article_texts = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').values_list('article_text', flat=True)[:sample_size]
+    
+                if article_texts.count() < 20:  # Need minimum articles for meaningful clustering
+                    logger.info("Insufficient articles for topic clustering.")
+                    topic_cluster_chart = "<p class='text-center py-5 text-muted'>Insufficient data for topic clustering (need 20+ articles).</p>"
+                else:
+                    logger.info(f"🚀 Starting improved topic clustering on {article_texts.count()} articles.")
+                    
+                    # --- STEP 1: Better Text Preprocessing ---
+                    processed_texts = []
+                    for text in article_texts:
+                        # Clean and preprocess each article
+                        text = text.lower()
+                        # Remove URLs, emails, excessive whitespace
+                        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|(?:%[0-9a-fA-F][0-9a-fA-F])|[!*\\$\\$, ])+', '', text)
+                        text = re.sub(r'\S+@\S+', '', text)  # Remove emails
+                        text = re.sub(r'[^\w\s]', ' ', text)  # Remove punctuation
+                        text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+                        # Remove very short texts
+                        if len(text.split()) > 10:
+                            processed_texts.append(text)
+    
+                    if len(processed_texts) < 20:
+                        topic_cluster_chart = "<p class='text-center py-5 text-muted'>Insufficient quality text for clustering after preprocessing.</p>"
+                    else:
+                        # --- STEP 2: Advanced TF-IDF Vectorization ---
+                        from sklearn.feature_extraction.text import TfidfVectorizer
+                        # Better parameters for theme discovery
+                        vectorizer = TfidfVectorizer(
+                            max_features=2000,      # More features for nuanced themes
+                            stop_words='english',   # Remove common English words
+                            ngram_range=(1, 3),     # Include bigrams and trigrams for phrases
+                            max_df=0.8,             # Ignore too-common words
+                            min_df=2,               # Ignore rare single-occurrence words
+                            lowercase=True
+                        )
+                        tfidf_matrix = vectorizer.fit_transform(processed_texts)
+    
+                        # --- STEP 3: Optimal Number of Clusters ---
+                        from sklearn.cluster import KMeans
+                        import numpy as np
+                        from sklearn.metrics import silhouette_score
+                        
+                        # Find optimal number of clusters using silhouette analysis
+                        silhouette_scores = []
+                        n_clusters_range = range(4, min(12, len(processed_texts)//10 + 1))
+                        
+                        for n_clusters in n_clusters_range:
+                            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                            cluster_labels = kmeans.fit_predict(tfidf_matrix)
+                            silhouette_avg = silhouette_score(tfidf_matrix, cluster_labels)
+                            silhouette_scores.append((n_clusters, silhouette_avg))
+    
+                        # Pick best number of clusters
+                        optimal_n_clusters = max(silhouette_scores, key=lambda x: x[1])[0]
+                        logger.info(f"Optimal clusters detected: {optimal_n_clusters}")
+    
+                        # --- STEP 4: Final Clustering ---
+                        kmeans = KMeans(n_clusters=optimal_n_clusters, random_state=42, n_init=10)
+                        cluster_labels = kmeans.fit_predict(tfidf_matrix)
+    
+                        # --- STEP 5: Extract Representative Themes (Top Phrases per Cluster) ---
+                        feature_names = vectorizer.get_feature_names_out()
+                        cluster_themes = {}
+                        
+                        for i in range(optimal_n_clusters):
+                            # Get articles in this cluster
+                            cluster_indices = np.where(cluster_labels == i)[0]
+                            cluster_size = len(cluster_indices)
+                            
+                            if cluster_size > 0:
+                                # Get cluster centroid
+                                cluster_center = kmeans.cluster_centers_[i]
+                                
+                                # Get top 8 most representative words/phrases
+                                top_indices = cluster_center.argsort()[-8:][::-1]
+                                top_terms = [feature_names[idx] for idx in top_indices]
+                                
+                                # Create theme label from top 4-5 terms
+                                theme_label = " | ".join(top_terms[:5])
+                                # Clean up the label for display
+                                theme_label = re.sub(r'\b(?:the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b', '', theme_label)
+                                theme_label = re.sub(r'\s+', ' ', theme_label).strip()
+                                
+                                cluster_themes[i] = {
+                                    'label': theme_label[:80] + "..." if len(theme_label) > 80 else theme_label,
+                                    'size': cluster_size,
+                                    'top_terms': top_terms[:6]
+                                }
+                            else:
+                                cluster_themes[i] = {'label': f'Empty Cluster {i}', 'size': 0, 'top_terms': []}
+    
+                        # =============================================================================
+                        # STEP 6: FANCY COMPACT CLICKABLE URL THEME CHART......
+                        # =============================================================================
+                        try:
+                            # Get article pool for URL matching
+                            article_pool = full_stats_qs.exclude(url__isnull=True).exclude(url='').exclude(url__exact='None')[:200]
+                            
+                            cluster_data = []
+                            
+                            # Build clickable URL data per cluster
+                            for cluster_id, theme_info in cluster_themes.items():
+                                cluster_indices = np.where(cluster_labels == cluster_id)[0]
+                                
+                                # Sample 3 URLs from this cluster
+                                sample_urls = []
+                                for j in range(min(3, len(cluster_indices))):
+                                    global_idx = cluster_indices[j]
+                                    if global_idx < len(article_pool):
+                                        art = article_pool[global_idx]
+                                        if art.url and art.url.strip() and 'http' in art.url.lower():
+                                            sample_urls.append({
+                                                'title': (getattr(art, 'display_title', art.article_text[:60] + '...')),
+                                                'url': art.url,
+                                                'source': getattr(art, 'media_outlet', 'Unknown')
+                                            })
+                                
+                                url_count = len(sample_urls)
+                                url_label = f"({url_count}🔗)" if url_count > 0 else "(0)"
+                                
+                                cluster_data.append({
+                                    'Theme': theme_info['label'],
+                                    'Articles': theme_info['size'],
+                                    'URLs': url_count,
+                                    'UrlLabel': url_label,
+                                    'TopTerms': ', '.join(theme_info['top_terms'][:3]),
+                                    'SampleUrls': sample_urls
+                                })
+                            
+                            df_clusters = pd.DataFrame(cluster_data)
+                            df_clusters = df_clusters[df_clusters['Articles'] >= 2].sort_values('Articles', ascending=True)
+                            
+                            if not df_clusters.empty:
+                                # FANCY CLICKABLE CHART
+                                fig_clusters = px.bar(
+                                    df_clusters,
+                                    x='Articles',
+                                    y='Theme',
+                                    orientation='h',
+                                    title=f"🧠 Live Themes w/ URLs ({len(df_clusters)} clusters)",
+                                    labels={'Articles': 'Articles'},
+                                    template="plotly_white",
+                                    hover_data=['TopTerms'],
+                                    color='Articles',
+                                    color_continuous_scale=['#eff6ff','#0ea5e9','#1e40af']
+                                )
+                                
+                                # URLS IN BARS + HOVER
+                                fig_clusters.update_traces(
+                                    text=[f"{row['Articles']} {row['UrlLabel']}" for _, row in df_clusters.iterrows()],
+                                    textposition='outside',
+                                    textfont=dict(size=11, family='Arial Black', color='white'),
+                                    marker_line=dict(width=2, color='white'),
+                                    hovertemplate="""
+                                        <b>%{y}</b><br>
+                                        📊 <b>%{x} articles</b><br>
+                                        🔗 <b>%{customdata[1]}</b><br>
+                                        Keywords: %{customdata[0]}<br>
+                                        <hr>
+                                        <b>URLs:</b><br>
+                                        %{customdata[2][0].title|slice:40} →<br>
+                                        <a href='%{customdata[2][0].url}'>%{customdata[2][0].url|slice:50}</a><br>
+                                        %{customdata[2][1].title|slice:40} →<br>
+                                        <a href='%{customdata[2][1].url}'>%{customdata[2][1].url|slice:50}</a>
+                                        <extra></extra>
+                                    """
+                                )
+                                
+                                fig_clusters.update_layout(
+                                    height=340,  # COMPACT
+                                    margin=dict(l=150, r=5, t=45, b=5),
+                                    title_font=dict(size=13, family="Arial Black"),
+                                    font_size=10.5,
+                                    plot_bgcolor='#f8fafc',
+                                    yaxis_title="",
+                                    showlegend=False
+                                )
+                                
+                                topic_cluster_chart = fig_clusters.to_html(
+                                    full_html=False, 
+                                    include_plotlyjs='cdn',
+                                    config={'displayModeBar': False}
+                                )
+                            logger.info(f"✅ CLICKABLE chart: {len(df_clusters)} themes w/ {df_clusters['URLs'].sum()} URLs")
+                            
+                            cache.set(topic_cluster_chart_cache_key, topic_cluster_chart, timeout=60*60*8)
+                        else:
+                            topic_cluster_chart = "<div class='text-center py-3'><i class='fas fa-chart-line fa-2x text-muted mb-2'></i><small class='text-muted'>No themes (need 20+ articles)</small></div>"
     # 8. Pagination (This is inherently fast as it limits the final result set)
     # Use the filtered queryset for pagination
     paginator = Paginator(full_stats_qs, 10) # Use the filtered queryset
@@ -1261,8 +1362,8 @@ def overview(request):
         "environment that may increase vulnerability."
     )
 
-        # 11. Context Assembly
-    context = { # <-- Context dictionary is defined here
+        # 11. Context Assembly - PROPERLY CLOSED
+    context = {
         'chart': chart,
         'page_obj': page_obj,
         'total_articles': total_articles,
@@ -1282,23 +1383,15 @@ def overview(request):
         'selected_intent': calc_strategic_intent,
         'intent_choices': INTENT_CHOICES,
         'vulnerability_description': vulnerability_methodology,  
-        
-        # dropdown state management
-        'selected_country': calc_target_country,
-        'selected_actor': calc_foreign_actor,
-        'selected_intent': calc_strategic_intent,
-        
-        # filter persistence for pagination links
         'selected_filters': {
             'target_country': calc_target_country,
             'inferred_actor': calc_foreign_actor,
             'strategic_intent': calc_strategic_intent,
         },
-
         'topic_cluster_chart': topic_cluster_chart
     } 
 
-    # Generate themes (AFTER context is defined)
+    # ✅ FIXED: Theme generation at CORRECT function level indentation (4 spaces from def overview)
     recent_articles_for_themes = full_stats_qs.exclude(article_text__isnull=True).exclude(article_text='').order_by('-posting_time')[:30]
     print(f"🔍 DEBUG: Found {recent_articles_for_themes.count()} articles for LLM themes")
     
@@ -1308,11 +1401,10 @@ def overview(request):
     else:
         top_themes = [{"theme": "No articles for theme analysis", "article_count": 0, "articles": []}]
 
-
-    # Add Top Recent Narrative Themes to Context 
+    # Add to context
     context['top_recent_themes'] = top_themes 
-    return render(request, 'overview.html', context)        
-      
+    
+    return render(request, 'overview.html', context)      
 
 from django.core.paginator import Paginator
 from django.db.models import Q, Count, F
