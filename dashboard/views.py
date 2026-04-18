@@ -1220,7 +1220,7 @@ def overview(request):
             })
         
         top_themes = [{
-            'theme': f"Top {len(top_articles)} Recent Foreign Influence Articles",
+            'theme': f"Top {len(top_articles)} Recent Articles",
             'article_count': recent_articles_for_themes.count(),
             'articles': top_articles
         }]
