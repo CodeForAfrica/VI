@@ -22,8 +22,8 @@ class Command(BaseCommand):
         total = articles_query.count()
         self.stdout.write(self.style.SUCCESS(f"🧐 Found {total} articles to process."))
 
-        # PPI CONFIG - Set your exact 15k anchor cutoff
-        ANCHOR_CUTOFF_ID = 15000  
+        # PPI CONFIG - Set exact 15k anchor cutoff
+        ANCHOR_CUTOFF_ID = 45119  
 
         results_to_update = []
         backup_data = []
