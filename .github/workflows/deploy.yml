@@ -39,6 +39,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Smoke-check Python syntax
+        run: python -m compileall config dashboard manage.py
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -47,13 +55,9 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          load: true
-          tags: vulnerability-index-tool:ci
+          push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Smoke-check Python imports inside image
-        run: docker run --rm vulnerability-index-tool:ci python -m compileall config dashboard manage.py
 
   deploy-dev:
     name: Deploy to Dokku DEV
