@@ -33,6 +33,7 @@ cloudscraper
 spacy
 botocore>=1.34.0
 huggingface_hub==1.5.0
+yake>=0.4.8
 
 
 
