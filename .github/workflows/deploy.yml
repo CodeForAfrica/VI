@@ -104,9 +104,19 @@ jobs:
 
     steps:
       - name: Configure SSH
+        env:
+          DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_SSH_PRIVATE_KEY_B64: ${{ secrets.DOKKU_SSH_PRIVATE_KEY_B64 }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' '${{ secrets.DOKKU_SSH_PRIVATE_KEY_B64 }}' | base64 -d > ~/.ssh/dokku_deploy_key
+          if [ -n "$DOKKU_SSH_PRIVATE_KEY_B64" ]; then
+            printf '%s' "$DOKKU_SSH_PRIVATE_KEY_B64" | tr -d '[:space:]' | base64 -d > ~/.ssh/dokku_deploy_key
+          elif [ -n "$DOKKU_SSH_PRIVATE_KEY" ]; then
+            printf '%s\n' "$DOKKU_SSH_PRIVATE_KEY" | sed 's/\\n/\n/g' > ~/.ssh/dokku_deploy_key
+          else
+            echo "DOKKU_SSH_PRIVATE_KEY_B64 or DOKKU_SSH_PRIVATE_KEY must be set"
+            exit 1
+          fi
           chmod 600 ~/.ssh/dokku_deploy_key
           ssh-keygen -y -f ~/.ssh/dokku_deploy_key > ~/.ssh/dokku_deploy_key.pub
           ssh-keyscan -H "${{ secrets.DOKKU_HOST }}" >> ~/.ssh/known_hosts
