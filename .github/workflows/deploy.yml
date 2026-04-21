@@ -103,22 +103,19 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
-
-      - name: Trust Dokku host key
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
+          printf '%s\n' '${{ secrets.DOKKU_SSH_PRIVATE_KEY }}' | sed 's/\\n/\n/g' > ~/.ssh/dokku_deploy_key
+          chmod 600 ~/.ssh/dokku_deploy_key
           ssh-keyscan -H "${{ secrets.DOKKU_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Log Dokku app into Docker Hub
         run: |
-          ssh "dokku@${{ secrets.DOKKU_HOST }}" \
+          ssh -i ~/.ssh/dokku_deploy_key "dokku@${{ secrets.DOKKU_HOST }}" \
             "echo '${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}' | registry:login '${{ secrets.DOKKU_APP_NAME }}' --password-stdin docker.io '${{ secrets.DOCKER_HUB_USERNAME }}'"
 
       - name: Release Docker Hub image on Dokku
         run: |
-          ssh "dokku@${{ secrets.DOKKU_HOST }}" \
+          ssh -i ~/.ssh/dokku_deploy_key "dokku@${{ secrets.DOKKU_HOST }}" \
             "git:from-image --force '${{ secrets.DOKKU_APP_NAME }}' '${{ needs.build.outputs.image_ref }}' 'GitHub Actions' 'github-actions@users.noreply.github.com'"
