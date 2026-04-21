@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE_REPOSITORY: ${{ vars.DOCKERHUB_IMAGE }}
+  IMAGE_REPOSITORY: ${{ vars.DOCKERHUB_IMAGE || 'codeforafrica/vulnerability-index-tool' }}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
