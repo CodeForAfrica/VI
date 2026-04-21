@@ -7,14 +7,6 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Deployment target
-        required: true
-        default: prod
-        type: choice
-        options:
-          - dev
-          - prod
       ref:
         description: Git ref to deploy
         required: false
@@ -89,44 +81,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: echo "image_ref=docker.io/${IMAGE_REPOSITORY}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-  deploy-dev:
-    name: Deploy to Dokku DEV
-    runs-on: ubuntu-latest
-    needs: build
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
-    environment: dev
-    concurrency:
-      group: deploy-dev
-      cancel-in-progress: false
-
-    steps:
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
-
-      - name: Trust Dokku host key
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.DOKKU_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Log Dokku app into Docker Hub
-        run: |
-          ssh "dokku@${{ secrets.DOKKU_HOST }}" \
-            "echo '${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}' | registry:login '${{ secrets.DOKKU_APP_NAME }}' --password-stdin docker.io '${{ secrets.DOCKER_HUB_USERNAME }}'"
-
-      - name: Release Docker Hub image on Dokku DEV
-        run: |
-          ssh "dokku@${{ secrets.DOKKU_HOST }}" \
-            "git:from-image --force '${{ secrets.DOKKU_APP_NAME }}' '${{ needs.build.outputs.image_ref }}' 'GitHub Actions' 'github-actions@users.noreply.github.com'"
-
   deploy-prod:
-    name: Deploy to Dokku PROD
+    name: Deploy to Dokku
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: prod
     concurrency:
       group: deploy-prod
@@ -148,7 +107,7 @@ jobs:
           ssh "dokku@${{ secrets.DOKKU_HOST }}" \
             "echo '${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}' | registry:login '${{ secrets.DOKKU_APP_NAME }}' --password-stdin docker.io '${{ secrets.DOCKER_HUB_USERNAME }}'"
 
-      - name: Release Docker Hub image on Dokku PROD
+      - name: Release Docker Hub image on Dokku
         run: |
           ssh "dokku@${{ secrets.DOKKU_HOST }}" \
             "git:from-image --force '${{ secrets.DOKKU_APP_NAME }}' '${{ needs.build.outputs.image_ref }}' 'GitHub Actions' 'github-actions@users.noreply.github.com'"
