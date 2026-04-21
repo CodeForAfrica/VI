@@ -108,6 +108,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' '${{ secrets.DOKKU_SSH_PRIVATE_KEY }}' | sed 's/\\n/\n/g' > ~/.ssh/dokku_deploy_key
           chmod 600 ~/.ssh/dokku_deploy_key
+          ssh-keygen -y -f ~/.ssh/dokku_deploy_key > ~/.ssh/dokku_deploy_key.pub
           ssh-keyscan -H "${{ secrets.DOKKU_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Log Dokku app into Docker Hub
