@@ -12,6 +12,10 @@ on:
         description: Git ref to deploy
         required: false
         default: main
+      version:
+        description: SemVer image version to publish, for example 1.0.0
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -62,6 +66,9 @@ jobs:
           images: ${{ env.IMAGE_REPOSITORY }}
           tags: |
             type=sha,prefix=sha-
+            type=semver,pattern={{version}},value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+            type=semver,pattern={{major}},value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build application image
