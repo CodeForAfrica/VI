@@ -1,19 +1,14 @@
-name: VI | Deploy | Dokku
+name: VI | Build and Deploy
 
 on:
   push:
     branches:
       - main
       - chore/dokku-github-actions
-  pull_request:
   workflow_dispatch:
     inputs:
-      ref:
-        description: Git ref to deploy
-        required: false
-        default: main
       version:
-        description: SemVer image version to publish, for example 1.0.0
+        description: Image version to publish and deploy, for example 1.0.0
         required: false
         type: string
 
@@ -26,9 +21,7 @@ concurrency:
 
 env:
   APP_NAME: ${{ secrets.DOKKU_APP_NAME }}
-  DOKKU_REMOTE_BRANCH: "master"
-  DOKKU_REMOTE_URL: "ssh://dokku@${{ secrets.DOKKU_HOST }}"
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DOKKU_REMOTE_URL: ssh://dokku@${{ secrets.DOKKU_HOST }}/${{ secrets.DOKKU_APP_NAME }}
   IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'codeforafrica/vulnerability-index-tool' }}
 
 jobs:
@@ -37,17 +30,12 @@ jobs:
     runs-on: ubuntu-24.04-arm
     environment: prod
     timeout-minutes: 60
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.head_ref == 'chore/dokku-github-actions')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -57,25 +45,20 @@ jobs:
       - name: Smoke-check Python syntax
         run: python -m compileall config dashboard manage.py
 
-      - name: Set Docker image version
-        id: image-version
+      - name: Set image version
+        id: image
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            VERSION="${{ github.event.inputs.version }}"
           else
-            echo "version=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            VERSION="sha-$(printf '%s' "$GITHUB_SHA" | cut -c1-7)"
           fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE_NAME}:${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          path: ${{ runner.temp }}/.buildx-cache
-          restore-keys: |
-            ${{ runner.os }}-buildx-
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -86,28 +69,17 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
-          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           context: .
           file: ./Dockerfile
           platforms: linux/arm64
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ steps.image-version.outputs.version }}
-
-      - name: Move cache
-        run: |
-          CACHE_DIR="${{ runner.temp }}/.buildx-cache"
-          NEW_CACHE_DIR="${{ runner.temp }}/.buildx-cache-new"
-          if [ -d "$NEW_CACHE_DIR" ]; then
-            rm -rf "$CACHE_DIR"
-            mv "$NEW_CACHE_DIR" "$CACHE_DIR"
-          else
-            echo "No new cache directory found at $NEW_CACHE_DIR; skipping move."
-          fi
+          tags: ${{ steps.image.outputs.image }}
 
       - name: Push to Dokku
         uses: dokku/github-action@v1.9.0
         with:
-          git_remote_url: ${{ env.DOKKU_REMOTE_URL }}/${{ env.APP_NAME }}
+          git_remote_url: ${{ env.DOKKU_REMOTE_URL }}
           ssh_private_key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
-          deploy_docker_image: ${{ env.IMAGE_NAME }}:${{ steps.image-version.outputs.version }}
+          deploy_docker_image: ${{ steps.image.outputs.image }}
