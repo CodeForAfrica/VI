@@ -20,6 +20,7 @@ class Journalist(Model):
     facebook_profile = URLField(blank=True, null=True)
     x_profile = URLField(blank=True, null=True)
     instagram_profile = URLField(blank=True, null=True)
+    
 
     def __str__(self):
         return self.name
@@ -38,6 +39,7 @@ class MediaOutlet(Model):
     facebook_profile = URLField(blank=True, null=True)
     x_profile = URLField(blank=True, null=True)
     instagram_profile = URLField(blank=True, null=True)
+    
 
     def __str__(self):
         return self.name
