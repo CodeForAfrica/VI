@@ -1949,14 +1949,16 @@ def authors(request):
         # ✅ CHANGE ONLY HERE: Query journalist names DIRECTLY from MediaNarrative articles
         # Instead of querying the Journalist table, we pull names from article metadata
         top_journalists_raw = MediaNarrative.objects.exclude(
-            journalist_name__in=['', None, 'Unknown', 'unknown', 'N/A', 'Staff', 'Editor', 'Anonymous', 'By']
-        ).values('journalist_name').annotate(
+            author__in=['', None, 'Unknown', 'unknown', 'N/A', 'Staff', 'Editor', 'Anonymous', 'By', 'Agency', 'Reuters', 'AFP']
+        ).exclude(
+            author__regex=r'^https?://'  # Exclude any value starting with http/https
+        ).values('author').annotate(
             article_count=Count('id'),
             avg_strategic_confidence=Avg('confidence'),
         ).filter(
-            journalist_name__isnull=False,
-            journalist_name__regex=r'^[A-Za-z\s\.\-]+$',  # Basic name validation: letters, spaces, dots, hyphens
-            article_count__gt=0
+            author__isnull=False,
+            author__regex=r'^[A-Za-z\s\.\'\-]+$',  # Only allow valid name characters
+            article_count__gt=2  # Require at least 2 articles to appear in sidebar
         ).order_by('-article_count', '-avg_strategic_confidence')[:10]
         
         # Convert QuerySet to list of dicts (same format as original)
