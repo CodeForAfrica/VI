@@ -24,11 +24,12 @@ API_KEY = os.getenv('MEDIACLOUD_API_KEY', '42caaa0601bd290fc5adada8bb804cdfc0604
 
 # Ensure all columns required by your DB are listed here
 db_columns = [
-    "article_text", "posting_time", "media_outlet", "inferred_actor",
-    "target_country", "url", "lang_detect", "strategic_intent",
-    "sector", "tone", "confidence", "use_afrolm", "llm_strat",
-    "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight",
-    "llm_strat_id", "strategic_intent_id"
+    'id', 'article_text', 'posting_time', 'media_outlet', 'inferred_actor',
+    'strategic_intent', 'sector', 'tone', 'target_country', 'url', 'confidence',
+    'prediction_source', 'lang_detect', 'use_afrolm', 'llm_strat', 'llm_strat_conf',
+    'llm_strat_notes', 'pseudo_kept', 'pseudo_weight', 'llm_strat_id', 
+    'strategic_intent_id', 'author',  
+    'journalist_fk_id', 'media_outlet_fk_id', 'ml_processed_at', 'is_anchor', 'true_label'
 ]
 
 logging.basicConfig(
@@ -266,8 +267,15 @@ def main():
                 print(f"  ✅ Found {len(stories)} stories for {target_country} ({actor_name})")
                 for s in stories:
                     record = {col: None for col in db_columns}
+                    
+                    # Extract author from URL (lightweight - only if URL exists)
+                    article_url = s.get("url")
+                    author_name = None
+                    if article_url:
+                        author_name = extract_author_from_url(article_url)
+                    
                     record.update({
-                        "url": s.get("url"),
+                        "url": article_url,
                         "posting_time": str(s.get("publish_date")),
                         "media_outlet": s.get("media_name"),
                         "inferred_actor": actor_name,
@@ -276,7 +284,8 @@ def main():
                         "pseudo_kept": True,
                         "pseudo_weight": 1.0,
                         "confidence": 1.0,
-                        "use_afrolm": False
+                        "use_afrolm": False,
+                        "author": author_name  # ✅ ADD THIS LINE - real name or None
                     })
                     all_records.append(record)
                 
