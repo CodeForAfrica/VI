@@ -1827,11 +1827,19 @@ def countries(request):
     #intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>" # Ensure it's initialized
     intent_distribution = []
     if selected_country_raw: 
-        # Fetch the raw intent counts for the selected country
+        # ✅ ENHANCED: Fetch intent counts excluding NULL, empty, and null-like values
+        from django.db.models import Q
         raw_intent_counts = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country_raw # <-- CORRECT: Use selected_country_raw for MN filtering
+            target_country__iexact=selected_country_raw
         ).exclude(
-            strategic_intent__in=['', 'Unknown', None]
+            Q(strategic_intent__isnull=True) |
+            Q(strategic_intent='') |
+            Q(strategic_intent__iexact='null') |
+            Q(strategic_intent__iexact='none') |
+            Q(strategic_intent__iexact='n/a') |
+            Q(strategic_intent__iexact='unknown') |
+            Q(strategic_intent__iexact='tbd') |
+            Q(strategic_intent__regex=r'^\s*$')  # whitespace-only strings
         ).values('strategic_intent').annotate(
             count=Count('id')
         ).order_by('-count')
@@ -1841,8 +1849,14 @@ def countries(request):
         for item in raw_intent_counts:
             raw_intent = item['strategic_intent']
             count = item['count']
+            # Skip if intent is still None or empty after filtering
+            if not raw_intent or raw_intent.strip() == '':
+                continue
             # Map the raw intent to its canonical form
             canonical_intent = map_to_canonical_intent(raw_intent)
+            # Skip if mapping returns None or empty
+            if not canonical_intent or canonical_intent.strip() == '':
+                continue
             # Add the count to the canonical intent bucket
             if canonical_intent in canonical_intent_counts:
                 canonical_intent_counts[canonical_intent] += count
@@ -1932,7 +1946,7 @@ def countries(request):
         'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
-
+    
 def authors(request):
     # 1. Capture the selected journalist name from URL
     journalist_name = request.GET.get('journalist', '').strip()
