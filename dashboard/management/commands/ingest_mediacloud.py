@@ -127,6 +127,92 @@ def print_progress(current, total, saved, failed):
     print(f"\rProcessing: {percent:3d}% |{bar}| {current}/{total} (Saved: {saved}, Failed: {failed})", end='', flush=True)
 
 # ────────────────────────────────────────────────
+# AUTHOR EXTRACTION HELPER
+# ────────────────────────────────────────────────
+def extract_author_from_url(url, html_content=None):
+    """
+    Extract author name from article URL by fetching and parsing HTML.
+    Returns author name (str) or None if not found.
+    """
+    from bs4 import BeautifulSoup
+    import json
+    import re
+    
+    try:
+        # Fetch HTML if not provided
+        if not html_content:
+            response = requests.get(url, timeout=15, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            if response.status_code != 200:
+                return None
+            html_content = response.text
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Strategy 1: Meta tags (most reliable)
+        for meta in soup.find_all('meta'):
+            if meta.get('name') == 'author' and meta.get('content'):
+                name = meta['content'].strip()
+                if name and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor', 'by']:
+                    return name
+            if meta.get('property') == 'article:author' and meta.get('content'):
+                name = meta['content'].strip()
+                if name and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor', 'by']:
+                    return name
+        
+        # Strategy 2: JSON-LD structured data
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string)
+                # Handle nested structures
+                if isinstance(data, list):
+                    data = next((item for item in data if isinstance(item, dict)), {})
+                if isinstance(data, dict):
+                    author = data.get('author')
+                    if isinstance(author, dict) and author.get('name'):
+                        name = author['name'].strip()
+                        if name and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor', 'by']:
+                            return name
+                    elif isinstance(author, list) and author and isinstance(author[0], dict) and author[0].get('name'):
+                        name = author[0]['name'].strip()
+                        if name and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor', 'by']:
+                            return name
+            except:
+                continue
+        
+        # Strategy 3: Common CSS selectors
+        selectors = [
+            '.byline', '.author-name', '[rel="author"]', 
+            '.article-author', '.entry-author', '.post-author',
+            'address[itemscope] [itemprop="name"]'
+        ]
+        for selector in selectors:
+            elem = soup.select_one(selector)
+            if elem and elem.text.strip():
+                name = elem.text.strip()
+                # Clean up common prefixes
+                name = re.sub(r'^(By|by|BY)\s+', '', name, flags=re.IGNORECASE)
+                if name and len(name) > 2 and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor']:
+                    return name
+        
+        # Strategy 4: Look for "By [Name]" pattern in first 500 chars
+        text_snippet = soup.get_text()[:500]
+        by_match = re.search(r'(?:By|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z\.]+)+)', text_snippet)
+        if by_match:
+            name = by_match.group(1).strip()
+            if name and len(name) > 2:
+                return name
+        
+        # No author found - return None (NOT 'Unknown')
+        return None
+        
+    except Exception as e:
+        # Log but don't crash ingestion
+        logging.debug(f"Author extraction failed for {url}: {e}")
+        return None
+
+# ────────────────────────────────────────────────
 # MAIN
 # ────────────────────────────────────────────────
 def main():
