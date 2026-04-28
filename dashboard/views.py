@@ -2084,13 +2084,22 @@ def authors(request):
         if common_intents:
             df_intent = pd.DataFrame(list(common_intents))
             if not df_intent.empty:
-                fig_intent = px.pie(
-                    df_intent, values='count', names='strategic_intent',
-                    title=f"Focus Areas for {journalist_name}",
-                    template="plotly_white"
+                fig_intent = go.Figure(data=[go.Pie(
+                    labels=df_intent['strategic_intent'],
+                    values=df_intent['count'],
+                    hole=0.3,
+                    textinfo='label+percent',
+                    hoverinfo='label+percent+value',
+                    marker=dict(colors=px.colors.qualitative.Set3)
+                )])
+                fig_intent.update_layout(
+                    title=f"Strategic Intent Distribution for {selected_country_raw}",
+                    template="plotly_white",
+                    height=400, 
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    showlegend=True
                 )
-                fig_intent.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
-                journalist_intent_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+                intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
     # 4. Pagination (ORIGINAL)
     paginator = Paginator(qs, 10)
