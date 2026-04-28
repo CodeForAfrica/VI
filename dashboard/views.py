@@ -1878,7 +1878,7 @@ def countries(request):
             df_intent['strategic_intent'] = df_intent['strategic_intent'].astype(str)
             
             # 3. Filter out literal "null", "none", "unknown", etc. (case-insensitive)
-            invalid_strings = {'null', 'none', 'na', 'n/a', 'unknown', 'tbd', ''}
+            invalid_strings = {'null', 'none', 'None', 'nan', 'NaN', 'na', 'n/a', 'unknown', 'tbd', ''}
             df_intent = df_intent[~df_intent['strategic_intent'].str.lower().str.strip().isin(invalid_strings)]
             
             # 4. Final cleanup: strip whitespace & drop empties
