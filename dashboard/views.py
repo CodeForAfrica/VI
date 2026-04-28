@@ -1852,6 +1852,10 @@ def countries(request):
                 continue
             # Map the raw intent to its canonical form
             canonical_intent = map_to_canonical_intent(raw_intent)
+
+            # Check for literal strings that Plotly might pick up
+            if not canonical_intent or str(canonical_intent).lower().strip() in ['null', 'none', '', 'nan']:
+                continue
             # Skip if mapping returns None or empty
             if not canonical_intent or canonical_intent.strip() == '':
                 continue
