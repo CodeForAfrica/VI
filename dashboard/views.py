@@ -1884,6 +1884,9 @@ def countries(request):
             # 4. Final cleanup: strip whitespace & drop empties
             df_intent['strategic_intent'] = df_intent['strategic_intent'].str.strip()
             df_intent = df_intent[df_intent['strategic_intent'] != '']
+            
+            # 🔍 DEBUG: Print exactly what Plotly will render
+            print(f"📊 PLOTLY DATA [{selected_country_raw}]: {df_intent['strategic_intent'].tolist()}")
 
             if not df_intent.empty:
                 fig_intent = px.pie(
