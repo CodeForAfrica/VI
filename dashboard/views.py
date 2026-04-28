@@ -1683,10 +1683,8 @@ def countries(request):
         "drc": "DRC",
         "Ethiopia": "Ethiopia",
         "ethiopia": "Ethiopia",
-        "South Africa": "SouthAfrica", # Check VI table for exact format, might be "South Africa" or "southafrica"
+        "South Africa": "SouthAfrica",
         "south africa": "SouthAfrica",
-        "South Africa": "South Africa",
-        "south africa": "South Africa",
     }
 
     # 3. Get the mapped country name for VulnerabilityIndex queries
@@ -1870,19 +1868,33 @@ def countries(request):
         processed_intent_data.sort(key=lambda x: x['count'], reverse=True)
     
         if processed_intent_data:
-        df_intent = pd.DataFrame(processed_intent_data)
-        
-        # Force drop any None/NaN/"null" before Plotly sees them
-        df_intent = df_intent[df_intent['strategic_intent'].notna() & (df_intent['strategic_intent'].astype(str).str.strip() != '') & (df_intent['strategic_intent'] != 'null')]
-        
-        if not df_intent.empty:
-            fig_intent = px.pie(
-                df_intent, values='count', names='strategic_intent',
-                title=f"Strategic Intent Distribution for {selected_country_raw}",
-                template="plotly_white"
-            )
-            fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
-            intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+            df_intent = pd.DataFrame(processed_intent_data)
+            
+            # 🛡️ AGGRESSIVE PLOTLY SANITIZATION
+            # 1. Drop Python None/NaN rows first
+            df_intent = df_intent.dropna(subset=['strategic_intent'])
+            
+            # 2. Convert to string to standardize types
+            df_intent['strategic_intent'] = df_intent['strategic_intent'].astype(str)
+            
+            # 3. Filter out literal "null", "none", "unknown", etc. (case-insensitive)
+            invalid_strings = {'null', 'none', 'na', 'n/a', 'unknown', 'tbd', ''}
+            df_intent = df_intent[~df_intent['strategic_intent'].str.lower().str.strip().isin(invalid_strings)]
+            
+            # 4. Final cleanup: strip whitespace & drop empties
+            df_intent['strategic_intent'] = df_intent['strategic_intent'].str.strip()
+            df_intent = df_intent[df_intent['strategic_intent'] != '']
+
+            if not df_intent.empty:
+                fig_intent = px.pie(
+                    df_intent, 
+                    values='count', 
+                    names='strategic_intent',
+                    title=f"Strategic Intent Distribution for {selected_country_raw}",
+                    template="plotly_white"
+                )
+                fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
+                intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
                 
     # Volume of Articles Over Time for the Selected Country
     # Shows trends - are certain topics or actors becoming more prominent?
