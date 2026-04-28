@@ -956,7 +956,7 @@ def overview(request):
     # 6. Volume Chart (Cache the HTML output!)
     chart_cache_key = f"overview_volume_chart_{calc_target_country}_{calc_foreign_actor}"
     cached_chart = cache.get(chart_cache_key)
-    if cached_chart:
+    if cached_data:
         logger.info(f"Cache HIT for volume chart: {chart_cache_key}")
         chart = cached_chart
     else:
@@ -1959,7 +1959,7 @@ def authors(request):
     cache_key = "authors_sidebar_and_chart"
     cached_data = cache.get(cache_key)
 
-    if cached_
+    if cached_data:
         top_journalists = cached_data['top_journalists']
         authors_chart = cached_data['authors_chart']
     else:
