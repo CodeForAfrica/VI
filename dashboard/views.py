@@ -1889,14 +1889,26 @@ def countries(request):
             print(f"📊 PLOTLY DATA [{selected_country_raw}]: {df_intent['strategic_intent'].tolist()}")
 
             if not df_intent.empty:
-                fig_intent = px.pie(
-                    df_intent, 
-                    values='count', 
-                    names='strategic_intent',
+                import plotly.graph_objects as go
+                # Use explicit lists to prevent px.pie auto-grouping of 'null'
+                labels = df_intent['strategic_intent'].tolist()
+                values = df_intent['count'].tolist()
+                
+                fig_intent = go.Figure(data=[go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.3,
+                    textinfo='label+percent',
+                    hoverinfo='label+percent+value',
+                    marker=dict(colors=px.colors.qualitative.Set3)
+                )])
+                fig_intent.update_layout(
                     title=f"Strategic Intent Distribution for {selected_country_raw}",
-                    template="plotly_white"
+                    template="plotly_white",
+                    height=400, 
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    showlegend=True
                 )
-                fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
                 
     # Volume of Articles Over Time for the Selected Country
