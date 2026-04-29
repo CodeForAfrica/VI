@@ -1992,7 +1992,7 @@ def authors(request):
     cache_key = f"authors_sidebar_and_chart_{search_query}_{author_page}"  # ✅ Include pagination in cache key
     cached_data = cache.get(cache_key)
 
-    if cached_
+    if cached_data:
         authors_page_obj = cached_data['authors_page_obj']  # ✅ Renamed for clarity
         authors_chart = cached_data['authors_chart']
         top_journalists = cached_data['top_journalists']  # Keep for chart
