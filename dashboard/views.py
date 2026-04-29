@@ -1984,43 +1984,57 @@ def countries(request):
 def authors(request):
     # 1. Capture the selected journalist name from URL
     journalist_name = request.GET.get('journalist', '').strip()
+    search_query = request.GET.get('search', '').strip()
+    author_page = request.GET.get('author_page', 1)  # ✅ NEW: Pagination param
 
     # 2. CACHE logic for the Sidebar and Chart (The "Heavy" Data)
     # We use a unique key to store the top journalists and the chart HTML
-    cache_key = "authors_sidebar_and_chart"
+    cache_key = f"authors_sidebar_and_chart_{search_query}_{author_page}"  # ✅ Include pagination in cache key
     cached_data = cache.get(cache_key)
 
     if cached_
-        top_journalists = cached_data['top_journalists']
+        authors_page_obj = cached_data['authors_page_obj']  # ✅ Renamed for clarity
         authors_chart = cached_data['authors_chart']
+        top_journalists = cached_data['top_journalists']  # Keep for chart
     else:
-        # ✅ CHANGE ONLY HERE: Query journalist names DIRECTLY from MediaNarrative articles
-        # Instead of querying the Journalist table, we pull names from article metadata
-        top_journalists_raw = MediaNarrative.objects.exclude(
+        # ✅ Get ALL authors (not just top 10), with optional search filter
+        all_authors_raw = MediaNarrative.objects.exclude(
             author__in=['', None, 'Unknown', 'unknown', 'N/A', 'Staff', 'Editor', 'Anonymous', 'By', 'Agency', 'Reuters', 'AFP']
         ).exclude(
-            author__regex=r'^https?://'  # Exclude any value starting with http/https
+            author__regex=r'^https?://'
         ).values('author').annotate(
             article_count=Count('id'),
             avg_strategic_confidence=Avg('confidence'),
         ).filter(
             author__isnull=False,
-            author__regex=r'^[A-Za-z\s\.\'\-]+$',  # Only allow valid name characters
-            article_count__gt=2  # Require at least 2 articles to appear in sidebar
-        ).order_by('-article_count', '-avg_strategic_confidence')[:10]
+            author__regex=r'^[A-Za-z\s\.\'\-]+$',
+            article_count__gte=1  # Show ALL authors with ≥1 article
+        )
         
-        # Convert QuerySet to list of dicts (same format as original)
+        # ✅ Apply search filter if user typed something
+        if search_query:
+            all_authors_raw = all_authors_raw.filter(author__icontains=search_query)
+        
+        # ✅ Order alphabetically for pagination (or by count if preferred)
+        all_authors_raw = all_authors_raw.order_by('author')
+        
+        # ✅ PAGINATE: 30 authors per page (adjust as needed)
+        from django.core.paginator import Paginator
+        author_paginator = Paginator(all_authors_raw, 30)
+        authors_page_obj = author_paginator.get_page(author_page)
+        
+        # Convert current page to list of dicts (for chart + template)
         top_journalists = []
-        for item in top_journalists_raw:
-            name = item['journalist_name'].strip()
-            if name and len(name) > 2:  # Skip very short/invalid names
+        for item in authors_page_obj:
+            name = item['author'].strip()
+            if name and len(name) > 2:
                 top_journalists.append({
                     'name': name,
                     'article_count': item['article_count'],
                     'avg_strategic_confidence': item['avg_strategic_confidence'] or 0.0
                 })
         
-        # Generate the Plotly Chart HTML - SAME as original
+        # Generate the Plotly Chart HTML (uses top_journalists)
         authors_chart = None
         if top_journalists:
             df = pd.DataFrame(list(top_journalists))
@@ -2038,9 +2052,13 @@ def authors(request):
                 )
                 authors_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-        # Store in cache for 1 hour (reduced from 24h for faster updates with new data)
-        cached_data = {'top_journalists': top_journalists, 'authors_chart': authors_chart}
-        cache.set(cache_key, cached_data, 60 * 60)  # 1 hour instead of 24
+        # Store in cache for 1 hour
+        cached_data = {
+            'authors_page_obj': authors_page_obj,  # ✅ Paginated object
+            'authors_chart': authors_chart,
+            'top_journalists': top_journalists  # For chart
+        }
+        cache.set(cache_key, cached_data, 60 * 60)
 
     # 3. Dynamic Logic (Not cached, changes based on user click) - ALL ORIGINAL INSIGHTS PRESERVED
     qs = MediaNarrative.objects.all().order_by('-posting_time')
@@ -2051,52 +2069,49 @@ def authors(request):
     common_intents = []
     common_countries = []
     common_actors = []
-    journalist_intent_chart = None  # Optional: mini chart for selected journalist
+    journalist_intent_chart = None
 
     if journalist_name:
-        # ✅ Filter directly on MediaNarrative.journalist_name field (no FK needed)
-        qs = qs.filter(journalist_name__iexact=journalist_name)
-        # Create simple dict for template (no DB lookup needed)
+        # ✅ Filter on MediaNarrative.author field
+        qs = qs.filter(author__iexact=journalist_name)
         selected_journalist = {'name': journalist_name}
 
-        # *** ENHANCED LOGIC: Calculate stats for the selected journalist (ORIGINAL) ***
+        # *** ENHANCED LOGIC: Calculate stats for the selected journalist ***
         journalist_stats = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).aggregate(
             total_articles=Count('id'),
             avg_confidence=Avg('confidence'),
-            # avg_vulnerability=Avg('vulnerability_index'), # REMOVED per earlier changes
         )
         
-        # Get most common intents (ORIGINAL)
+        # Get most common intents
         common_intents = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             strategic_intent__in=['', 'Unknown', None]
         ).values('strategic_intent').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # Get most common target countries (ORIGINAL)
+        # Get most common target countries
         common_countries = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             target_country__in=['', 'Unknown', None]
         ).values('target_country').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # Get most common inferred actors (ORIGINAL)
+        # Get most common inferred actors
         common_actors = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             inferred_actor__in=['', 'Unknown', None]
         ).values('inferred_actor').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # *** OPTIONAL: Generate Mini Chart for Selected Journalist (ORIGINAL) ***
-        # Example: Pie chart for intent distribution
+        # Generate Mini Chart for Selected Journalist
         if common_intents:
             df_intent = pd.DataFrame(list(common_intents))
             if not df_intent.empty:
@@ -2109,36 +2124,36 @@ def authors(request):
                     marker=dict(colors=px.colors.qualitative.Set3)
                 )])
                 fig_intent.update_layout(
-                    title=f"Strategic Intent Distribution for {selected_country_raw}",
+                    title=f"Focus Areas for {journalist_name}",
                     template="plotly_white",
-                    height=400, 
-                    margin=dict(l=20, r=20, t=40, b=20),
+                    height=300, 
+                    margin=dict(l=10, r=10, t=30, b=10),
                     showlegend=True
                 )
-                intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
+                journalist_intent_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 4. Pagination (ORIGINAL)
+    # 4. Pagination for Articles (ORIGINAL)
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 5. Context Assembly - ALL ORIGINAL KEYS PRESERVED
+    # 5. Context Assembly - ALL ORIGINAL KEYS PRESERVED + NEW PAGINATION
     context = {
-        'top_journalists': top_journalists,          # ✅ Sidebar list
-        'authors_chart': authors_chart,              # ✅ Main bar chart
-        'page_obj': page_obj,                        # ✅ Paginated articles
-        'selected_name': journalist_name or "All Journalists",  # ✅ UI state
-        'selected_journalist': selected_journalist,  # ✅ Selected author info
-        
-        # ✅ ALL ORIGINAL INSIGHTS BELOW:
-        'journalist_stats': journalist_stats,        # ✅ Total articles, avg confidence
-        'common_intents': common_intents,            # ✅ Top intents for journalist
-        'common_countries': common_countries,        # ✅ Top countries covered
-        'common_actors': common_actors,              # ✅ Top actors mentioned
-        'journalist_intent_chart': journalist_intent_chart,  # ✅ Optional mini pie chart
+        'authors_page': authors_page_obj,      # ✅ NEW: Paginated author directory
+        'top_journalists': top_journalists,    # For chart (current page only)
+        'authors_chart': authors_chart,
+        'page_obj': page_obj,                  # Article pagination (original)
+        'selected_name': journalist_name or "All Journalists",
+        'selected_journalist': selected_journalist,
+        'journalist_stats': journalist_stats,
+        'common_intents': common_intents,
+        'common_countries': common_countries,
+        'common_actors': common_actors,
+        'journalist_intent_chart': journalist_intent_chart,
+        'search_query': search_query,
     }
     return render(request, 'authors.html', context)
-    
+
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
