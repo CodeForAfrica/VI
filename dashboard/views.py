@@ -1,43 +1,44 @@
 # dashboard/views.py
-import pandas as pd
-import plotly.express as px
-from django.shortcuts import render
-from django.core.cache import cache 
-from django.db.models import Q, Count, Avg
-import plotly.graph_objects as go
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from .utils import map_to_canonical_intent
-import boto3
-import requests
-from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
-from dashboard.services.summarizer import get_summary
-from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
-from math import isfinite
-from django.http import HttpResponse, JsonResponse
-from django.template.loader import get_template
-from xhtml2pdf import pisa
-from io import BytesIO
-from datetime import datetime
-import base64
-import json
-import logging
-import urllib3
-import matplotlib
-matplotlib.use('Agg')  # Required for Django to prevent "main thread" GUI errors
-import matplotlib.pyplot as plt
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from groq import Groq
-from django.conf import settings
-from django.db.models.functions import TruncMonth
-from django.utils.dateparse import parse_date
 import os
 import re
 import io
-from botocore.exceptions import ClientError, NoCredentialsError
-from dashboard.services.ml_inference_service import MLInferenceService
-from .utils import calculate_contextual_score, map_to_canonical_intent
+import json
+import base64
+import logging
+import requests
+import urllib3
+import boto3
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
 
+from datetime import datetime
+from io import BytesIO
+from math import isfinite
+from botocore.exceptions import ClientError, NoCredentialsError
+from groq import Groq
+from xhtml2pdf import pisa
+
+from django.shortcuts import render
+from django.conf import settings
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import get_template
+from django.core.cache import cache 
+from django.db.models import Q, Count, Avg, Sum
+from django.db.models.functions import TruncMonth
+from django.utils.dateparse import parse_date
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+# App-specific imports
+from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
+from .utils import calculate_contextual_score, map_to_canonical_intent
+from dashboard.services.summarizer import get_summary
+from dashboard.services.ml_inference_service import get_ml_service, MLInferenceService
 
 
 logger = logging.getLogger(__name__)
@@ -188,7 +189,7 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
 
-        import re
+        
         country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
         actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
         
@@ -251,7 +252,7 @@ class DisinfoAnalysisChatbot:
         # ============================================
         # General Narratives Overview #####################
         # ============================================
-        import re
+        
         narrative_keywords = ['key narratives', 'narratives', 'strategic intent', 'what narratives', 'main narratives', 'list narratives']
         if any(keyword in query_l for keyword in narrative_keywords):
             from django.db.models import Count
@@ -296,7 +297,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 • "Narratives involving Senegal and France"
 """
 
-        import re
+        
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
@@ -409,7 +410,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             return "I specialize in foreign influence analysis and vulnerability indices. I don't track local sports or entertainment unless they involve foreign actors."
     
         # Handle multiple questions about ANY country with foreign actor focus
-        import re
+       
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         
@@ -1121,9 +1122,6 @@ def overview(request):
     }
     return render(request, 'overview.html', context)        
    
-
-from django.core.paginator import Paginator
-from django.db.models import Q, Count, F
 
 def media(request):
     # 1. Get the filter parameter
