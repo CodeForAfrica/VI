@@ -2020,7 +2020,6 @@ def authors(request):
         all_authors_raw = all_authors_raw.order_by('author')
         
         # ✅ PAGINATE: 30 authors per page (adjust as needed)
-        from django.core.paginator import Paginator
         author_paginator = Paginator(all_authors_raw, 30)
         authors_page_obj = author_paginator.get_page(author_page)
         
