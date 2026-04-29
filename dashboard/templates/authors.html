@@ -1,4 +1,4 @@
-<!-- dashboard/templates/dashboard/authors.html -->
+<!-- dashboard/templates/authors.html -->
 {% extends "base.html" %}
 {% load static %}
 
@@ -57,14 +57,14 @@
     </div>
 
     <div class="row">
-        <!-- ✅ SIDEBAR: Journalist Directory (FIXED INDENTATION) -->
+        <!-- ✅ SIDEBAR: Journalist Directory -->
         <div class="col-lg-4 mb-4">
             <div class="card shadow-sm border-0 sticky-sidebar">
                 <div class="card-header bg-white py-3">
                     <h5 class="fw-bold mb-0">Journalist Directory</h5>
                 </div>
                 
-                <!-- 🔍 SEARCH BOX (properly nested inside .card) -->
+                <!-- 🔍 SEARCH BOX -->
                 <form method="GET" class="p-3 border-bottom">
                     <div class="input-group input-group-sm">
                         <input type="text" name="search" value="{{ search_query }}" 
@@ -177,7 +177,7 @@
             </div>
             {% endif %} 
 
-            <!-- Mini Chart Section (Optional) -->
+            <!-- Mini Chart Section -->
             {% if journalist_intent_chart %}
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
