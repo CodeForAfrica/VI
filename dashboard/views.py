@@ -10,6 +10,7 @@ from dashboard.services.summarizer import get_summary
 from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go 
 from math import isfinite
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
