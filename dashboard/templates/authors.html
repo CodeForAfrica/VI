@@ -64,27 +64,73 @@
                 <div class="card-header bg-white py-3">
                     <h5 class="fw-bold mb-0">Journalist Directory</h5>
                 </div>
-                <div class="list-group list-group-flush" style="max-height: 600px; overflow-y: auto;">
-                    <a href="{% url 'authors' %}" class="list-group-item list-group-item-action {% if selected_name == 'All Journalists' %}active{% endif %}">
-                        <strong>View All Journalists</strong>
-                    </a>
-                    {% for journalist in top_journalists %}
-                    <a href="?journalist={{ journalist.name|urlencode }}"
-                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
-                       {% if selected_name == journalist.name %}active{% endif %}">
-                        <span>{{ journalist.name }}</span>
-                        <span class="badge {% if selected_name == journalist.name %}bg-white text-primarybg-primary{% endif %} rounded-pill">
-                            {{ journalist.article_count }}
-                        </span>
-                    </a>
-                    {% empty %}
-                    <div class="p-3 text-muted">No journalists found.</div>
-                    {% endfor %} 
-                </div>
-            </div>
-        </div>
+                <!-- 🔍 SEARCH BOX -->
+<form method="GET" class="p-3 border-bottom">
+  <div class="input-group input-group-sm">
+    <input type="text" name="search" value="{{ search_query }}" 
+           class="form-control" placeholder="Search journalists...">
+    <button type="submit" class="btn btn-primary">🔍</button>
+    {% if search_query %}
+      <a href="{% url 'authors' %}" class="btn btn-outline-secondary">Clear</a>
+    {% endif %}
+  </div>
+</form>
 
-        <div class="col-lg-8">
+<!-- 📊 Paginated Journalist Directory -->
+<div class="mb-2 px-3 d-flex justify-content-between align-items-center small text-muted">
+  <span>Page {{ authors_page.number }} of {{ authors_page.paginator.num_pages }}</span>
+  <span>({{ authors_page.paginator.count }} total)</span>
+</div>
+
+<div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+  <a href="{% url 'authors' %}" class="list-group-item list-group-item-action {% if not selected_journalist %}active{% endif %}">
+    <strong>View All Journalists</strong>
+  </a>
+  {% for journalist in authors_page %}
+    <a href="?journalist={{ journalist.author|urlencode }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_journalist %}&page=1{% endif %}" 
+       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
+       {% if selected_journalist and selected_journalist.name == journalist.author %}active{% endif %}">
+        <span class="text-truncate" style="max-width: 180px;">{{ journalist.author }}</span>
+        <span class="badge bg-primary rounded-pill">{{ journalist.article_count }}</span>
+    </a>
+  {% empty %}
+    <div class="p-3 text-muted text-center">No journalists found.</div>
+  {% endfor %} 
+</div>
+
+<!-- 🔢 Pagination Controls -->
+{% if authors_page.has_other_pages %}
+  <div class="p-2 border-top">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+      {% if authors_page.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?author_page=1{% if search_query %}&search={{ search_query }}{% endif %}">«</a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?author_page={{ authors_page.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">←</a>
+        </li>
+      {% endif %}
+      
+      <li class="page-item disabled">
+        <span class="page-link">{{ authors_page.number }}/{{ authors_page.paginator.num_pages }}</span>
+      </li>
+      
+      {% if authors_page.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?author_page={{ authors_page.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">→</a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?author_page={{ authors_page.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}">»</a>
+        </li>
+      {% endif %}
+    </ul>
+  </div>
+                
+  {% endif %}
+                </div> <!-- ✅ Closes the sidebar .card -->
+            </div>     <!-- ✅ Closes the .col-lg-4 column -->
+
+            <div class="col-lg-8">
 
             {% if selected_journalist %}
             <div class="card shadow-sm border-0 mb-4 animate__animated animate__fadeIn">
