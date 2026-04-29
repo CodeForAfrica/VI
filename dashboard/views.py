@@ -1165,7 +1165,6 @@ def media(request):
             # Create the Plotly bar chart
             # Sort by article_count for a cleaner display (ascending for horizontal bar if desired)
             df_sorted = df.sort_values(by='article_count', ascending=True) # Ascending for horizontal bar (top = highest)
-            import plotly.express as px # Import here or at the top
             fig = px.bar(
                 df_sorted,
                 x='article_count', # X-axis: count
