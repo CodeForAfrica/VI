@@ -1277,7 +1277,8 @@ def media(request):
     # No chart is calculated for the overall view now.
 
     # 6. HANDLE PAGINATION
-    paginator = Paginator(qs, 10) # Show 10 per page
+    import django.core.paginator
+    paginator = django.core.paginator.Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -1768,7 +1769,8 @@ def countries(request):
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
             df = df.sort_values('Articles', ascending=True)
-            fig = go.Figure(go.Bar(
+            import plotly.graph_objects
+            fig = plotly.graph_objects.Figure(plotly.graph_objects.Bar(
                 x=df['Articles'],
                 y=df['Country'],
                 orientation='h',
