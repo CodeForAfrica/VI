@@ -1,15 +1,17 @@
 # dashboard/views.py
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from django.shortcuts import render
+from django.db.models import Q, Avg, Count
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.cache import cache
 import boto3
 import requests
-from django.shortcuts import render
-from django.core.cache import cache 
-from django.db.models import Q, Count, Avg
-from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
 from dashboard.services.summarizer import get_summary
 from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
-import pandas as pd
-import plotly.express as px
+
 from math import isfinite
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
@@ -29,14 +31,13 @@ from groq import Groq
 from django.conf import settings
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
-import plotly.graph_objects as go
 import os
 import re
 import io
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 
 
 logger = logging.getLogger(__name__)
