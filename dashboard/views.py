@@ -1,15 +1,17 @@
 # dashboard/views.py
-import boto3
-import requests
+import pandas as pd
+import plotly.express as px
 from django.shortcuts import render
 from django.core.cache import cache 
 from django.db.models import Q, Count, Avg
-from django.core.paginator import Paginator
+import plotly.graph_objects as go
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .utils import map_to_canonical_intent
+import boto3
+import requests
 from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
 from dashboard.services.summarizer import get_summary
 from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
-import pandas as pd
-import plotly.express as px
 from math import isfinite
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
@@ -29,14 +31,13 @@ from groq import Groq
 from django.conf import settings
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
-import plotly.graph_objects as go
 import os
 import re
 import io
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 
 
 logger = logging.getLogger(__name__)
@@ -1121,9 +1122,6 @@ def overview(request):
     return render(request, 'overview.html', context)        
    
 
-from django.core.paginator import Paginator
-from django.db.models import Q, Count, F
-
 def media(request):
     # 1. Get the filter parameter
     outlet_name = request.GET.get('outlet', '').strip()
@@ -1827,7 +1825,6 @@ def countries(request):
     intent_distribution = []
     if selected_country_raw: 
         # ✅ ENHANCED: Fetch intent counts excluding NULL, empty, and null-like values
-        from django.db.models import Q
         raw_intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country_raw
         ).exclude(
@@ -1894,7 +1891,6 @@ def countries(request):
             print(f"📊 PLOTLY DATA [{selected_country_raw}]: {df_intent['strategic_intent'].tolist()}")
 
             if not df_intent.empty:
-                import plotly.graph_objects as go
                 # Use explicit lists to prevent px.pie auto-grouping of 'null'
                 labels = df_intent['strategic_intent'].tolist()
                 values = df_intent['count'].tolist()
