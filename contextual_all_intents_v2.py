@@ -140,32 +140,77 @@ def presence_factor(a,c):
     return 0.2
 
 # compute g_f values
-def compute_gs():
-    g = {a:{c:{} for c in countries} for a in actors}
-    for a in actors:
-        for c in countries:
-            # debt
-            debt = DEBT.get(a,{}).get(c,0.0)
-            g_debt = clip(debt / GDP[c]) if GDP[c]>0 else 0.0
-            # res, mil
-            g_res = G_RES.get(a,{}).get(c,0.0)
-            g_mil = G_MIL.get(a,{}).get(c,0.0)
-            # elec: time + baseline (baseline uses presence_factor)
-            months_to_elec = 3 if c=="CoteIvoire" else 999
-            g_elec_time = 1 - min(months_to_elec,24)/24 if months_to_elec < 999 else 0.0
-            elec_index = ACTOR_ELEC.get(a,{}).get(c,0.0)
-            # baseline 0.25 applied if actor present
-            base = 0.25 * presence_factor(a,c)
-            g_elec = elec_index * max(g_elec_time, base)
-            # lgbt: (1-L_c) * actor_lgbtq_index
-            lgbt_index = ACTOR_LGBTQ.get(a,{}).get(c,0.0)
-            g_lgbt = (1 - L[c]) * lgbt_index
-            # frag: FSI_norm * disinfo index (only for social fragility intent)
-            disinfo_index = ACTOR_DISINFO.get(a,{}).get(c,0.0)
-            g_frag = FSI_NORM[c] * disinfo_index
-            g[a][c] = {"debt":g_debt,"res":g_res,"mil":g_mil,"elec":g_elec,"lgbt":g_lgbt,"frag":g_frag}
-    return g
+from datetime import datetime
 
+ELECTION_DATES = {
+    "Senegal":      datetime(2027, 2, 25),    # example – next presidential election
+    "DRC":          datetime(2028, 12, 20),   # example – general election
+    "CoteIvoire":   datetime(2025, 10, 31),   # presidential election
+    "Ethiopia":     datetime(2026, 6, 30),    # general election (as discussed)
+    "South Africa": datetime(2029, 5, 15),    # national election
+}
+
+def months_until_election(country, current_date=None):
+    """Return number of months until the next election for the given country.
+    Returns 999 if no election date is defined or if the election has already passed."""
+    if current_date is None:
+        current_date = datetime.now()
+    election_date = ELECTION_DATES.get(country)
+    if not election_date:
+        return 999
+    if election_date <= current_date:
+        return 0          # election already happened
+    # Calculate months difference
+    months = (election_date.year - current_date.year) * 12 + (election_date.month - current_date.month)
+    # Adjust for day of month (if election day is earlier in the month, subtract 1)
+    if election_date.day < current_date.day:
+        months -= 1
+    return max(0, months)
+
+
+def compute_gs():
+    """Compute g (actor‑country specific factors) for all actors and countries."""
+    g = {a: {c: {} for c in COUNTRIES} for a in ACTORS}
+    for a in ACTORS:
+        for c in COUNTRIES:
+            # ----- debt factor -----
+            debt = DEBT.get(a, {}).get(c, 0.0)
+            g_debt = clip(debt / GDP[c]) if GDP[c] > 0 else 0.0
+
+            # ----- resource factor -----
+            g_res = G_RES.get(a, {}).get(c, 0.0)
+
+            # ----- military factor -----
+            g_mil = G_MIL.get(a, {}).get(c, 0.0)
+
+            # ----- election factor (dynamic) -----
+            months_to_elec = months_until_election(c)
+            # g_elec_time = 1 - min(months_to_elec, 24) / 24  (0 if >24 months)
+            g_elec_time = 1 - min(months_to_elec, 24) / 24 if months_to_elec < 999 else 0.0
+            elec_index = ACTOR_ELEC.get(a, {}).get(c, 0.0)
+            # baseline presence factor (used to avoid zero when months_to_elec is large)
+            base = 0.25 * presence_factor(a, c)
+            g_elec = elec_index * max(g_elec_time, base)
+
+            # ----- lgbt factor -----
+            lgbt_index = ACTOR_LGBTQ.get(a, {}).get(c, 0.0)
+            g_lgbt = (1 - L.get(c, 0.5)) * lgbt_index
+
+            # ----- fragility / disinfo factor -----
+            disinfo_index = ACTOR_DISINFO.get(a, {}).get(c, 0.0)
+            g_frag = FSI_NORM[c] * disinfo_index
+
+            # Store all factors
+            g[a][c] = {
+                "debt": g_debt,
+                "res":  g_res,
+                "mil":  g_mil,
+                "elec": g_elec,
+                "lgbt": g_lgbt,
+                "frag": g_frag
+            }
+    return g
+  
 # raw metrics m_{a,c,f} used for R-factors
 def raw_metrics(a,c,g):
     return {
