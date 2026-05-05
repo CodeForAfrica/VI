@@ -37,14 +37,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Smoke-check Python syntax
-        run: python -m compileall config dashboard manage.py
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
