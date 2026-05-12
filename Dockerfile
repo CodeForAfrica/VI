@@ -1,16 +1,17 @@
-# Use Debian-based slim image
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
-# Set environment variables for better Python behavior
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    VIRTUAL_ENV=/opt/venv
 
 WORKDIR /app
 
-# Install system dependencies for compilation
-# Complete list of required packages for pycairo and other dependencies
+RUN python -m venv "$VIRTUAL_ENV"
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
@@ -20,32 +21,42 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip, setuptools, and wheel
-RUN pip install --upgrade pip setuptools wheel
-
-# Copy requirements.txt
 COPY requirements.txt .
 
-# Install Python requirements using pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install -r requirements.txt
 
-# Copy the rest of the project files
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    HOME=/home/appuser \
+    MPLCONFIGDIR=/home/appuser/.config/matplotlib
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libgirepository-1.0-1 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system appgroup \
+    && adduser --system --ingroup appgroup --home /home/appuser appuser \
+    && mkdir -p /home/appuser/.config/matplotlib \
+    && chown -R appuser:appgroup /home/appuser
+
+COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 8000
+RUN python manage.py collectstatic --noinput \
+    && chown -R appuser:appgroup /app
 
-# Command to run the application with Gunicorn
-
-RUN pip install --upgrade pip setuptools wheel
-
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
+USER appuser
 
 EXPOSE 8000
 
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn --bind 0.0.0.0:8000 config.wsgi:application"]
