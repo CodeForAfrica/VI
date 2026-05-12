@@ -1,4 +1,7 @@
 # dashboard/views.py
+import os
+import re
+import io
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -19,21 +22,35 @@ from xhtml2pdf import pisa
 from io import BytesIO
 from datetime import datetime
 import base64
+
 import json
+import base64
 import logging
+import requests
 import urllib3
+import boto3
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib
-matplotlib.use('Agg')  # Required for Django to prevent "main thread" GUI errors
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+
+from datetime import datetime
+from io import BytesIO
+from math import isfinite
+from botocore.exceptions import ClientError, NoCredentialsError
 from groq import Groq
+from xhtml2pdf import pisa
+
+from django.shortcuts import render
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import get_template
+from django.core.cache import cache 
+from django.db.models import Q, Count, Avg, Sum
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
-import os
-import re
-import io
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
@@ -188,7 +205,7 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
 
-        import re
+        
         country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
         actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
         
@@ -251,7 +268,7 @@ class DisinfoAnalysisChatbot:
         # ============================================
         # General Narratives Overview #####################
         # ============================================
-        import re
+        
         narrative_keywords = ['key narratives', 'narratives', 'strategic intent', 'what narratives', 'main narratives', 'list narratives']
         if any(keyword in query_l for keyword in narrative_keywords):
             from django.db.models import Count
@@ -296,7 +313,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 • "Narratives involving Senegal and France"
 """
 
-        import re
+        
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
@@ -409,7 +426,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             return "I specialize in foreign influence analysis and vulnerability indices. I don't track local sports or entertainment unless they involve foreign actors."
     
         # Handle multiple questions about ANY country with foreign actor focus
-        import re
+       
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         
@@ -1122,9 +1139,6 @@ def overview(request):
     return render(request, 'overview.html', context)        
    
 
-from django.core.paginator import Paginator
-from django.db.models import Q, Count, F
-
 def media(request):
     # 1. Get the filter parameter
     outlet_name = request.GET.get('outlet', '').strip()
@@ -1167,7 +1181,6 @@ def media(request):
             # Create the Plotly bar chart
             # Sort by article_count for a cleaner display (ascending for horizontal bar if desired)
             df_sorted = df.sort_values(by='article_count', ascending=True) # Ascending for horizontal bar (top = highest)
-            import plotly.express as px # Import here or at the top
             fig = px.bar(
                 df_sorted,
                 x='article_count', # X-axis: count
@@ -1279,7 +1292,7 @@ def media(request):
     # No chart is calculated for the overall view now.
 
     # 6. HANDLE PAGINATION
-    paginator = Paginator(qs, 10) # Show 10 per page
+    paginator = django.core.paginator.Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -1770,7 +1783,8 @@ def countries(request):
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
             df = df.sort_values('Articles', ascending=True)
-            fig = go.Figure(go.Bar(
+            import plotly.graph_objects
+            fig = plotly.graph_objects.Figure(plotly.graph_objects.Bar(
                 x=df['Articles'],
                 y=df['Country'],
                 orientation='h',
@@ -1828,7 +1842,6 @@ def countries(request):
     intent_distribution = []
     if selected_country_raw: 
         # ✅ ENHANCED: Fetch intent counts excluding NULL, empty, and null-like values
-        from django.db.models import Q
         raw_intent_counts = MediaNarrative.objects.filter(
             target_country__iexact=selected_country_raw
         ).exclude(
@@ -1895,7 +1908,6 @@ def countries(request):
             print(f"📊 PLOTLY DATA [{selected_country_raw}]: {df_intent['strategic_intent'].tolist()}")
 
             if not df_intent.empty:
-                import plotly.graph_objects as go
                 # Use explicit lists to prevent px.pie auto-grouping of 'null'
                 labels = df_intent['strategic_intent'].tolist()
                 values = df_intent['count'].tolist()

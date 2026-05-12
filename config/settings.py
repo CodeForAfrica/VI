@@ -4,28 +4,19 @@ from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Handle special characters in secret key
-try:
-    # Try to get from environment variable first
-    SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'fallback-secret-key-for-development')
-    # If it's the fallback, use the actual key
-    if SECRET_KEY == 'fallback-secret-key-for-development':
-        SECRET_KEY = "(@lhxdh^3z1aea9xjny21q^0crno_h48*3!y7en!g#x(5^*zad"
-except:
-    # Fallback if environment variable access fails
-    SECRET_KEY = "(@lhxdh^3z1aea9xjny21q^0crno_h48*3!y7en!g#x(5^*zad"
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
 
 # SECURITY WARNING: Don't run with debug turned on in production!
-#DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-DEBUG = True
-# Security: Allow specific hosts only
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-# Get ALLOWED_HOSTS from environment variable, with fallback to specific IPs
-import os
-
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 # CSRF_TRUSTED_ORIGINS MUST have the scheme (http://)
 CSRF_TRUSTED_ORIGINS = [
@@ -46,6 +37,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -102,6 +94,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -119,7 +112,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1', # Adjust if Redis is on a different host/port
+        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
