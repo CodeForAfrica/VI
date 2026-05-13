@@ -4,6 +4,14 @@ import re
 import io
 import pandas as pd
 import plotly.express as px
+from django.shortcuts import render
+from django.core.cache import cache 
+from django.db.models import Q, Count, Avg
+import plotly.graph_objects as go
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .utils import map_to_canonical_intent
+import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 from django.shortcuts import render
 from django.db.models import Q, Avg, Count
