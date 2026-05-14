@@ -54,6 +54,7 @@ from django.utils.dateparse import parse_date
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
+from django.core.paginator import Paginator 
 
 
 
