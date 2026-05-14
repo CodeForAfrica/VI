@@ -28,7 +28,7 @@ requests==2.33.0
 beautifulsoup4==4.12.2
 trafilatura
 langdetect==1.0.9
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 groq
 cloudscraper
 spacy
