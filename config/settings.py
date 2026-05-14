@@ -20,7 +20,7 @@ ALLOWED_HOSTS = [
 
 # CSRF_TRUSTED_ORIGINS MUST have the scheme (http://)
 CSRF_TRUSTED_ORIGINS = [
-    'http://3.254.121.126', 
+    'http://108.130.70.153', 
     'http://localhost',
     'http://*.compute-1.amazonaws.com'  # This handles the internal AWS address
 ]
