@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from django.shortcuts import render
-from django.db.models import Q, Avg, Count
+from django.db.models import Q, F, Avg, Count
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.cache import cache
 import boto3
@@ -1293,7 +1293,7 @@ def media(request):
     # No chart is calculated for the overall view now.
 
     # 6. HANDLE PAGINATION
-    paginator = django.core.paginator.Paginator(qs, 10) # Show 10 per page
+    paginator = Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
