@@ -819,7 +819,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 # Instantiate the chatbot once
 chatbot_instance = DisinfoAnalysisChatbot()
 
-@csrf_exempt
+#@csrf_exempt
 def chat_view(request):
     # 1. If the user is SENDING a message (AJAX)
     if request.method == "POST":
@@ -835,7 +835,7 @@ def chat_view(request):
     # This provides the HTML structure for the typing area
     return render(request, 'chat_inline.html') 
     
-@csrf_exempt
+#@csrf_exempt
 def chatbot_response(request):
     if request.method == "POST":
         try:
