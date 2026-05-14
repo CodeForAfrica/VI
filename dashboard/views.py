@@ -1293,7 +1293,7 @@ def media(request):
     # No chart is calculated for the overall view now.
 
     # 6. HANDLE PAGINATION
-    paginator = django.core.paginator.Paginator(qs, 10) # Show 10 per page
+    paginator = Paginator(qs, 10) # Show 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
