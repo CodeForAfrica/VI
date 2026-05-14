@@ -1310,7 +1310,15 @@ def media(request):
         'selected_name': outlet_name if outlet_name else "All Outlets",
         'target_countries': COUNTRIES,
     }
-    return render(request, 'media.html', context)
+    try:
+        return render(request, 'media.html', context)
+    except Exception as e:
+        import sys, traceback
+        print(f"\n🚨 MEDIA VIEW ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"📋 TRACEBACK:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print(f"🚨 END MEDIA ERROR\n", file=sys.stderr)
+        raise 
     
 def generate_report(request):
     selected_country = request.GET.get('country')
