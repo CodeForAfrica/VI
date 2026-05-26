@@ -1,15 +1,20 @@
 # dashboard/views.py
+import os
+import re
+import io
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from django.shortcuts import render
+from django.db.models import Q, F, Avg, Count
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.cache import cache
 import boto3
 import requests
-from django.shortcuts import render
-from django.core.cache import cache 
-from django.db.models import Q, Count, Avg
-from django.core.paginator import Paginator
 from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
 from dashboard.services.summarizer import get_summary
 from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
-import pandas as pd
-import plotly.express as px
+
 from math import isfinite
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
@@ -17,25 +22,40 @@ from xhtml2pdf import pisa
 from io import BytesIO
 from datetime import datetime
 import base64
+
 import json
+import base64
 import logging
+import requests
 import urllib3
+import boto3
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib
-matplotlib.use('Agg')  # Required for Django to prevent "main thread" GUI errors
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+
+from datetime import datetime
+from io import BytesIO
+from math import isfinite
+from botocore.exceptions import ClientError, NoCredentialsError
 from groq import Groq
+from xhtml2pdf import pisa
+
+from django.shortcuts import render
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import get_template
+from django.core.cache import cache 
+from django.db.models import Q, Count, Avg, Sum
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
-import plotly.graph_objects as go
-import os
-import re
-import io
 from botocore.exceptions import ClientError, NoCredentialsError
 from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
+from django.core.paginator import Paginator 
+from django.views.decorators.csrf import csrf_exempt
 
 
 logger = logging.getLogger(__name__)
@@ -186,7 +206,7 @@ class DisinfoAnalysisChatbot:
     def process_query(self, query):
         query_l = query.lower().strip()
 
-        import re
+        
         country_pattern = r'(senegal|drc|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa)'
         actor_pattern = r'(china|france|usa|united states|us|russia|saudi|turkey|uae|israel|iran|rwanda)'
         
@@ -249,7 +269,7 @@ class DisinfoAnalysisChatbot:
         # ============================================
         # General Narratives Overview #####################
         # ============================================
-        import re
+        
         narrative_keywords = ['key narratives', 'narratives', 'strategic intent', 'what narratives', 'main narratives', 'list narratives']
         if any(keyword in query_l for keyword in narrative_keywords):
             from django.db.models import Count
@@ -294,7 +314,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 • "Narratives involving Senegal and France"
 """
 
-        import re
+        
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         if match and ('how many' in query_l or 'analyze' in query_l or 'articles' in query_l):
@@ -407,7 +427,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             return "I specialize in foreign influence analysis and vulnerability indices. I don't track local sports or entertainment unless they involve foreign actors."
     
         # Handle multiple questions about ANY country with foreign actor focus
-        import re
+       
         country_pattern = r'(?:around|about|for|on)\s+(senegal|drc|coted\'ivoire|cote d\'ivoire|cote ivoire|ivory coast|ethiopia|south africa|southafrica)'
         match = re.search(country_pattern, query_l, re.IGNORECASE)
         
@@ -799,7 +819,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 # Instantiate the chatbot once
 chatbot_instance = DisinfoAnalysisChatbot()
 
-@csrf_exempt
+#@csrf_exempt
 def chat_view(request):
     # 1. If the user is SENDING a message (AJAX)
     if request.method == "POST":
@@ -815,7 +835,7 @@ def chat_view(request):
     # This provides the HTML structure for the typing area
     return render(request, 'chat_inline.html') 
     
-@csrf_exempt
+#@csrf_exempt
 def chatbot_response(request):
     if request.method == "POST":
         try:
@@ -1120,9 +1140,6 @@ def overview(request):
     return render(request, 'overview.html', context)        
    
 
-from django.core.paginator import Paginator
-from django.db.models import Q, Count, F
-
 def media(request):
     # 1. Get the filter parameter
     outlet_name = request.GET.get('outlet', '').strip()
@@ -1165,7 +1182,6 @@ def media(request):
             # Create the Plotly bar chart
             # Sort by article_count for a cleaner display (ascending for horizontal bar if desired)
             df_sorted = df.sort_values(by='article_count', ascending=True) # Ascending for horizontal bar (top = highest)
-            import plotly.express as px # Import here or at the top
             fig = px.bar(
                 df_sorted,
                 x='article_count', # X-axis: count
@@ -1294,7 +1310,15 @@ def media(request):
         'selected_name': outlet_name if outlet_name else "All Outlets",
         'target_countries': COUNTRIES,
     }
-    return render(request, 'media.html', context)
+    try:
+        return render(request, 'media.html', context)
+    except Exception as e:
+        import sys, traceback
+        print(f"\n🚨 MEDIA VIEW ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"📋 TRACEBACK:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print(f"🚨 END MEDIA ERROR\n", file=sys.stderr)
+        raise 
     
 def generate_report(request):
     selected_country = request.GET.get('country')
@@ -1683,10 +1707,8 @@ def countries(request):
         "drc": "DRC",
         "Ethiopia": "Ethiopia",
         "ethiopia": "Ethiopia",
-        "South Africa": "SouthAfrica", # Check VI table for exact format, might be "South Africa" or "southafrica"
+        "South Africa": "SouthAfrica",
         "south africa": "SouthAfrica",
-        "South Africa": "South Africa",
-        "south africa": "South Africa",
     }
 
     # 3. Get the mapped country name for VulnerabilityIndex queries
@@ -1770,7 +1792,8 @@ def countries(request):
         if not df.empty:
             df = df.rename(columns={'target_country': 'Country', 'article_count': 'Articles'})
             df = df.sort_values('Articles', ascending=True)
-            fig = go.Figure(go.Bar(
+            import plotly.graph_objects
+            fig = plotly.graph_objects.Figure(plotly.graph_objects.Bar(
                 x=df['Articles'],
                 y=df['Country'],
                 orientation='h',
@@ -1824,14 +1847,21 @@ def countries(request):
     # *** NEW: Intent Distribution for the Selected Country ***
     # Shows what types of strategic influence topics are most prevalent for the selected country.
     # Uses selected_country_raw (unchanged)
-    #intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>" # Ensure it's initialized
+    intent_distribution_chart = "<p class='text-center py-5 text-muted'>No intent data available</p>" # Ensure it's initialized
     intent_distribution = []
     if selected_country_raw: 
-        # Fetch the raw intent counts for the selected country
+        # ✅ ENHANCED: Fetch intent counts excluding NULL, empty, and null-like values
         raw_intent_counts = MediaNarrative.objects.filter(
-            target_country__iexact=selected_country_raw # <-- CORRECT: Use selected_country_raw for MN filtering
+            target_country__iexact=selected_country_raw
         ).exclude(
-            strategic_intent__in=['', 'Unknown', None]
+            Q(strategic_intent__isnull=True) |
+            Q(strategic_intent='') |
+            Q(strategic_intent__iexact='null') |
+            Q(strategic_intent__iexact='none') |
+            Q(strategic_intent__iexact='n/a') |
+            Q(strategic_intent__iexact='unknown') |
+            Q(strategic_intent__iexact='tbd') |
+            Q(strategic_intent__regex=r'^\s*$')  # whitespace-only strings
         ).values('strategic_intent').annotate(
             count=Count('id')
         ).order_by('-count')
@@ -1841,8 +1871,18 @@ def countries(request):
         for item in raw_intent_counts:
             raw_intent = item['strategic_intent']
             count = item['count']
+            # Skip if intent is still None or empty after filtering
+            if not raw_intent or raw_intent.strip() == '':
+                continue
             # Map the raw intent to its canonical form
             canonical_intent = map_to_canonical_intent(raw_intent)
+
+            # Check for literal strings that Plotly might pick up
+            if not canonical_intent or str(canonical_intent).lower().strip() in ['null', 'none', '', 'nan']:
+                continue
+            # Skip if mapping returns None or empty
+            if not canonical_intent or canonical_intent.strip() == '':
+                continue
             # Add the count to the canonical intent bucket
             if canonical_intent in canonical_intent_counts:
                 canonical_intent_counts[canonical_intent] += count
@@ -1857,14 +1897,45 @@ def countries(request):
     
         if processed_intent_data:
             df_intent = pd.DataFrame(processed_intent_data)
+            
+            # 🛡️ AGGRESSIVE PLOTLY SANITIZATION
+            # 1. Drop Python None/NaN rows first
+            df_intent = df_intent.dropna(subset=['strategic_intent'])
+            
+            # 2. Convert to string to standardize types
+            df_intent['strategic_intent'] = df_intent['strategic_intent'].astype(str)
+            
+            # 3. Filter out literal "null", "none", "unknown", etc. (case-insensitive)
+            invalid_strings = {'null', 'none', 'None', 'nan', 'NaN', 'na', 'n/a', 'unknown', 'tbd', ''}
+            df_intent = df_intent[~df_intent['strategic_intent'].str.lower().str.strip().isin(invalid_strings)]
+            
+            # 4. Final cleanup: strip whitespace & drop empties
+            df_intent['strategic_intent'] = df_intent['strategic_intent'].str.strip()
+            df_intent = df_intent[df_intent['strategic_intent'] != '']
+            
+            # 🔍 DEBUG: Print exactly what Plotly will render
+            print(f"📊 PLOTLY DATA [{selected_country_raw}]: {df_intent['strategic_intent'].tolist()}")
+
             if not df_intent.empty:
-                fig_intent = px.pie(
-                    df_intent, values='count', names='strategic_intent', # 'names' is now canonical
-                    title=f"Strategic Intent Distribution for {selected_country_raw}", # <-- CORRECT: Use selected_country_raw for display
-                    template="plotly_white"
+                # Use explicit lists to prevent px.pie auto-grouping of 'null'
+                labels = df_intent['strategic_intent'].tolist()
+                values = df_intent['count'].tolist()
+                
+                fig_intent = go.Figure(data=[go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.3,
+                    textinfo='label+percent',
+                    hoverinfo='label+percent+value',
+                    marker=dict(colors=px.colors.qualitative.Set3)
+                )])
+                fig_intent.update_layout(
+                    title=f"Strategic Intent Distribution for {selected_country_raw}",
+                    template="plotly_white",
+                    height=400, 
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    showlegend=True
                 )
-                # Optional: Add a legend outside the plot
-                fig_intent.update_layout(height=400, margin=dict(l=20, r=20, t=40, b=20))
                 intent_distribution_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
                 
     # Volume of Articles Over Time for the Selected Country
@@ -1932,47 +2003,60 @@ def countries(request):
         'country_stats': country_stats,
     }
     return render(request, 'countries.html', context)
-
+    
 def authors(request):
     # 1. Capture the selected journalist name from URL
     journalist_name = request.GET.get('journalist', '').strip()
+    search_query = request.GET.get('search', '').strip()
+    author_page = request.GET.get('author_page', 1)  # ✅ NEW: Pagination param
 
     # 2. CACHE logic for the Sidebar and Chart (The "Heavy" Data)
     # We use a unique key to store the top journalists and the chart HTML
-    cache_key = "authors_sidebar_and_chart"
+    cache_key = f"authors_sidebar_and_chart_{search_query}_{author_page}"  # ✅ Include pagination in cache key
     cached_data = cache.get(cache_key)
 
-    if cached_
-        top_journalists = cached_data['top_journalists']
+    if cached_data:
+        authors_page_obj = cached_data['authors_page_obj']  # ✅ Renamed for clarity
         authors_chart = cached_data['authors_chart']
+        top_journalists = cached_data['top_journalists']  # Keep for chart
     else:
-        # ✅ CHANGE ONLY HERE: Query journalist names DIRECTLY from MediaNarrative articles
-        # Instead of querying the Journalist table, we pull names from article metadata
-        top_journalists_raw = MediaNarrative.objects.exclude(
+        # ✅ Get ALL authors (not just top 10), with optional search filter
+        all_authors_raw = MediaNarrative.objects.exclude(
             author__in=['', None, 'Unknown', 'unknown', 'N/A', 'Staff', 'Editor', 'Anonymous', 'By', 'Agency', 'Reuters', 'AFP']
         ).exclude(
-            author__regex=r'^https?://'  # Exclude any value starting with http/https
+            author__regex=r'^https?://'
         ).values('author').annotate(
             article_count=Count('id'),
             avg_strategic_confidence=Avg('confidence'),
         ).filter(
             author__isnull=False,
-            author__regex=r'^[A-Za-z\s\.\'\-]+$',  # Only allow valid name characters
-            article_count__gt=2  # Require at least 2 articles to appear in sidebar
-        ).order_by('-article_count', '-avg_strategic_confidence')[:10]
+            author__regex=r'^[A-Za-z\s\.\'\-]+$',
+            article_count__gte=1  # Show ALL authors with ≥1 article
+        )
         
-        # Convert QuerySet to list of dicts (same format as original)
+        # ✅ Apply search filter if user typed something
+        if search_query:
+            all_authors_raw = all_authors_raw.filter(author__icontains=search_query)
+        
+        # ✅ Order alphabetically for pagination (or by count if preferred)
+        all_authors_raw = all_authors_raw.order_by('author')
+        
+        # ✅ PAGINATE: 30 authors per page (adjust as needed)
+        author_paginator = Paginator(all_authors_raw, 30)
+        authors_page_obj = author_paginator.get_page(author_page)
+        
+        # Convert current page to list of dicts (for chart + template)
         top_journalists = []
-        for item in top_journalists_raw:
-            name = item['journalist_name'].strip()
-            if name and len(name) > 2:  # Skip very short/invalid names
+        for item in authors_page_obj:
+            name = item['author'].strip()
+            if name and len(name) > 2:
                 top_journalists.append({
                     'name': name,
                     'article_count': item['article_count'],
                     'avg_strategic_confidence': item['avg_strategic_confidence'] or 0.0
                 })
         
-        # Generate the Plotly Chart HTML - SAME as original
+        # Generate the Plotly Chart HTML (uses top_journalists)
         authors_chart = None
         if top_journalists:
             df = pd.DataFrame(list(top_journalists))
@@ -1990,9 +2074,13 @@ def authors(request):
                 )
                 authors_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
 
-        # Store in cache for 1 hour (reduced from 24h for faster updates with new data)
-        cached_data = {'top_journalists': top_journalists, 'authors_chart': authors_chart}
-        cache.set(cache_key, cached_data, 60 * 60)  # 1 hour instead of 24
+        # Store in cache for 1 hour
+        cached_data = {
+            'authors_page_obj': authors_page_obj,  # ✅ Paginated object
+            'authors_chart': authors_chart,
+            'top_journalists': top_journalists  # For chart
+        }
+        cache.set(cache_key, cached_data, 60 * 60)
 
     # 3. Dynamic Logic (Not cached, changes based on user click) - ALL ORIGINAL INSIGHTS PRESERVED
     qs = MediaNarrative.objects.all().order_by('-posting_time')
@@ -2003,85 +2091,91 @@ def authors(request):
     common_intents = []
     common_countries = []
     common_actors = []
-    journalist_intent_chart = None  # Optional: mini chart for selected journalist
+    journalist_intent_chart = None
 
     if journalist_name:
-        # ✅ Filter directly on MediaNarrative.journalist_name field (no FK needed)
-        qs = qs.filter(journalist_name__iexact=journalist_name)
-        # Create simple dict for template (no DB lookup needed)
+        # ✅ Filter on MediaNarrative.author field
+        qs = qs.filter(author__iexact=journalist_name)
         selected_journalist = {'name': journalist_name}
 
-        # *** ENHANCED LOGIC: Calculate stats for the selected journalist (ORIGINAL) ***
+        # *** ENHANCED LOGIC: Calculate stats for the selected journalist ***
         journalist_stats = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).aggregate(
             total_articles=Count('id'),
             avg_confidence=Avg('confidence'),
-            # avg_vulnerability=Avg('vulnerability_index'), # REMOVED per earlier changes
         )
         
-        # Get most common intents (ORIGINAL)
+        # Get most common intents
         common_intents = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             strategic_intent__in=['', 'Unknown', None]
         ).values('strategic_intent').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # Get most common target countries (ORIGINAL)
+        # Get most common target countries
         common_countries = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             target_country__in=['', 'Unknown', None]
         ).values('target_country').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # Get most common inferred actors (ORIGINAL)
+        # Get most common inferred actors
         common_actors = MediaNarrative.objects.filter(
-            journalist_name__iexact=journalist_name
+            author__iexact=journalist_name
         ).exclude(
             inferred_actor__in=['', 'Unknown', None]
         ).values('inferred_actor').annotate(
             count=Count('id')
         ).order_by('-count')[:5]
 
-        # *** OPTIONAL: Generate Mini Chart for Selected Journalist (ORIGINAL) ***
-        # Example: Pie chart for intent distribution
+        # Generate Mini Chart for Selected Journalist
         if common_intents:
             df_intent = pd.DataFrame(list(common_intents))
             if not df_intent.empty:
-                fig_intent = px.pie(
-                    df_intent, values='count', names='strategic_intent',
+                fig_intent = go.Figure(data=[go.Pie(
+                    labels=df_intent['strategic_intent'],
+                    values=df_intent['count'],
+                    hole=0.3,
+                    textinfo='label+percent',
+                    hoverinfo='label+percent+value',
+                    marker=dict(colors=px.colors.qualitative.Set3)
+                )])
+                fig_intent.update_layout(
                     title=f"Focus Areas for {journalist_name}",
-                    template="plotly_white"
+                    template="plotly_white",
+                    height=300, 
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    showlegend=True
                 )
-                fig_intent.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
                 journalist_intent_chart = fig_intent.to_html(full_html=False, include_plotlyjs='cdn')
 
-    # 4. Pagination (ORIGINAL)
+    # 4. Pagination for Articles (ORIGINAL)
     paginator = Paginator(qs, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # 5. Context Assembly - ALL ORIGINAL KEYS PRESERVED
+    # 5. Context Assembly - ALL ORIGINAL KEYS PRESERVED + NEW PAGINATION
     context = {
-        'top_journalists': top_journalists,          # ✅ Sidebar list
-        'authors_chart': authors_chart,              # ✅ Main bar chart
-        'page_obj': page_obj,                        # ✅ Paginated articles
-        'selected_name': journalist_name or "All Journalists",  # ✅ UI state
-        'selected_journalist': selected_journalist,  # ✅ Selected author info
-        
-        # ✅ ALL ORIGINAL INSIGHTS BELOW:
-        'journalist_stats': journalist_stats,        # ✅ Total articles, avg confidence
-        'common_intents': common_intents,            # ✅ Top intents for journalist
-        'common_countries': common_countries,        # ✅ Top countries covered
-        'common_actors': common_actors,              # ✅ Top actors mentioned
-        'journalist_intent_chart': journalist_intent_chart,  # ✅ Optional mini pie chart
+        'authors_page': authors_page_obj,      # ✅ NEW: Paginated author directory
+        'top_journalists': top_journalists,    # For chart (current page only)
+        'authors_chart': authors_chart,
+        'page_obj': page_obj,                  # Article pagination (original)
+        'selected_name': journalist_name or "All Journalists",
+        'selected_journalist': selected_journalist,
+        'journalist_stats': journalist_stats,
+        'common_intents': common_intents,
+        'common_countries': common_countries,
+        'common_actors': common_actors,
+        'journalist_intent_chart': journalist_intent_chart,
+        'search_query': search_query,
     }
     return render(request, 'authors.html', context)
-    
+
 def articles_view(request):
     search_query = request.GET.get("q", "")
 
