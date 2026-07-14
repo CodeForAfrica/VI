@@ -68,4 +68,5 @@ jobs:
         with:
           git_remote_url: ${{ env.DOKKU_REMOTE_URL }}
           ssh_private_key: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          ssh_host_key: ${{ secrets.DOKKU_SSH_HOST_KEY }}
           deploy_docker_image: ${{ steps.meta.outputs.tags }}
