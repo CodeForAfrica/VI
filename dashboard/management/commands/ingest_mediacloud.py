@@ -285,7 +285,7 @@ def main():
                         "pseudo_weight": 1.0,
                         "confidence": 1.0,
                         "use_afrolm": False,
-                        "author": author_name  # ✅ ADD THIS LINE - real name or None
+                        "author": author_name  
                     })
                     all_records.append(record)
                 
