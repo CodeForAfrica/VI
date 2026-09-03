@@ -39,12 +39,20 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       MODEL_CACHE_DIR: /models
+      # Persist HuggingFace Hub base models on the mounted volume too (matches prod
+      # Lambda). Without these the ~5.5GB of Hub bases re-download every run.
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
       # Groq arbitration is part of the real prediction path (Christian's note),
       # so the local test includes it. check_groq fails loud if key/model are bad.
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
     volumes:
       - ./model_cache:/models
+      # Local live-edit: source is mounted so code changes apply without a rebuild.
+      # On the box this runs from the baked image instead (drop these two mounts).
+      - ./config:/app/config
+      - ./dashboard:/app/dashboard
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py check_groq &&
