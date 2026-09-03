@@ -1,0 +1,51 @@
+# Local-only. Classification half of the split, isolated from prod.
+# DB_HOST is pinned to the local `db` service, so a run physically cannot reach
+# RDS (settings.py:76 otherwise defaults DB_HOST to the prod RDS endpoint).
+# Secrets come from a gitignored .env via ${VAR} substitution - never hardcode.
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: vulnerability
+      POSTGRES_USER: vi
+      POSTGRES_PASSWORD: vi_local
+    ports:
+      - "5433:5432" # host 5433 to avoid clashing with a local postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vi -d vulnerability"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  classifier:
+    build:
+      context: .
+      dockerfile: Dockerfile.classifier
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # DB pinned to the local service. This is the guardrail against prod RDS.
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vulnerability
+      DB_USER: vi
+      DB_PASSWORD: vi_local
+      DJANGO_SECRET_KEY: local-dev-not-secret
+      DEBUG: "true"
+      # Models: read-only pull from S3, cached to the mounted volume (downloads once).
+      S3_MODELS_BUCKET: ${S3_MODELS_BUCKET:-cfa-vulnerability-index-sandbox-models}
+      AWS_S3_REGION_NAME: eu-west-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MODEL_CACHE_DIR: /models
+      # Groq arbitration is part of the real prediction path (Christian's note),
+      # so the local test includes it. check_groq fails loud if key/model are bad.
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+    volumes:
+      - ./model_cache:/models
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py check_groq &&
+             python manage.py fill_missing_intents --limit 5"
