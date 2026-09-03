@@ -448,21 +448,29 @@ class MLInferenceService:
         try:
             client = Groq(api_key=groq_api_key)
             system_msg = (
-                "Analyze strategic intent. Respond ONLY with JSON. "
-                "Labels: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, "
-                "MilitaryPresence, ResourceDependency, SocialFragility, Neutral."
+                "You are a strict text classifier. Respond with a single JSON object and nothing else. "
+                "Keys: \"strategic_intent\" (exactly one of: Economic, Sovereignty, LGBTQ, Religious, "
+                "ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility, Neutral) and "
+                "\"strategic_intent_conf\" (a number between 0 and 1). "
+                "Example: {\"strategic_intent\": \"Economic\", \"strategic_intent_conf\": 0.82}"
             )
-            
+
             response = client.chat.completions.create(
-                model=getattr(settings, 'GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct'),
+                model=getattr(settings, 'GROQ_MODEL', 'qwen/qwen3.6-27b'),
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": text[:4000]}
                 ],
-                temperature=0.0 
+                temperature=0.0,
+                # Force a clean single JSON object. On Groq this also keeps the <think>
+                # reasoning wrapper (Qwen3 and similar) out of the content, which would
+                # otherwise make the parser grab a stray brace and read Neutral/0.0.
+                response_format={"type": "json_object"},
             )
-    
+
             raw_content = response.choices[0].message.content.strip()
+            # Defensive: strip a leaked <think>...</think> block if any model emits one.
+            raw_content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
             
             # 1. Extract all JSON-like blocks using regex
             json_blocks = re.findall(r'\{.*?\}', raw_content, re.DOTALL)

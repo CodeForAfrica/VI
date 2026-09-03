@@ -14,7 +14,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         key = getattr(settings, "GROQ_API_KEY", "") or ""
-        model = getattr(settings, "GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+        model = getattr(settings, "GROQ_MODEL", "qwen/qwen3.6-27b")
 
         if not key:
             raise CommandError(

@@ -107,6 +107,10 @@ S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 # API Keys - SECURE: All from environment
 MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Default to a live model - the old hardcoded default (llama-4-scout) was
+# decommissioned on Groq (shutdown 2026-07-17), which made the LLM arbitration
+# silently fail. qwen/qwen3.6-27b is the team-chosen replacement.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
 
 # CACHES configuration
 CACHES = {
