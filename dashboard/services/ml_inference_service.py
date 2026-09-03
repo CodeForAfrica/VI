@@ -242,25 +242,47 @@ class MLInferenceService:
         
         try:
             print(f"📂 Listing objects with prefix: '{s3_prefix}'")
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=s3_prefix)
-            
-            if 'Contents' not in response:
+            # Retry the list call too - it hits the same flaky endpoint as the downloads.
+            contents = None
+            for attempt in range(max_retries):
+                try:
+                    response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=s3_prefix)
+                    contents = response.get('Contents')
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ Retry {attempt + 1}/{max_retries} listing {s3_prefix}: {e}")
+                        time.sleep(2 ** attempt)
+                    else:
+                        raise
+
+            if not contents:
                 print(f"❌ No files found with prefix: {s3_prefix}")
                 return False
-            
-            print(f"✅ Found {len(response['Contents'])} files")
-            
-            for obj in response.get('Contents', []):
+
+            print(f"✅ Found {len(contents)} files")
+
+            for obj in contents:
                 key = obj['Key']
                 if key.endswith('/'):
                     continue
-                
+
                 rel_path = key[len(s3_prefix):].lstrip('/')
                 local_file_path = os.path.join(local_dir, rel_path)
-                
+
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+
+                # Resume: skip files already fully downloaded (local size matches S3).
+                # This is what turns a dropped connection into a resume instead of a
+                # full re-pull of the whole directory.
+                # ponytail: size match, not checksum - a truncated file has a different
+                # size so it re-downloads; corruption at matching size is not caught.
+                if os.path.exists(local_file_path) and os.path.getsize(local_file_path) == obj.get('Size'):
+                    print(f"⏩ Skipping (already downloaded): {key}")
+                    continue
+
                 print(f"⬇️ Downloading: {key} -> {local_file_path}")
-                
+
                 # Retry logic for each file
                 for attempt in range(max_retries):
                     try:
@@ -275,7 +297,7 @@ class MLInferenceService:
                         else:
                             print(f"❌ Failed to download {key} after {max_retries} retries")
                             raise
-            
+
             print(f"✅ Successfully downloaded all files")
             return True
         except Exception as e:
@@ -898,9 +920,13 @@ class MLInferenceService:
         else:
             print(f"⚠️  Local tone model not found at {KNOWN_TONE_MODEL_PATH}, attempting S3 download...")
 
-        # If local paths don't exist, proceed with S3 download as fallback (Priority 4)
-        temp_dir = tempfile.mkdtemp(prefix='tone_model_')
-        self._temp_dirs.add(temp_dir)
+        # If local paths don't exist, proceed with S3 download as fallback (Priority 4).
+        # Download into a stable dir on the persistent volume (not a throwaway /tmp), and
+        # deliberately do NOT register it in _temp_dirs, so a dropped connection resumes and
+        # re-runs reuse the files instead of re-pulling ~6GB each time.
+        tone_dl_dir = self.model_cache_dir / 'tone_download'
+        tone_dl_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = str(tone_dl_dir)
 
         # ONLY use the working prefix - NO LOOP
         tone_prefix = 'calibrated_stacked_ensemble/'
