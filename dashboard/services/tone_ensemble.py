@@ -265,7 +265,7 @@ class CalibratedStackedEnsemble:
                 # Load base model (assuming it's available locally or can be downloaded)
                 # You might need to adjust the base model name/path based on your setup
                 # For example, if the base model is always expected to be local:
-                KNOWN_MODELS_DIR_EC2 = "/home/ubuntu/Vulnerability_index_tool/app/models"
+                KNOWN_MODELS_DIR_EC2 = os.environ.get("BASE_MODELS_DIR", "/home/ubuntu/Vulnerability_index_tool/app/models")
                 expected_base_model_dir_name = peft_config.base_model_name_or_path.split('/')[-1] # Get last part of path as name
                 base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
                 

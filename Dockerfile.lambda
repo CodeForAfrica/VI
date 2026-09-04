@@ -5,15 +5,17 @@ RUN dnf install -y gcc gcc-c++ postgresql-devel cairo-devel pkg-config && dnf cl
 
 RUN pip install --upgrade pip setuptools wheel
 
-# Install CPU-only PyTorch FIRST — saves ~1.8GB vs the default CUDA version
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Ingestion-only dependencies. The heavy ML stack (torch, transformers, etc.) is
+# intentionally NOT installed here - classification moved to the classifier
+# container. This is what keeps the image well under Lambda's 10GB limit.
+COPY requirements-lambda.txt .
+RUN pip install --no-cache-dir -r requirements-lambda.txt
 
 # Copy only what Lambda needs
 COPY lambda_function.py .
 COPY dashboard/ ./dashboard/
+# config/ holds Django settings (config.settings), which the ingestion service
+# loads via django.conf.settings, so this must be present.
+COPY config/ ./config/
 
 CMD ["lambda_function.lambda_handler"]
