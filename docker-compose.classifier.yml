@@ -46,14 +46,26 @@ services:
       # Groq arbitration is part of the real prediction path (Christian's note),
       # so the local test includes it. check_groq fails loud if key/model are bad.
       GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+      GROQ_MODEL: ${GROQ_MODEL:-qwen/qwen3.6-27b}
     volumes:
       - ./model_cache:/models
       # Local live-edit: source is mounted so code changes apply without a rebuild.
-      # On the box this runs from the baked image instead (drop these two mounts).
+      # On the box this runs from the baked image instead (drop these three mounts).
       - ./config:/app/config
       - ./dashboard:/app/dashboard
+      - ./fixtures:/app/fixtures
+    # Full local end-to-end of the split, in one `up`:
+    #   migrate            -> schema on the isolated local db
+    #   loaddata           -> seed the sample articles from the repo file as
+    #                         freshly-ingested, unclassified rows (this is what the
+    #                         Lambda ingestion half would leave behind). Re-running
+    #                         overwrites by pk, so it doubles as the reset.
+    #   check_groq         -> fail loud if the arbitration key/model are dead
+    #   fill_missing_intents -> the classifier half: fills the null intents
+    #   show_results       -> print what got classified
     command: >
       sh -c "python manage.py migrate --noinput &&
+             python manage.py loaddata fixtures/test_articles.json &&
              python manage.py check_groq &&
-             python manage.py fill_missing_intents --limit 5"
+             python manage.py fill_missing_intents &&
+             python manage.py show_results"
