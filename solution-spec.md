@@ -161,6 +161,91 @@ For each new article:
 The important ordering is **insert first, infer second**. An inference outage
 must not cause newly discovered articles to be lost.
 
+## Logging and observability requirements
+
+Both the ingestion Lambda and inference API must emit clear logs for every
+important step, including successful completion, expected rejection, retry, and
+unexpected failure. Logging must use standard output and standard error so AWS
+Lambda sends logs to CloudWatch and Dokku captures the API logs without adding
+another runtime service.
+
+Use structured JSON logs rather than free-form `print` statements. Every log
+entry should contain the fields relevant to that event:
+
+```json
+{
+  "timestamp": "2026-09-04T13:00:00Z",
+  "level": "INFO",
+  "service": "vi-ingestion-lambda",
+  "event": "inference_request_completed",
+  "status": "success",
+  "request_id": "7d86d12d-dc93-44da-8e03-06ba1aab36cc",
+  "article_id": 12345,
+  "duration_ms": 4280
+}
+```
+
+The Lambda must generate one `request_id` for each inference attempt and send
+that same value in the API request. The API must include it in every related log
+and return it in the response. This allows one article to be traced across both
+services.
+
+### Lambda events to log
+
+| Step | Success or informational event | Failure or retry event |
+|---|---|---|
+| Invocation | `ingestion_started`, `ingestion_completed` | `ingestion_failed` |
+| MediaCloud query | `mediacloud_query_started`, `mediacloud_query_completed` | `mediacloud_query_failed` |
+| Article scraping | `article_scrape_started`, `article_scrape_completed`, `article_skipped` | `article_scrape_failed` |
+| Database insert | `article_inserted`, `duplicate_article_skipped` | `article_insert_failed` |
+| Inference call | `inference_request_started`, `inference_request_completed` | `inference_request_retrying`, `inference_request_failed` |
+| Response validation | `inference_response_validated` | `inference_response_invalid` |
+| Database update | `article_classification_saved` | `article_classification_save_failed` |
+| Pending retry | `pending_retry_started`, `pending_retry_completed` | `pending_retry_failed` |
+
+The final Lambda log must summarize counts such as articles found, skipped,
+inserted, classified, left pending, and failed, plus total invocation duration.
+
+### Inference API events to log
+
+| Step | Success or informational event | Failure or rejection event |
+|---|---|---|
+| Process startup | `api_starting`, `api_started` | `api_start_failed` |
+| Model initialization | `model_load_started`, `model_load_completed`, `model_cache_hit`, `model_download_started`, `model_download_completed` | `model_download_failed`, `model_load_failed` |
+| Authentication | `authentication_succeeded` | `authentication_failed` |
+| Rate limiting | `rate_limit_checked` | `rate_limit_exceeded` |
+| Request validation | `inference_request_validated` | `inference_request_invalid`, `payload_too_large` |
+| Strategic-intent inference | `strategic_inference_started`, `strategic_inference_completed` | `strategic_inference_failed` |
+| Tone inference | `tone_inference_started`, `tone_inference_completed` | `tone_inference_failed` |
+| LLM arbitration | `arbitration_started`, `arbitration_completed`, `arbitration_skipped` | `arbitration_failed` |
+| Response | `inference_completed` | `inference_failed` |
+| Process shutdown | `api_shutdown_started`, `api_shutdown_completed` | `api_shutdown_failed` |
+
+Every completed model step should include its duration and model version. API
+request logs should also include the authenticated caller name, response status,
+and total request duration.
+
+### Log levels
+
+- `INFO`: normal starts, successful steps, skips, and completion summaries.
+- `WARNING`: retryable failures, rate limits, invalid caller input, and degraded
+  optional arbitration.
+- `ERROR`: exhausted retries, model failures, database failures, and requests
+  that cannot be completed.
+- `DEBUG`: optional development diagnostics that are disabled in production.
+
+### Information that must never be logged
+
+- The `X-API-Key` value or accepted-key configuration.
+- AWS credentials or Secrets Manager values.
+- Database credentials or connection strings containing passwords.
+- Full article text or complete request and response bodies.
+- Groq, Ollama, or other provider credentials.
+
+Errors should include a stable `error_code`, a safe error message, and exception
+type. Unexpected server-side exceptions should include a stack trace in the
+server log, after ensuring sensitive values and article content are not present.
+
 ## API contract
 
 ### Liveness endpoint
@@ -686,6 +771,8 @@ Before production deployment:
 ### API tests
 
 - A valid authenticated request returns the documented schema.
+- The API logs every request step with the same `request_id` and appropriate
+  success or failure event.
 - Missing authentication returns `401`.
 - An unknown API key returns `401`.
 - A revoked API key returns `401`.
@@ -697,10 +784,13 @@ Before production deployment:
 - Internal inference errors return `500`, not `Neutral`.
 - Every successful intent belongs to the allowed enum.
 - Article text and authentication data do not appear in logs.
+- Successful and failed model steps include duration and model version where
+  available.
 
 ### Lambda tests
 
 - A successful response updates the article.
+- Lambda and API logs use the same `request_id` for one inference attempt.
 - A timeout leaves the article pending.
 - Retryable status codes are retried.
 - Permanent status codes are not retried.
@@ -708,6 +798,8 @@ Before production deployment:
 - Neutral results are stored as processed results.
 - Duplicate article URLs are not inserted again.
 - A temporary API outage does not fail the ingestion run.
+- The final Lambda summary reports found, skipped, inserted, classified,
+  pending, and failed counts.
 
 ### Deployment tests
 
@@ -737,6 +829,9 @@ The solution is complete when:
 - The inference API does not depend on Redis, Valkey, a queue, or another
   persistence service.
 - Secrets and article text do not appear in ordinary logs.
+- Lambda and API handlers produce structured logs for every significant success,
+  rejection, retry, and failure step.
+- A single `request_id` traces an inference attempt across both services.
 - Memory and latency have been measured on the actual host.
 - The dashboard continues to read classifications without changing its public
   behavior.
