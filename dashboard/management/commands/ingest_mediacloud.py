@@ -20,7 +20,7 @@ DB_PORT = os.getenv('DB_PORT', '5432')
 DB_NAME = os.getenv('DB_NAME', 'postgres')
 DB_TABLE = "dashboard_medianarrative"
 
-API_KEY = os.getenv('MEDIACLOUD_API_KEY', '42caaa0601bd290fc5adada8bb804cdfc0604a7a')
+API_KEY = os.getenv('MEDIACLOUD_API_KEY')  # env only - no hardcoded key
 
 # Ensure all columns required by your DB are listed here
 db_columns = [
