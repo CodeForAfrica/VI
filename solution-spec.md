@@ -25,6 +25,7 @@ https://vi-model-inference.codeforafrica.org
 The inference service should be stateless with respect to the VI database. It
 receives article content, returns a prediction, and does not hold PostgreSQL
 credentials. The ingestion Lambda remains responsible for database writes.
+It must not require Redis, Valkey, a queue, or another persistence service.
 
 ## Original problem: monolithic Lambda
 
@@ -308,8 +309,8 @@ HTTP/1.1 401 Unauthorized
 }
 ```
 
-The response must not disclose whether a key ID, timestamp, nonce, or signature
-was specifically incorrect.
+The response must not disclose which key was expected or why authentication
+failed.
 
 ### Payload too large
 
@@ -387,73 +388,93 @@ stable unless all traffic is deliberately routed through fixed egress.
 - Store all authentication material in AWS Secrets Manager.
 - Support secret rotation without downtime.
 
-### Recommended authentication: HMAC-signed requests
+### Recommended authentication: API key
 
-Use a shared HMAC-SHA256 secret so the secret itself is never sent over the
-network. Authentication uses one HTTP header. The key ID, timestamp, and nonce
-are encoded inside a compact token rather than sent as separate headers.
-
-The token has two Base64URL-encoded parts:
-
-```text
-<claims>.<signature>
-```
-
-The decoded claims are a small JSON object:
-
-```json
-{
-  "kid": "lambda-prod",
-  "ts": 1788512400,
-  "nonce": "31e39d5f-96eb-4405-82d4-065582822118"
-}
-```
-
-Send the complete token in one header:
+Use one long, random API key sent in one request header:
 
 ```http
-Authorization: VI-HMAC <base64url-claims>.<base64url-signature>
+X-API-Key: <random-api-key>
 ```
 
-Construct the canonical signing value as:
+Generate each key from at least 32 random bytes. Store the Lambda's key in AWS
+Secrets Manager and inject it into the Lambda at deployment time. Store the
+API's accepted-key configuration in AWS Secrets Manager and inject it into the
+Dokku application.
 
-```text
-POST
-/api/v1/inference
-<base64url-claims>
-<SHA256-of-the-exact-request-body>
+The API keeps an accepted-key list so each key also identifies its caller:
+
+```json
+[
+  {"caller": "vi-lambda-prod", "key": "<random-api-key>"},
+  {"caller": "vi-developer-test", "key": "<different-random-api-key>"}
+]
 ```
 
-Calculate the signature as:
+When a request arrives, the API compares the supplied key against the accepted
+values. A matching entry authenticates the request and provides the caller name
+for rate limiting and audit logs.
 
-```text
-HMAC-SHA256(shared_secret, canonical_value)
-```
+### Why each authentication part exists
 
-Encode the resulting signature with Base64URL without padding and append it to
-the encoded claims with a `.` separator. The Lambda and API must use the same
-canonicalization and Base64URL rules.
+| Part | Reason |
+|---|---|
+| `X-API-Key` header | Gives the Lambda one simple place to send its credential. |
+| Random API key | Proves that the caller knows a secret shared with the API. A long randomly generated value cannot be practically guessed. |
+| Accepted-key list | Allows the API to identify callers, revoke one caller without affecting others, and accept an old and new key during rotation. |
+| AWS Secrets Manager | Keeps keys out of source control, Docker images, Terraform output, and ordinary configuration files. |
+| HTTPS | Encrypts the header, article text, and response in transit. The API key is present in the HTTP request, but TLS prevents network observers from reading it. |
+| Constant-time comparison | Avoids leaking useful information through small timing differences when keys are compared. |
+| Rate limiting | Limits abuse and cost if a valid key is accidentally exposed. |
+| Log redaction | Prevents a valid key from being copied into application, proxy, or error logs. |
+
+This intentionally does not use nonces or request signatures. The tradeoff is
+that a stolen API key can be reused until it is revoked. HTTPS, secret storage,
+log redaction, rate limiting, monitoring, and straightforward key rotation are
+the controls for that simpler design.
 
 The API must:
 
-- Require exactly one `Authorization` authentication header.
-- Require the `VI-HMAC` authorization scheme.
-- Split the token into exactly one claims part and one signature part.
-- Base64URL-decode and validate the claims before using them.
-- Select the shared secret using the claims' `kid` value.
-- Recreate the signature from the exact received request bytes.
-- Compare signatures using a constant-time comparison.
-- Reject timestamps older than five minutes.
-- Reject timestamps too far in the future.
-- Reject a previously used nonce during the five-minute window.
+- Require exactly one `X-API-Key` header.
+- Compare the supplied value against all currently accepted keys using a
+  constant-time comparison.
 - Return the same generic `401` for every authentication failure.
-- Support two active key IDs during key rotation.
+- Record the matched caller name for rate limiting and audit logs without
+  recording the key itself.
+- Support an old and new key during credential rotation.
 
-The existing shared Valkey service can store used nonces with a five-minute TTL.
+### Rate limiting
 
-For a smaller first iteration, a random bearer token of at least 32 bytes over
-HTTPS is an acceptable baseline, but HMAC adds request integrity and replay
-protection and is the target design.
+Apply a simple per-caller requests-per-minute limit after the API key has been
+authenticated. Configure it through an environment variable:
+
+```text
+VI_RATE_LIMIT_REQUESTS_PER_MINUTE=60
+```
+
+Because the inference API initially runs as one Dokku instance with one model
+worker, keep the counters in that process's memory. No Redis, Valkey, database,
+queue, or other service is required. It is acceptable for counters to reset when
+the container restarts.
+
+When a caller exceeds the limit, return:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+```
+
+```json
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Too many inference requests",
+    "request_id": "7d86d12d-dc93-44da-8e03-06ba1aab36cc"
+  }
+}
+```
+
+The rate limiter must count requests by the matched caller name, must not retain
+article bodies, and must not reveal the caller's API key in metrics or logs.
 
 ## Lambda implementation behavior
 
@@ -642,7 +663,8 @@ and verify allowed labels, confidence values, latency, and failure behavior.
 
 The existing host is a `g4dn.xlarge` with 16 GiB of system memory and one NVIDIA
 T4 with 16 GB of GPU memory. It already runs Ollama, Open WebUI, shared Valkey
-workloads, Dokku, and the operating system.
+workloads, Dokku, and the operating system. These are co-located host workloads,
+not dependencies of the inference API.
 
 The inference ensemble reportedly requires approximately 13 GB resident memory.
 The current classifier Dockerfile installs CPU-only PyTorch, so it cannot use the
@@ -665,12 +687,12 @@ Before production deployment:
 
 - A valid authenticated request returns the documented schema.
 - Missing authentication returns `401`.
-- An invalid signature returns `401`.
-- An expired timestamp returns `401`.
-- A reused nonce returns `401`.
+- An unknown API key returns `401`.
+- A revoked API key returns `401`.
 - Invalid JSON returns `400`.
 - Missing article text returns `400`.
 - An oversized payload returns `413`.
+- Exceeding the configured per-caller request limit returns `429`.
 - Unavailable models return `503`.
 - Internal inference errors return `500`, not `Neutral`.
 - Every successful intent belongs to the allowed enum.
@@ -682,7 +704,7 @@ Before production deployment:
 - A timeout leaves the article pending.
 - Retryable status codes are retried.
 - Permanent status codes are not retried.
-- Authentication headers are generated correctly.
+- The configured API key is sent only in the `X-API-Key` header.
 - Neutral results are stored as processed results.
 - Duplicate article URLs are not inserted again.
 - A temporary API outage does not fail the ingestion run.
@@ -692,7 +714,7 @@ Before production deployment:
 - `/healthz` works through the public domain.
 - `/readyz` changes from `503` to `200` after model loading.
 - Unauthenticated inference requests fail.
-- A valid Lambda-style signed request succeeds.
+- A request with an accepted API key succeeds.
 - Models are not downloaded again after a container restart.
 - Dokku restart preserves the model cache.
 - Only one copy of the model ensemble is loaded.
@@ -712,6 +734,8 @@ The solution is complete when:
 - Failed requests can be retried safely.
 - `Neutral` is distinguishable from unprocessed.
 - The inference server has no VI database credentials.
+- The inference API does not depend on Redis, Valkey, a queue, or another
+  persistence service.
 - Secrets and article text do not appear in ordinary logs.
 - Memory and latency have been measured on the actual host.
 - The dashboard continues to read classifications without changing its public
