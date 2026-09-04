@@ -390,15 +390,29 @@ stable unless all traffic is deliberately routed through fixed egress.
 ### Recommended authentication: HMAC-signed requests
 
 Use a shared HMAC-SHA256 secret so the secret itself is never sent over the
-network.
+network. Authentication uses one HTTP header. The key ID, timestamp, and nonce
+are encoded inside a compact token rather than sent as separate headers.
 
-Required headers:
+The token has two Base64URL-encoded parts:
+
+```text
+<claims>.<signature>
+```
+
+The decoded claims are a small JSON object:
+
+```json
+{
+  "kid": "lambda-prod",
+  "ts": 1788512400,
+  "nonce": "31e39d5f-96eb-4405-82d4-065582822118"
+}
+```
+
+Send the complete token in one header:
 
 ```http
-X-VI-Key-Id: lambda-prod
-X-VI-Timestamp: 1788512400
-X-VI-Nonce: 31e39d5f-96eb-4405-82d4-065582822118
-X-VI-Signature: <hex-encoded-hmac>
+Authorization: VI-HMAC <base64url-claims>.<base64url-signature>
 ```
 
 Construct the canonical signing value as:
@@ -406,8 +420,7 @@ Construct the canonical signing value as:
 ```text
 POST
 /api/v1/inference
-1788512400
-31e39d5f-96eb-4405-82d4-065582822118
+<base64url-claims>
 <SHA256-of-the-exact-request-body>
 ```
 
@@ -417,8 +430,17 @@ Calculate the signature as:
 HMAC-SHA256(shared_secret, canonical_value)
 ```
 
+Encode the resulting signature with Base64URL without padding and append it to
+the encoded claims with a `.` separator. The Lambda and API must use the same
+canonicalization and Base64URL rules.
+
 The API must:
 
+- Require exactly one `Authorization` authentication header.
+- Require the `VI-HMAC` authorization scheme.
+- Split the token into exactly one claims part and one signature part.
+- Base64URL-decode and validate the claims before using them.
+- Select the shared secret using the claims' `kid` value.
 - Recreate the signature from the exact received request bytes.
 - Compare signatures using a constant-time comparison.
 - Reject timestamps older than five minutes.
