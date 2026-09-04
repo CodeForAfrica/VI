@@ -55,12 +55,17 @@ class MLInferenceService:
         aws_secret = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None) or os.environ.get('AWS_SECRET_ACCESS_KEY')
         aws_bucket = getattr(settings, 'S3_MODELS_BUCKET', None) or os.environ.get('S3_MODELS_BUCKET')
         aws_region = getattr(settings, 'AWS_S3_REGION_NAME', None) or os.environ.get('AWS_S3_REGION_NAME', 'eu-west-1')
-        
+        # Session token is required when the creds are temporary (e.g. a Lambda
+        # execution role); without it temporary creds fail with InvalidAccessKeyId.
+        # Harmless (None) for long-term IAM user keys used by the web app.
+        aws_token = getattr(settings, 'AWS_SESSION_TOKEN', None) or os.environ.get('AWS_SESSION_TOKEN')
+
         if aws_key and aws_secret and aws_bucket:
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=aws_key,
                 aws_secret_access_key=aws_secret,
+                aws_session_token=aws_token,
                 region_name=aws_region,
                 config=botocore.config.Config(
                     retries={
@@ -82,12 +87,14 @@ class MLInferenceService:
         self._tone_label_encoder = None
         self._strategic_vocab = None
 
-        # ✅ Add persistent cache directory (this is the old one, might become secondary)
-        self.model_cache_dir = Path(settings.BASE_DIR) / 'model_cache'
-        self.model_cache_dir.mkdir(exist_ok=True)
+        # Persistent cache directory. Overridable via MODEL_CACHE_DIR because on
+        # Lambda BASE_DIR (/var/task) is read-only and only /tmp is writable.
+        self.model_cache_dir = Path(os.environ.get("MODEL_CACHE_DIR") or (Path(settings.BASE_DIR) / 'model_cache'))
+        self.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # ✅ NEW: Add the specific directory where the archive was extracted
-        self.local_models_dir = Path("/Users/hannateshager/Vulnerability_index_tool/model_cache")
+        # Optional pre-extracted model archive dir. Overridable via LOCAL_MODELS_DIR;
+        # defaults to the persistent cache so there is no personal hardcoded path.
+        self.local_models_dir = Path(os.environ.get("LOCAL_MODELS_DIR", self.model_cache_dir))
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
@@ -894,7 +901,7 @@ class MLInferenceService:
         # ✅ Check if tone model exists in the KNOWN LOCAL PATH (Priority 3 - existing check)
         # This path might be redundant if the archive cache is the primary source now,
         # but keeping it for compatibility if this specific path was used previously.
-        KNOWN_TONE_MODEL_PATH = "/Users/hannateshager/Vulnerability_index_tool/app/models/model_cache/tone_model"
+        KNOWN_TONE_MODEL_PATH = str(self.local_models_dir / 'tone_model')
         if os.path.exists(KNOWN_TONE_MODEL_PATH):
             print(f"✅ Loading tone classifier from KNOWN LOCAL PATH: {KNOWN_TONE_MODEL_PATH}")
 
