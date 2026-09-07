@@ -30,7 +30,7 @@ db_columns = [
     "article_text", "posting_time", "media_outlet", "inferred_actor",
     "target_country", "url", "lang_detect", "strategic_intent",
     "sector", "tone", "confidence", "use_afrolm", "llm_strat",
-    "llmm_strat_notes", "pseudo_kept", "pseudo_weight",
+    "llm_strat_notes", "pseudo_kept", "pseudo_weight",
     "llm_strat_id", "strategic_intent_id"
 ]
 
@@ -49,8 +49,10 @@ if not API_KEY:
 mc_search = mediacloud.api.SearchApi(API_KEY)
 
 
-# START_DATE = date(2026, 1, 1) # use for specific dates
-START_DATE = date(2026, 1, 1)
+# Daily ingester: only pull a recent window (not a full re-scan every run).
+# 3 days gives overlap so a missed/failed day is still caught; url_exists() dedupes.
+# For a one-off backfill, temporarily set START_DATE = date(2026, 1, 1).
+START_DATE = date.today() - timedelta(days=3)
 END_DATE = date.today()
 
 ACTOR_COLLECTION_IDS = {
@@ -81,10 +83,10 @@ QUERY_BY_COUNTRY = {
     "Ethiopia": '''(
         ("Ethiopia" OR "ኢትዮጵያ" OR "አዲስ አበባ" OR "ኦሮሚያ" OR "ትግራይ" OR "አማራ" OR "የአፍሪካ ቀንድ" OR "Addis Ababa" OR "Abiy Ahmed" OR "GERD" OR "Grand Ethiopian Renaissance Dam" OR "Tigray" OR "Amhara" OR "Oromia")
         AND (
-            ("narrative*" OR "public opinion" OR " "policy shift" OR "state media" OR "foreign influence")
+            ("narrative*" OR "public opinion" OR "policy shift" OR "state media" OR "foreign influence")
             OR ("weaponized" OR "information warfare" OR "disinformation" OR "fake news" OR "propaganda" OR "media campaign" OR "social media amplification" OR "broadcast in Amharic")
             OR ("investment" OR "infrastructure project" OR "debt relief" OR "foreign aid" OR "trade" OR "mining" OR "manufacturing" OR "energy project" OR "military cooperation" OR "arms sale" OR "defense pact" OR "peacekeeping" OR "security partnership" OR "diplomatic relations" OR "election" OR "governance" OR "anti-corruption" OR "state visit" OR "Confucius Institute" OR "cultural exchange" OR "language school" OR "scholarship" OR "digital Silk Road" OR "5G" OR "Huawei" OR "surveillance" OR "cybersecurity" OR "AI" OR "vaccine" OR "pandemic aid" OR "hospital construction" OR "education" OR "university" OR "climate change" OR "hydropower" OR "agriculture" OR "land lease" OR "energy cooperation" OR "mosque" OR "church" OR "religious coopration")
-            OR ("instability" OR "ethnic tension" OR "protest" OR "insurgency" ORgeopolitical competition")
+            OR ("instability" OR "ethnic tension" OR "protest" OR "insurgency" OR "geopolitical competition")
         )
         AND NOT ("sports" OR "football results" OR "travel guide" OR "cooking" OR "entertainment news")
     )''',
@@ -92,7 +94,7 @@ QUERY_BY_COUNTRY = {
     "Senegal": '''(
         ("Senegal" OR "Sénégal" OR "Dakar" OR "Macky Sall" OR "Ousmane Sonko" OR "Bassirou Diomaye Faye" OR "Abdourahmane Diouf" OR "Khalifa Sall" OR "Fatma Gueye" OR "Abass Fall" OR "Ngoné Mbengue" OR "tàmbali" OR "jàngoro" OR "kampaañ" OR "goubernans" OR "wulli" OR "jàppale" OR "fàtt" OR "tali" OR "militéer" OR "guddi" OR "defaans" OR "jàmm" OR "teyat" OR "ndaw" OR "bataaxal bu dëppoo" OR "bataaxal yu dëppoo" OR "vaksin" OR "ndimbal" OR "ñàg" OR "kaku" OR "moské" OR "njàng" OR "kristiyaan")
         AND (
-            ("narrative*" OR "souveraineté" OR "souveraineté économique" OR "sentiment anti-français" OR sentiment" OR "perceptions publiques" OR "opinion publique" OR "public opinion")
+            ("narrative*" OR "souveraineté" OR "souveraineté économique" OR "sentiment anti-français" OR "sentiment" OR "perceptions publiques" OR "opinion publique" OR "public opinion")
             OR ("weaponized" OR "manipulation" OR "disinformation" OR "coordonné" OR "fake news" OR "propaganda" OR "désinformation" OR "influence étrangère" OR "coordonnée" OR "ingérence" OR "multipartisme" OR "teranga" OR "TER" OR "FAS" OR "DAGE" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "conficius" OR "université" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
             OR ("investment" OR "infrastructure project" OR "projets pétroliers" OR "ressources naturelles" OR "investissements directs" OR "dette" OR "prêt" OR "debt" OR "foreign aid" OR "aide étrangère" OR "commerce" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "aide" OR "cacao" OR "énergie" OR "agriculture")
             OR ("instability" OR "tensions politiques" OR "manifestations" OR "protests" OR "terrorisme" OR "sécurité régionale" OR "Sahel" OR "AES")
@@ -103,7 +105,7 @@ QUERY_BY_COUNTRY = {
         ("South Africa" OR "Suid-Afrika" OR "Mzansi" OR "Pretoria" OR "Johannesburg" OR "Cape Town" OR "Durban" OR "ANC" OR "Ramaphosa" OR "BRICS" OR "iNingizimu Afrika" OR "iPitoli" OR "iKapa" OR "iGoli" OR "iTheku" OR "iANC" OR "uRamaphosa" OR "iBRICS" OR "uhwebo" OR "utshalo-mali" OR "ubambiswano" OR "ingqalasizinda" OR "ezempi" OR "ukuthula" OR "imfundo" OR "ezempilo")
         AND (
             ("narrative*" OR "GNU" OR "Government of National Unity" OR "coalition" OR "non-aligned" OR "alignment" OR "strategic autonomy" OR "koalisie" OR "nasionale eenheid")
-            OR ("weaponized" OR "disinformation" OR "deepfake" OR "troll farm" OR "bot network" OR "fopnuus" OR "propaganda" OR "information manipulation"" OR "propaganda" OR "disinformation" OR "social media campaign" OR "5G" OR "Huawei" OR "AI" OR "vaccine")
+            OR ("weaponized" OR "disinformation" OR "deepfake" OR "troll farm" OR "bot network" OR "fopnuus" OR "propaganda" OR "information manipulation" OR "propaganda" OR "disinformation" OR "social media campaign" OR "5G" OR "Huawei" OR "AI" OR "vaccine")
             OR ("energy crisis" OR "load shedding" OR "Eskom" OR "just energy transition" OR "nuclear deal" OR "Chinese investment" OR "Russian influence" OR "kragkrisis" OR "trade" OR "investment" OR "economic cooperation" OR "mining" OR "energy" OR "infrastructure" OR "military" OR "defense" OR "peace" OR "terrorism")
             OR ("service delivery protest" OR "xenophobia" OR "social unrest" OR "polarization" OR "stoking" OR "incitement" OR "betoging" OR "mislukking")
         )
@@ -112,7 +114,7 @@ QUERY_BY_COUNTRY = {
     "DRC": '''(
         ("Democratic Republic of the Congo" OR "République Démocratique du Congo" OR "RDC" OR "Kinshasa" OR "Tshisekedi" OR "Congolais" OR "Kisangani" OR "Lubumbashi" OR "Kolwezi" OR "Kivu" OR "Kokolo" OR "Goma" OR "Corneille Nnanga" OR "Bertrand Bisimwa" OR "Sultani Makenga" OR "Willy Ngoma" OR "Lawrence Kanyuka" OR "Jean-Jacques Mamba" OR "Éric Nkuba" OR "Joseph Kabila" OR "Félix Tshisekedi" OR "bobongisi maponami" OR "maponami" OR "politiki" OR "kampanyi" OR "boyangeli" OR "mbongo na mosala" OR "libaku ya mbongo" OR "nzela" OR "ya nzela" OR "mibundu" OR "liboke ya bitumba" OR "bokengi" OR "kimia" OR "banyama ya liboma" OR "lisungi" OR "ya bokolongono" OR "elenga" OR "nsango ya lokuta" OR "influenceur" OR "media" OR "vaksin" OR "lopitalo" OR "bilanga" OR "kura" OR "misiri" OR "ndako ya Nzambe" OR "kristoya")
         AND (
-            ("critical minerals" OR "cobalt" OR "lithium" OR "minerais stratégiques" OR "souveraineté minière" OR "Gecamines" OR "contrats chinois" OR "US-DRC partnership" OR "maadini" OR "mumbanda" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse"us" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
+            ("critical minerals" OR "cobalt" OR "lithium" OR "minerais stratégiques" OR "souveraineté minière" OR "Gecamines" OR "contrats chinois" OR "US-DRC partnership" OR "maadini" OR "mumbanda" OR "élection" OR "présidentielle" OR "scrutin" OR "politique" OR "campagne" OR "gouvernance" OR "francophonie" OR "investissement" OR "commerce" OR "prêt" OR "dette" OR "route" OR "routière" OR "port" OR "rail" OR "oléoduc" OR "militaire" OR "arme" OR "défense" OR "paix" OR "terrorisme" OR "mercenaires" OR "bourse" OR "université" OR "aide" OR "sanitaire" OR "cinéma" OR "théâtre" OR "jeune" OR "propagande" OR "désinformation" OR "réseaux sociaux" OR "fausses informations" OR "influenceur" OR "média" OR "5G" OR "Huawei" OR "IA" OR "Intelligence Artificielle" OR "cybersécurité" OR "internet" OR "satellite" OR "surveillance" OR "vaccin" OR "pandémique" OR "hôpital" OR "subvention" OR "agriculture" OR "énergie" OR "cacao" OR "renouvelable" OR "hydraulique" OR "mosqué" OR "église" OR "séminaire" OR "pélérinage" OR "anti-extrémisme" OR "islam" OR "christianisme" OR "chiite" OR "alliance" OR "sunnite")
             OR ("weaponized" OR "disinformation" OR "fake news" OR "propaganda" OR "désinformation" OR "ingérence" OR "manipulation de l'information" OR "lokuta" OR "habari za uongo")
             OR ("M23" OR "Wazalendo" OR "East" OR "Est" OR "Kivu" OR "Ituri" OR "Goma" OR "security-for-minerals" OR "balkanisation" OR "bitumba" OR "vita")
             OR ("élections" OR "human rights" OR "droits de l'homme" OR "corruption" OR "liberté de la presse" OR "bokonzi" OR "demokrasi")
@@ -187,10 +189,19 @@ def is_article_relevant(article_content, target_country_name):
 def main():
     all_records = []
     print("🛰️ Querying MediaCloud API...")
+    # Time-budget the query-gathering phase so it can't eat the whole Lambda
+    # runtime before scraping/inserting begins (ponytail: this loop had no guard).
+    QUERY_BUDGET_SECONDS = 300
+    query_start = time.time()
     # iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
+        if time.time() - query_start > QUERY_BUDGET_SECONDS:
+            print(f"Query budget ({QUERY_BUDGET_SECONDS}s) reached; proceeding with {len(all_records)} gathered.")
+            break
         base_query = QUERY_BY_COUNTRY.get(country)
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
+            if time.time() - query_start > QUERY_BUDGET_SECONDS:
+                break
             try:
                 time.sleep(0.5)
                 stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[actor_coll_id])

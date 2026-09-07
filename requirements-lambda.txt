@@ -1,0 +1,40 @@
+# Ingestion-only dependencies for the Lambda image.
+#
+# The Lambda now only ingests (see lambda_function.py); classification moved to
+# the dedicated classifier container, which installs the full requirements.txt.
+# The heavy ML stack (torch, transformers, tokenizers, peft, accelerate,
+# scikit-learn, cleanlab, venn-abers, skops, sentencepiece) is intentionally
+# excluded here - it is multiple GB and is what pushed the Lambda image toward
+# the 10GB limit. spaCy/nltk/yake and the PDF/plot packages are web/ML-only and
+# are also excluded; the ingestion service imports only the packages below.
+#
+# Versions are pinned to what resolves in the current image (via pip freeze), so
+# the Lambda builds reproducibly and matches the tested classifier environment.
+#
+# NB: build-test this image (docker build -f Dockerfile.lambda .) and smoke-test
+# `lambda_function.lambda_handler` before merging - runtime imports can't be fully
+# verified statically.
+
+# MediaCloud + scraping/ingestion
+mediacloud==5.1.0
+trafilatura==2.2.0
+cloudscraper==1.2.71
+beautifulsoup4==4.12.2
+langdetect==1.0.9
+requests==2.33.0
+urllib3==2.7.0
+
+# Data + DB
+pandas==3.0.5
+numpy==2.2.4
+SQLAlchemy==2.0.52
+psycopg2-binary==2.9.12
+
+# AWS (lambda_function imports boto3)
+boto3==1.43.87
+botocore==1.43.87
+
+# Django (settings, ORM, cache)
+Django==4.2.30
+django-redis==6.0.0
+python-dotenv==1.2.2

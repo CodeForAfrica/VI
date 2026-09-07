@@ -55,12 +55,17 @@ class MLInferenceService:
         aws_secret = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None) or os.environ.get('AWS_SECRET_ACCESS_KEY')
         aws_bucket = getattr(settings, 'S3_MODELS_BUCKET', None) or os.environ.get('S3_MODELS_BUCKET')
         aws_region = getattr(settings, 'AWS_S3_REGION_NAME', None) or os.environ.get('AWS_S3_REGION_NAME', 'eu-west-1')
-        
+        # Session token is required when the creds are temporary (e.g. a Lambda
+        # execution role); without it temporary creds fail with InvalidAccessKeyId.
+        # Harmless (None) for long-term IAM user keys used by the web app.
+        aws_token = getattr(settings, 'AWS_SESSION_TOKEN', None) or os.environ.get('AWS_SESSION_TOKEN')
+
         if aws_key and aws_secret and aws_bucket:
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=aws_key,
                 aws_secret_access_key=aws_secret,
+                aws_session_token=aws_token,
                 region_name=aws_region,
                 config=botocore.config.Config(
                     retries={
@@ -82,12 +87,14 @@ class MLInferenceService:
         self._tone_label_encoder = None
         self._strategic_vocab = None
 
-        # ✅ Add persistent cache directory (this is the old one, might become secondary)
-        self.model_cache_dir = Path(settings.BASE_DIR) / 'model_cache'
-        self.model_cache_dir.mkdir(exist_ok=True)
+        # Persistent cache directory. Overridable via MODEL_CACHE_DIR because on
+        # Lambda BASE_DIR (/var/task) is read-only and only /tmp is writable.
+        self.model_cache_dir = Path(os.environ.get("MODEL_CACHE_DIR") or (Path(settings.BASE_DIR) / 'model_cache'))
+        self.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # ✅ NEW: Add the specific directory where the archive was extracted
-        self.local_models_dir = Path("/Users/hannateshager/Vulnerability_index_tool/model_cache")
+        # Optional pre-extracted model archive dir. Overridable via LOCAL_MODELS_DIR;
+        # defaults to the persistent cache so there is no personal hardcoded path.
+        self.local_models_dir = Path(os.environ.get("LOCAL_MODELS_DIR", self.model_cache_dir))
         
         # Load CSV risk data once at initialization
         self._csv_risk_df = self._load_csv_risks()
@@ -242,25 +249,47 @@ class MLInferenceService:
         
         try:
             print(f"📂 Listing objects with prefix: '{s3_prefix}'")
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=s3_prefix)
-            
-            if 'Contents' not in response:
+            # Retry the list call too - it hits the same flaky endpoint as the downloads.
+            contents = None
+            for attempt in range(max_retries):
+                try:
+                    response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=s3_prefix)
+                    contents = response.get('Contents')
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ Retry {attempt + 1}/{max_retries} listing {s3_prefix}: {e}")
+                        time.sleep(2 ** attempt)
+                    else:
+                        raise
+
+            if not contents:
                 print(f"❌ No files found with prefix: {s3_prefix}")
                 return False
-            
-            print(f"✅ Found {len(response['Contents'])} files")
-            
-            for obj in response.get('Contents', []):
+
+            print(f"✅ Found {len(contents)} files")
+
+            for obj in contents:
                 key = obj['Key']
                 if key.endswith('/'):
                     continue
-                
+
                 rel_path = key[len(s3_prefix):].lstrip('/')
                 local_file_path = os.path.join(local_dir, rel_path)
-                
+
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+
+                # Resume: skip files already fully downloaded (local size matches S3).
+                # This is what turns a dropped connection into a resume instead of a
+                # full re-pull of the whole directory.
+                # ponytail: size match, not checksum - a truncated file has a different
+                # size so it re-downloads; corruption at matching size is not caught.
+                if os.path.exists(local_file_path) and os.path.getsize(local_file_path) == obj.get('Size'):
+                    print(f"⏩ Skipping (already downloaded): {key}")
+                    continue
+
                 print(f"⬇️ Downloading: {key} -> {local_file_path}")
-                
+
                 # Retry logic for each file
                 for attempt in range(max_retries):
                     try:
@@ -275,7 +304,7 @@ class MLInferenceService:
                         else:
                             print(f"❌ Failed to download {key} after {max_retries} retries")
                             raise
-            
+
             print(f"✅ Successfully downloaded all files")
             return True
         except Exception as e:
@@ -448,21 +477,29 @@ class MLInferenceService:
         try:
             client = Groq(api_key=groq_api_key)
             system_msg = (
-                "Analyze strategic intent. Respond ONLY with JSON. "
-                "Labels: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, "
-                "MilitaryPresence, ResourceDependency, SocialFragility, Neutral."
+                "You are a strict text classifier. Respond with a single JSON object and nothing else. "
+                "Keys: \"strategic_intent\" (exactly one of: Economic, Sovereignty, LGBTQ, Religious, "
+                "ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility, Neutral) and "
+                "\"strategic_intent_conf\" (a number between 0 and 1). "
+                "Example: {\"strategic_intent\": \"Economic\", \"strategic_intent_conf\": 0.82}"
             )
-            
+
             response = client.chat.completions.create(
-                model=getattr(settings, 'GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct'),
+                model=getattr(settings, 'GROQ_MODEL', 'qwen/qwen3.6-27b'),
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": text[:4000]}
                 ],
-                temperature=0.0 
+                temperature=0.0,
+                # Force a clean single JSON object. On Groq this also keeps the <think>
+                # reasoning wrapper (Qwen3 and similar) out of the content, which would
+                # otherwise make the parser grab a stray brace and read Neutral/0.0.
+                response_format={"type": "json_object"},
             )
-    
+
             raw_content = response.choices[0].message.content.strip()
+            # Defensive: strip a leaked <think>...</think> block if any model emits one.
+            raw_content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
             
             # 1. Extract all JSON-like blocks using regex
             json_blocks = re.findall(r'\{.*?\}', raw_content, re.DOTALL)
@@ -864,7 +901,7 @@ class MLInferenceService:
         # ✅ Check if tone model exists in the KNOWN LOCAL PATH (Priority 3 - existing check)
         # This path might be redundant if the archive cache is the primary source now,
         # but keeping it for compatibility if this specific path was used previously.
-        KNOWN_TONE_MODEL_PATH = "/Users/hannateshager/Vulnerability_index_tool/app/models/model_cache/tone_model"
+        KNOWN_TONE_MODEL_PATH = str(self.local_models_dir / 'tone_model')
         if os.path.exists(KNOWN_TONE_MODEL_PATH):
             print(f"✅ Loading tone classifier from KNOWN LOCAL PATH: {KNOWN_TONE_MODEL_PATH}")
 
@@ -890,9 +927,13 @@ class MLInferenceService:
         else:
             print(f"⚠️  Local tone model not found at {KNOWN_TONE_MODEL_PATH}, attempting S3 download...")
 
-        # If local paths don't exist, proceed with S3 download as fallback (Priority 4)
-        temp_dir = tempfile.mkdtemp(prefix='tone_model_')
-        self._temp_dirs.add(temp_dir)
+        # If local paths don't exist, proceed with S3 download as fallback (Priority 4).
+        # Download into a stable dir on the persistent volume (not a throwaway /tmp), and
+        # deliberately do NOT register it in _temp_dirs, so a dropped connection resumes and
+        # re-runs reuse the files instead of re-pulling ~6GB each time.
+        tone_dl_dir = self.model_cache_dir / 'tone_download'
+        tone_dl_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = str(tone_dl_dir)
 
         # ONLY use the working prefix - NO LOOP
         tone_prefix = 'calibrated_stacked_ensemble/'

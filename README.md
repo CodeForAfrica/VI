@@ -125,6 +125,27 @@ The score ranges between **0 and 1**.
                  
 ---
 
+# Deployment Topology (ingestion / classification split)
+
+The ML ensemble (~13GB) exceeds AWS Lambda's 10GB limits, so **ingestion** and
+**classification** run as two decoupled halves that communicate only through the
+`dashboard_medianarrative` database table:
+
+- **Ingestion (AWS Lambda)** — `lambda_function.py` pulls articles from MediaCloud
+  and writes rows with a null `strategic_intent`. It installs ingestion-only
+  dependencies (`requirements-lambda.txt`, built via `Dockerfile.lambda`) to stay
+  under the Lambda image limit.
+- **Classification (dedicated container)** — `Dockerfile.classifier` runs the
+  `fill_missing_intents` command, which drains rows with a null intent, runs the
+  ensemble + Groq arbitration, and writes back `strategic_intent`, `tone`,
+  `confidence`, and `ml_processed_at`.
+
+The two never call each other directly — the table is the seam. See
+[Local Testing](#local-testing-classification-split) to run the classification
+half end-to-end on your machine.
+
+---
+
 # Data Pipeline
 
 The platform includes a **data pipeline implemented through Django management commands**.
@@ -174,7 +195,10 @@ Vulnerability_index_tool/
 │   │   ├── fill_posting_time.py
 │   │   ├── migrate_profiles.py
 │   │   ├── calculate_vulnerability_index.py
-│   │   └── run_full_pipeline.py
+│   │   ├── run_full_pipeline.py
+│   │   ├── fill_missing_intents.py     # Classifier half: fills null intents
+│   │   ├── check_groq.py               # Fail-loud Groq preflight
+│   │   └── show_results.py             # Print classification results (local test)
 │
 │   ├── templates/                    # Dashboard HTML templates
 │   ├── static/                       # Static assets
@@ -190,17 +214,24 @@ Vulnerability_index_tool/
 │   ├── variables.tf
 │   └── outputs.tf
 │
-├── lambda_function.py                # AWS Lambda handler
+├── lambda_function.py                # AWS Lambda handler (ingestion only)
 ├── contextual_all_intents_v2.py      # Contextual signal computation
 │
-├── merged_dataset.csv                # Narrative dataset
+├── fixtures/
+│   └── test_articles.json            # Sample articles for the local test
+├── docs/
+│   └── improvements.md               # Codebase improvement backlog
+│
 ├── Journalist.csv
 ├── MediaOutlet.csv
 ├── final_risk_by_actor_intent_country.csv
 │
-├── Dockerfile
-├── Dockerfile.lambda
-├── requirements.txt
+├── Dockerfile                        # Web app image
+├── Dockerfile.lambda                 # Ingestion Lambda image
+├── Dockerfile.classifier             # Classification container image
+├── docker-compose.classifier.yml     # Local end-to-end classification test
+├── requirements.txt                  # Full deps (web + ML)
+├── requirements-lambda.txt           # Ingestion-only deps (Lambda)
 ├── Makefile
 └── manage.py
 ```
@@ -254,3 +285,34 @@ Start the Django development server:
 ```bash
 python manage.py runserver
 ```
+
+---
+
+# Local Testing (classification split)
+
+The classification half runs end-to-end locally against an **isolated Postgres**,
+with no access to production and no RDS or ECR required. The classifier image is
+built on your machine from `Dockerfile.classifier`; `docker-compose.classifier.yml`
+pins `DB_HOST` to the local db so a run physically cannot reach prod.
+
+### Prerequisites
+
+- Docker, with ~12GB memory allocated (the ensemble needs ~13GB resident; enable swap)
+- A `.env` file — copy `.env.example` and fill in read-only S3 model-bucket
+  credentials plus a valid `GROQ_API_KEY` / `GROQ_MODEL`
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
+| `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
+| `make reset` | Reload the fixture, resetting the rows back to unclassified |
+| `make verify` | Assert 0 rows would be reprocessed — proves the blank-intent guard |
+| `make down` | Stop the test containers (keeps the db data) |
+| `make clean-test` | Stop and wipe the local test database |
+
+The sample articles live in `fixtures/test_articles.json` and stand in for the
+Lambda ingestion output, so the run is deterministic and offline. Models download
+once from S3 into the mounted `model_cache/` directory and are reused on
+subsequent runs.

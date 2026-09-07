@@ -18,11 +18,12 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-# CSRF_TRUSTED_ORIGINS MUST have the scheme (http://)
+# CSRF_TRUSTED_ORIGINS MUST have the scheme (http://). Comma-separated in the env
+# so deploy IPs/hosts are not hardcoded here.
 CSRF_TRUSTED_ORIGINS = [
-    'http://108.130.70.153', 
-    'http://localhost',
-    'http://*.compute-1.amazonaws.com'  # This handles the internal AWS address
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost').split(',')
+    if origin.strip()
 ]
     
 INSTALLED_APPS = [
@@ -73,7 +74,7 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME', 'postgres'),
         'USER': os.getenv('DB_USER', 'postgres'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'rds-vulnerabilityindex-euwest-01.cfgmtx8ishfx.eu-west-1.rds.amazonaws.com'),  # RDS endpoint
+        'HOST': os.getenv('DB_HOST', 'localhost'),  # never default to prod - DB_HOST must be set in the environment
         'PORT': os.getenv('DB_PORT', '5432'),
         'CONN_MAX_AGE': 600,
     }
@@ -107,6 +108,10 @@ S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 # API Keys - SECURE: All from environment
 MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Default to a live model - the old hardcoded default (llama-4-scout) was
+# decommissioned on Groq (shutdown 2026-07-17), which made the LLM arbitration
+# silently fail. qwen/qwen3.6-27b is the team-chosen replacement.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
 
 # CACHES configuration
 CACHES = {

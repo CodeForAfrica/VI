@@ -2,6 +2,7 @@
 import time
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 from dashboard.models import MediaNarrative
 # Use your existing service helper
 from dashboard.services.ml_inference_service import get_ml_service
@@ -43,6 +44,13 @@ class Command(BaseCommand):
             article_text='' # Exclude if article_text is empty string
         ).exclude(
             article_text__iexact='no content available' # Exclude if article_text is a default placeholder
+        ).filter(
+            # Only rows we've never processed. A correctly-Neutral article maps to a
+            # NULL strategic_intent (utils.map_to_canonical_intent has no 'neutral'
+            # key), so without this marker it looks unprocessed and gets re-run every
+            # time. ml_processed_at, set below, lets those rows settle. Failed rows
+            # never get the marker, so they still retry.
+            ml_processed_at__isnull=True
         )
 
         # Apply limit if specified (useful for testing)
@@ -95,6 +103,7 @@ class Command(BaseCommand):
                 article.strategic_intent = canonical_intent # Save the canonical form
                 article.confidence = inference_result.get('confidence', 0.0) # Update confidence from result dict
                 article.tone = inference_result.get('tone', 'Factual') # Update tone from result dict
+                article.ml_processed_at = timezone.now() # Mark as processed so Neutral/NULL rows don't re-run forever
                 # Optionally update other fields like inferred_actor, target_country if needed
                 # article.inferred_actor = inference_result.get('inferred_actor', article.inferred_actor) # Keep original if not found
                 # article.target_country = inference_result.get('target_country', article.target_country) # Keep original if not found
@@ -146,7 +155,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
                     # Include 'tone' and 'confidence' if you updated them above
-                    fields_to_update = ['strategic_intent', 'confidence', 'tone'] # Add other fields updated above if any
+                    fields_to_update = ['strategic_intent', 'confidence', 'tone', 'ml_processed_at'] # Add other fields updated above if any
                     MediaNarrative.objects.bulk_update(
                         chunk,
                         fields_to_update,

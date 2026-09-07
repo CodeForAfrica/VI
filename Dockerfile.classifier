@@ -1,0 +1,36 @@
+# Classification half of the split: runs the ML inference off Lambda so it is
+# not capped by Lambda's 10GB image/memory limits. CPU torch (same index trick
+# as Dockerfile.lambda) keeps the image small; the inference code auto-selects
+# cuda when a GPU is present (ml_inference_service.py:45), so this same image
+# also works on the GPU box later with no change.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps mirror the web Dockerfile (known-good for this dependency set).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc g++ pkg-config \
+    libcairo2-dev libgirepository1.0-dev libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip setuptools wheel
+
+# CPU torch index primary so torch resolves to the +cpu wheel (no CUDA/nvidia libs);
+# everything else falls through to PyPI.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple
+
+# Bake the spaCy model in; the code otherwise downloads it at runtime.
+RUN python -m spacy download en_core_web_sm
+
+COPY manage.py .
+COPY dashboard/ ./dashboard/
+COPY config/ ./config/
+
+CMD ["python", "manage.py", "fill_missing_intents"]
