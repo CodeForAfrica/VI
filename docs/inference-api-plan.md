@@ -76,11 +76,19 @@ Local test: gunicorn + fixture article, curl the three endpoints, assert schema,
 401 on bad key, 400 on missing text, 413 on oversized body, 429 past the limit.
 Same one-command style as PR #22's `make test`.
 
-### Phase 2 - API test suite (code, local)
+### Phase 2 - API test suite (code, local) - DONE
 
 The API-tests block from spec 772-788 as real tests (PR #22 shipped with none;
 this closes improvements.md #9 for the new surface). Auth, validation, payload
 limits, rate limit, enum membership, log-redaction, 500-not-Neutral.
+
+Implemented in `inference_api/tests.py` (32 tests, all passing), runnable with
+`make test-api` (in the classifier container) or, since `inference_api/
+tests_settings.py` is deliberately light, directly in any venv with Django +
+requests + beautifulsoup4:
+`python manage.py test inference_api --settings=inference_api.tests_settings`.
+The suite is contract-level - the ML service is mocked and readiness toggled -
+so it needs no torch, no model weights, and no DB server.
 
 ## Phase 1 testing status
 
