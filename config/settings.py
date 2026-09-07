@@ -47,7 +47,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'config.urls'
+# Env-overridable so the inference API process can boot with its own small
+# urlconf (config.inference_wsgi sets ROOT_URLCONF=inference_api.urls) instead
+# of the dashboard's full url/view module. Defaults to the dashboard app.
+ROOT_URLCONF = os.getenv('ROOT_URLCONF', 'config.urls')
 
 TEMPLATES = [
     {

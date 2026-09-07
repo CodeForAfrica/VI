@@ -1271,6 +1271,9 @@ class MLInferenceService:
             return {
                 'strategic_intent': strategic_intent,
                 'confidence': max(si_confidence, tone_confidence),
+                'strategic_intent_confidence': si_confidence,   # exposed for the HTTP API response schema
+                'tone_confidence': tone_confidence,             # exposed for the HTTP API response schema
+                'prediction_source': prediction_source,         # e.g. ensemble_matched / llm_arbitrated
                 'tone': tone,
                 'vulnerability_index': float(vi_score),  # ✅ FLOAT - No NoneType errors!
                 'inferred_actor': inferred_actor,
