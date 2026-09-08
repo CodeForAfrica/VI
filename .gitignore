@@ -58,3 +58,6 @@ logs/
 # --- Temporary Files ---
 *.tmp
 *.temp
+
+# Local-only planning doc (kept out of the repo)
+docs/inference-api-plan.md
