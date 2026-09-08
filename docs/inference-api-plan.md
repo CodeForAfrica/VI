@@ -158,7 +158,17 @@ Failure / safety:
 Logging discipline (spec 238-247):
 - the `X-API-Key` value and full `article_text` never appear in emitted logs.
 
-### Phase 3 - Lambda rewrite (code, local-testable)
+### Phase 3 - Lambda rewrite (code, local-testable) - DONE
+
+Implemented: `inference_client.py` (pure, requests-only HTTP client with the
+retry/no-retry classification, backoff+jitter, response validation) and a
+rewritten `lambda_function.py` that ingests, then drains pending rows
+(`ml_processed_at IS NULL`, bounded by `VI_INFERENCE_MAX_PER_RUN`) through the
+client and writes back predictions. Inference runs AFTER ingestion so an
+outage never blocks ingestion; failures stay pending; Neutral is stored
+explicitly; structured JSON logs per step with a reused `request_id`; final
+summary counts. New env vars documented in `.env.example`. Client logic verified
+(19 checks); the drain loop against a mocked DB is Phase 4.
 
 Replace the removed ML step (PR #22 already stripped it) with an HTTP client:
 insert-pending -> call API -> validate -> write back; leave pending on failure
