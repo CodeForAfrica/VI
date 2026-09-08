@@ -1,7 +1,7 @@
 # dashboard/management/commands/fill_missing_intents.py
 import time
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 from dashboard.models import MediaNarrative
 # Use your existing service helper
@@ -146,6 +146,13 @@ class Command(BaseCommand):
             if backup_data: # <-- CORRECTED: Check if backup_data list is not empty, added ':'
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
+
+            # The per-article ML work above can run for many minutes, long enough
+            # for Postgres to drop the connection opened at the start of the command
+            # (seen as "connection already closed" on this final write, losing the
+            # whole batch). Drop the stale connection so the ORM reconnects fresh for
+            # the write. Results are already in memory, so no data is lost.
+            connection.close()
 
             # Use bulk_update to efficiently save all changes
             # Chunked save might be needed for very large datasets, but bulk_update often handles this well internally
