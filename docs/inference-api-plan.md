@@ -186,9 +186,19 @@ insert-pending -> call API -> validate -> write back; leave pending on failure
 Local test: run the API locally, point a local Lambda-handler invocation at it,
 assert pending->completed, timeout leaves pending, retryable vs permanent codes.
 
-### Phase 4 - Lambda test suite (code, local)
+### Phase 4 - Lambda test suite (code, local) - DONE
 
-The Lambda-tests block from spec 790-802.
+The Lambda-tests block from spec 790-802. Implemented as plain unittest in
+`test_inference_client.py` (13 tests) and `test_lambda_function.py` (12 tests),
+all passing, runnable with `make test-lambda` or
+`python -m unittest test_inference_client test_lambda_function`. A fake DB
+connection and fake/injected client mean no Postgres, AWS, or MediaCloud is
+needed. `lambda_function` was refactored so its psycopg2 / MediaCloud imports
+are lazy, letting the module be imported and tested standalone. Covers:
+success updates the row, retryable failure leaves it pending, permanent failure
+is not retried, Neutral stored as processed, mixed-batch counts, skip when the
+API is unconfigured, same request_id across retries, key only in the header,
+and handler success/500 wiring.
 
 ### Phase 5 - Infra + deploy (NOT code, needs cloud access)
 
