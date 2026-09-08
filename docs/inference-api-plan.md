@@ -113,6 +113,10 @@ made - stubbing it here would just duplicate Phase 5.
 
 - gunicorn boot of `config.inference_wsgi:application` under the real
   `config.settings` (whitenoise, csrf, dashboard app, DB env present).
+  DONE locally via `make smoke-api` (docker-compose.inference.yml): boots
+  gunicorn with warmup skipped and asserts /healthz 200, /readyz 503, 401
+  without key, 503 models_not_ready with a key. The real-weights rows below
+  still need the host.
 - Background warmup against real weights; `/readyz` flips 503 -> 200 only when
   the ensemble is genuinely usable; `model_load_failed` keeps it out of ready.
 - Model cache persists across container restart (no re-download).

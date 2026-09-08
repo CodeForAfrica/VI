@@ -57,8 +57,15 @@ _service_holder = {"service": None}
 
 
 def start_warmup():
-    """Kick the background load once. Safe to call from the wsgi entrypoint."""
+    """Kick the background load once. Safe to call from the wsgi entrypoint.
+
+    VI_SKIP_WARMUP=1 boots the web process without loading models: /healthz
+    stays 200 and /readyz stays 503. Used by the boot smoke harness and any
+    health-only boot; do not set it in the real inference deployment."""
     global _warmup_kicked
+    if os.getenv("VI_SKIP_WARMUP") == "1":
+        log_event("INFO", "model_warmup_skipped")
+        return
     with _warmup_started:
         if _warmup_kicked:
             return

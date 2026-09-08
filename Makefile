@@ -6,8 +6,9 @@ ECR_REGISTRY = $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
 ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 
 CLF_COMPOSE = docker compose -f docker-compose.classifier.yml
+INF_COMPOSE = docker compose -f docker-compose.inference.yml
 
-.PHONY: build push build-test test test-api test-lambda results reset verify db down clean-test
+.PHONY: build push build-test test test-api test-lambda smoke-api results reset verify db down clean-test
 
 # Build the web image
 build:
@@ -47,6 +48,13 @@ test-api:
 #   python -m unittest test_inference_client test_lambda_function
 test-lambda:
 	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
+
+# Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and
+# assert the HTTP contract (/healthz, /readyz, auth, readiness gating). Warmup
+# is skipped, so no models/GPU/DB are needed. Exits non-zero if the smoke fails.
+smoke-api:
+	$(INF_COMPOSE) up --build --abort-on-container-exit --exit-code-from smoke; \
+	code=$$?; $(INF_COMPOSE) down; exit $$code
 
 # Print the current classification state of every row.
 results:
