@@ -32,5 +32,8 @@ RUN python -m spacy download en_core_web_sm
 COPY manage.py .
 COPY dashboard/ ./dashboard/
 COPY config/ ./config/
+# The inference API shares this image (it also needs the ML stack); it boots via
+# gunicorn config.inference_wsgi:application (see docker-compose.inference.yml).
+COPY inference_api/ ./inference_api/
 
 CMD ["python", "manage.py", "fill_missing_intents"]
