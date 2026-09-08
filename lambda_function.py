@@ -4,18 +4,18 @@ import sys
 import time
 import uuid
 
-import psycopg2
-
 # Add the dashboard directory to Python path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(CURRENT_DIR)
 
-# Import your existing services.
 # ML classification is intentionally NOT loaded in this process: the ~13GB
 # ensemble exceeds Lambda's 10GB limits and moved to the vi-model-inference
 # HTTP API. This Lambda ingests, then calls that API per pending article and
 # writes back the prediction (solution-spec).
-from dashboard.services.mediacloud_ingestion_service import main as run_mediacloud_ingestion
+#
+# psycopg2 and the MediaCloud ingestion service are imported lazily inside the
+# functions that use them so this module can be imported (and unit-tested)
+# without a database driver or the ingestion stack present.
 from inference_client import (
     InferenceClient,
     PermanentInferenceError,
@@ -45,6 +45,7 @@ def _log(level, event, **fields):
 
 
 def get_db_connection():
+    import psycopg2
     return psycopg2.connect(
         host=os.environ.get('DB_HOST'),
         database=os.environ.get('DB_NAME'),
@@ -61,6 +62,10 @@ def lambda_handler(event, context):
     try:
         # Map Environment Variables (Ensures consistency)
         os.environ['API_KEY'] = os.environ.get('MEDIACLOUD_API_KEY', '')
+
+        from dashboard.services.mediacloud_ingestion_service import (
+            main as run_mediacloud_ingestion,
+        )
 
         conn = get_db_connection()
 
@@ -160,8 +165,9 @@ def save_classification(conn, article_id, result):
         conn.commit()
 
 
-def classify_pending(conn):
-    client = _build_client()
+def classify_pending(conn, client=None):
+    if client is None:
+        client = _build_client()
     if client is None:
         _log("WARNING", "inference_skipped",
              reason="VI_INFERENCE_API_URL / VI_INFERENCE_API_KEY not set")

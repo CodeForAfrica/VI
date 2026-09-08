@@ -7,7 +7,7 @@ ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 
 CLF_COMPOSE = docker compose -f docker-compose.classifier.yml
 
-.PHONY: build push build-test test test-api results reset verify db down clean-test
+.PHONY: build push build-test test test-api test-lambda results reset verify db down clean-test
 
 # Build the web image
 build:
@@ -40,6 +40,13 @@ test: build-test
 #   python manage.py test inference_api --settings=inference_api.tests_settings
 test-api:
 	$(CLF_COMPOSE) run --rm classifier python manage.py test inference_api --settings=inference_api.tests_settings
+
+# Run the ingestion Lambda test suite (inference client + drain loop + handler).
+# Plain unittest with a fake DB and fake client - no Postgres/AWS/MediaCloud.
+# Also runs in any local venv with requests installed:
+#   python -m unittest test_inference_client test_lambda_function
+test-lambda:
+	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
 
 # Print the current classification state of every row.
 results:
