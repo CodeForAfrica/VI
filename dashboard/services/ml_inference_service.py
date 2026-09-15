@@ -21,6 +21,7 @@ import re
 import sys
 from groq import Groq
 from transformers import AutoTokenizer
+from dashboard.services.strategic_arbitration import choose_strategic_prediction
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpx").propagate = False
@@ -34,6 +35,18 @@ os.environ["TQDM_DISABLE"] = "True"
 
 # Standard logger for your service
 logger = logging.getLogger(__name__)
+
+
+def _api_event(level, event, **fields):
+    """Emit the API's structured model-step logs only in inference-server mode."""
+    if os.environ.get("VI_INFERENCE_SERVER") != "1":
+        return
+    try:
+        from inference_api.logs import log_event
+        fields.setdefault("model_version", os.environ.get("MODEL_VERSION", "unknown"))
+        log_event(level, event, **fields)
+    except Exception:
+        logger.exception("Could not emit structured inference event")
 
 TransferConfig = None
 DetectorFactory.seed = 0
@@ -60,22 +73,25 @@ class MLInferenceService:
         # Harmless (None) for long-term IAM user keys used by the web app.
         aws_token = getattr(settings, 'AWS_SESSION_TOKEN', None) or os.environ.get('AWS_SESSION_TOKEN')
 
-        if aws_key and aws_secret and aws_bucket:
-            self.s3_client = boto3.client(
-                's3',
-                aws_access_key_id=aws_key,
-                aws_secret_access_key=aws_secret,
-                aws_session_token=aws_token,
-                region_name=aws_region,
-                config=botocore.config.Config(
-                    retries={
-                        'max_attempts': 10,
-                        'mode': 'adaptive'
-                    },
+        if aws_bucket:
+            client_kwargs = {
+                'region_name': aws_region,
+                'config': botocore.config.Config(
+                    retries={'max_attempts': 10, 'mode': 'adaptive'},
                     connect_timeout=60,
-                    read_timeout=300
-                )
-            )
+                    read_timeout=300,
+                ),
+            }
+            # Explicit credentials remain supported for local development. On
+            # the Dokku EC2 host, omitting them deliberately lets boto3 use the
+            # instance profile/default credential chain.
+            if aws_key and aws_secret:
+                client_kwargs.update({
+                    'aws_access_key_id': aws_key,
+                    'aws_secret_access_key': aws_secret,
+                    'aws_session_token': aws_token,
+                })
+            self.s3_client = boto3.client('s3', **client_kwargs)
             self.bucket_name = aws_bucket
         else:
             self.s3_client = None
@@ -109,6 +125,11 @@ class MLInferenceService:
         """
         Maps model/LLM outputs to canonical labels and looks up risk scores.
         """
+        # The dedicated inference API deliberately has no VI database access.
+        # Risk calculation remains the dashboard/Lambda's responsibility.
+        if os.environ.get("VI_INFERENCE_SERVER") == "1":
+            return 0.0
+
         # 1. Immediate guard for non-strategic content
         if not intent or str(intent).lower() in ['neutral', 'unknown', 'none']:
             return 0.0
@@ -205,6 +226,8 @@ class MLInferenceService:
             
     def _load_csv_risks(self):
         """Load pre-calculated risk scores directly from the Database instead of CSV"""
+        if os.environ.get("VI_INFERENCE_SERVER") == "1":
+            return pd.DataFrame()
         try:
             from dashboard.models import VulnerabilityIndex
             
@@ -621,6 +644,7 @@ class MLInferenceService:
 
         model_intent = "unknown"
         model_confidence = 0.0
+        model_prediction_available = False
         
         # --- (Steps 1 & 2: Model and LLM Prediction stay exactly the same) ---
         try:
@@ -634,37 +658,64 @@ class MLInferenceService:
                 )
                 model_intent = self._decode_label(predictions[0])
                 model_confidence = float(np.max(probabilities[0]))
+                model_prediction_available = (
+                    bool(str(model_intent).strip())
+                    and str(model_intent).strip().lower() not in ("unknown", "none")
+                )
+            else:
+                _api_event("WARNING", "strategic_model_unavailable",
+                           error_code="strategic_model_unavailable",
+                           degraded=True)
         except Exception as e:
             logger.error(f"Model inference failed: {e}")
+            _api_event("WARNING", "strategic_model_inference_failed",
+                       error_type=type(e).__name__,
+                       error_code="strategic_model_inference_failed",
+                       error_detail=str(e)[:500], degraded=True)
 
+        arbitration_started = time.time()
+        _api_event("INFO", "arbitration_started")
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
+        arbitration_failed = (
+            isinstance(llm_notes, str) and llm_notes.startswith("Error:")
+        )
+        arbitration_unconfigured = llm_notes == "API key missing"
+        llm_prediction_available = (
+            not arbitration_failed
+            and not arbitration_unconfigured
+            and bool(str(llm_intent).strip())
+            and str(llm_intent).strip().lower() not in ("unknown", "none")
+        )
+        if arbitration_failed:
+            _api_event("ERROR", "arbitration_failed",
+                       error_code="arbitration_failed",
+                       error_detail=llm_notes[6:].strip()[:500],
+                       duration_ms=int((time.time() - arbitration_started) * 1000))
+        elif arbitration_unconfigured:
+            _api_event("WARNING", "arbitration_skipped",
+                       reason="groq_api_key_missing",
+                       duration_ms=int((time.time() - arbitration_started) * 1000))
+        elif str(llm_intent).lower() in ("unknown", "none"):
+            _api_event("INFO", "arbitration_skipped",
+                       reason="no_llm_prediction",
+                       duration_ms=int((time.time() - arbitration_started) * 1000))
+        else:
+            _api_event("INFO", "arbitration_completed",
+                       duration_ms=int((time.time() - arbitration_started) * 1000))
         
-        # --- (Step 3: Your exact Decision Logic stays the same) ---
-        final_intent = "unknown"
-        final_confidence = 0.0
-        prediction_source = "unknown"
-        CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6
-
-        if model_intent and llm_intent:
-            if model_intent.lower() == llm_intent.lower():
-                max_conf = max(model_confidence, llm_confidence)
-                if max_conf >= CONFIDENCE_THRESHOLD_FOR_MATCH:
-                    final_intent, final_confidence = model_intent, max_conf
-                    prediction_source = "ensemble_matched_confirmed"
-                else:
-                    if model_confidence >= llm_confidence:
-                        final_intent, final_confidence = model_intent, model_confidence
-                        prediction_source = "model_selected_after_low_match"
-                    else:
-                        final_intent, final_confidence = llm_intent, llm_confidence
-                        prediction_source = "llm_selected_after_low_match"
-            else:
-                if model_confidence >= llm_confidence:
-                    final_intent, final_confidence = model_intent, model_confidence
-                    prediction_source = "model"
-                else:
-                    final_intent, final_confidence = llm_intent, llm_confidence
-                    prediction_source = "llm"
+        # Do not let unavailable sources participate as zero-confidence
+        # placeholders. If neither source produced a prediction this raises;
+        # the API returns a retryable 500 and Lambda keeps the article pending.
+        final_intent, final_confidence, prediction_source = (
+            choose_strategic_prediction(
+                model_intent,
+                model_confidence,
+                model_prediction_available,
+                llm_intent,
+                llm_confidence,
+                llm_prediction_available,
+            )
+        )
 
         # 2. Lookup the risk score from the ContextualRisk table
         risk_score = self.lookup_risk(country, final_intent, actor)
@@ -1209,8 +1260,7 @@ class MLInferenceService:
             
             # If classifier failed to load, return fallback
             if classifier is None:
-                logger.warning("Tone classifier not available, returning neutral")
-                return 'neutral', 0.3
+                raise RuntimeError("Tone classifier is not available")
                 
             probs = classifier.predict_proba([article_text])
             pred_idx = np.argmax(probs[0])
@@ -1220,33 +1270,44 @@ class MLInferenceService:
                 pred_label = str(pred_idx)
             confidence = float(np.max(probs[0]))
             return str(pred_label), confidence
-        except Exception as e:
-            logger.error(f"Error in tone inference: {e}")
-            return 'neutral', 0.3
+        except Exception:
+            logger.exception("Tone inference failed")
+            raise
 
     def perform_inference(self, article_text):
         """🚀 MAIN PIPELINE METHOD - Called by run_pipeline.py"""
         processed_text = self.preprocess_text(article_text)
         if not processed_text:
-            return {
-                'strategic_intent': strategic_intent,
-                'strategic_intent_conf': si_confidence,      # ✅ NEW
-                'strategic_intent_source': 'model',          # ✅ NEW  
-                'confidence': max(si_confidence, tone_confidence),
-                'tone': tone,
-                'vulnerability_index': float(vi_score),
-                'inferred_actor': inferred_actor,
-                'target_country': target_country
-            }
+            raise ValueError("article text is empty after preprocessing")
 
         try:
             # 1. STRATEGIC INTENT
-            final_intent, final_confidence, vi_score_from_method, prediction_source, llm_notes = self.perform_strategic_intent_inference(processed_text)
+            strategic_started = time.time()
+            _api_event("INFO", "strategic_inference_started")
+            try:
+                final_intent, final_confidence, vi_score_from_method, prediction_source, llm_notes = self.perform_strategic_intent_inference(processed_text)
+            except Exception as e:
+                _api_event("ERROR", "strategic_inference_failed",
+                           error_type=type(e).__name__, error_code="strategic_inference_failed",
+                           duration_ms=int((time.time() - strategic_started) * 1000))
+                raise
+            _api_event("INFO", "strategic_inference_completed",
+                       duration_ms=int((time.time() - strategic_started) * 1000))
             strategic_intent = final_intent
             si_confidence = final_confidence
             
             # 2. TONE
-            tone, tone_confidence = self.perform_tone_inference(processed_text)
+            tone_started = time.time()
+            _api_event("INFO", "tone_inference_started")
+            try:
+                tone, tone_confidence = self.perform_tone_inference(processed_text)
+            except Exception as e:
+                _api_event("ERROR", "tone_inference_failed", error_type=type(e).__name__,
+                           error_code="tone_inference_failed",
+                           duration_ms=int((time.time() - tone_started) * 1000))
+                raise
+            _api_event("INFO", "tone_inference_completed",
+                       duration_ms=int((time.time() - tone_started) * 1000))
             
             # 3. EXTRACT ACTOR/COUNTRY
             entities = self.extract_entities_from_content(processed_text)
@@ -1280,16 +1341,9 @@ class MLInferenceService:
                 'target_country': target_country
             }
             
-        except Exception as e:
-            logger.error(f"Pipeline inference error: {e}")
-            return {
-                'strategic_intent': 'unknown',
-                'tone': 'neutral',
-                'confidence': 0.0,
-                'vulnerability_index': 0.0,  # ✅ SAFE DEFAULT
-                'inferred_actor': 'Unknown',
-                'target_country': 'Unknown'
-            }
+        except Exception:
+            logger.exception("Pipeline inference failed")
+            raise
 
     def calculate_vulnerability_index(self, strategic_intent, tone, target_country, inferred_actor, confidence):
         """

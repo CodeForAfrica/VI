@@ -8,10 +8,31 @@ process runs a single model copy.
 import os
 import threading
 import time
+from pathlib import Path
 
-from .logs import log_event
+from .logs import log_event, safe_error, safe_traceback
 
 MODEL_VERSION = os.getenv("MODEL_VERSION", "2026-09-04")
+ALLOWED_INTENTS = {
+    "Economic", "Sovereignty", "LGBTQ", "Religious", "ElectionInfluence",
+    "MilitaryPresence", "ResourceDependency", "SocialFragility", "Neutral",
+}
+MODEL_CONTRACT_ERROR_CODES = {
+    "unknown_strategic_intent",
+    "unsupported_strategic_intent",
+    "invalid_model_result",
+    "invalid_strategic_intent_confidence",
+    "invalid_tone",
+    "invalid_tone_confidence",
+    "invalid_confidence",
+    "invalid_prediction_source",
+}
+
+
+class InferenceRuntimeError(RuntimeError):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
 
 # One concurrent inference at a time (single loaded ensemble). threads>1 just
 # queue here rather than each touching the model (spec 642-644).
@@ -34,10 +55,37 @@ def _warmup():
     this module (e.g. in unit tests) does not drag in torch."""
     log_event("INFO", "model_load_started", model_version=MODEL_VERSION)
     started = time.time()
+    cache_root = Path(os.getenv("LOCAL_MODELS_DIR")
+                      or os.getenv("MODEL_CACHE_DIR", "/models"))
+    cache_present = all(
+        (cache_root / name).exists() for name in ("strategic_model", "tone_model")
+    )
+    if cache_present:
+        log_event("INFO", "model_cache_hit", model_version=MODEL_VERSION)
+    else:
+        log_event("INFO", "model_download_started", model_version=MODEL_VERSION)
+    required_models_loaded = False
+    failure_stage = "service_initialization"
     try:
         from dashboard.services.ml_inference_service import get_ml_service
         service = get_ml_service()
-        service.perform_inference("warmup")  # forces lazy model loads
+        # Readiness means both required local classifiers can actually load. The
+        # legacy service has fallback paths, so merely receiving a dict from
+        # perform_inference() is not a sufficient readiness check.
+        failure_stage = "strategic_model_load"
+        if service._load_strategic_classifier() is None:
+            raise RuntimeError("strategic classifier failed to load")
+        failure_stage = "tone_model_load"
+        if service._load_tone_classifier() is None:
+            raise RuntimeError("tone classifier failed to load")
+        required_models_loaded = True
+        if not cache_present:
+            log_event("INFO", "model_download_completed", model_version=MODEL_VERSION,
+                      duration_ms=int((time.time() - started) * 1000))
+        failure_stage = "warmup_inference"
+        warmup_result = service.perform_inference("warmup")
+        failure_stage = "warmup_response_validation"
+        _shape_result(warmup_result, "warmup")
         _service_holder["service"] = service
         _ready.set()
         log_event(
@@ -46,10 +94,18 @@ def _warmup():
             duration_ms=int((time.time() - started) * 1000),
         )
     except Exception as e:  # noqa: BLE001 - stay down, don't crash the web process
+        if not cache_present and not required_models_loaded:
+            log_event("ERROR", "model_download_failed", model_version=MODEL_VERSION,
+                      failure_stage=failure_stage, error_type=type(e).__name__,
+                      error_code="model_download_failed", error_detail=safe_error(e))
         log_event(
             "ERROR", "model_load_failed",
             model_version=MODEL_VERSION,
+            failure_stage=failure_stage,
             error_type=type(e).__name__,
+            error_code="model_load_failed",
+            error_detail=safe_error(e),
+            stack_trace=safe_traceback(),
         )
 
 
@@ -77,12 +133,65 @@ def _map_intent(raw):
     """Canonicalize, but keep Neutral explicit - NULL means unprocessed, a
     correctly-Neutral article is a processed result (spec 358-360)."""
     from dashboard.utils import map_to_canonical_intent
+    if isinstance(raw, str) and raw.strip().lower() == "neutral":
+        return "Neutral"
     canonical = map_to_canonical_intent(raw)
     if canonical:
         return canonical
-    # No canonical match: treat as Neutral (an explicit, processed outcome)
-    # rather than returning null.
-    return "Neutral"
+    raise InferenceRuntimeError("unknown_strategic_intent",
+                                "model returned an unknown strategic intent")
+
+
+def _detect_language(article_text):
+    try:
+        from langdetect import LangDetectException, detect
+    except ImportError:
+        return "unknown"
+    try:
+        return detect(article_text)
+    except (LangDetectException, ValueError):
+        return "unknown"
+
+
+def _as_confidence(result, field, fallback=None):
+    value = result.get(field, result.get(fallback)) if fallback else result.get(field)
+    try:
+        value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise InferenceRuntimeError(
+            f"invalid_{field}", f"model returned invalid {field}") from exc
+    if not 0.0 <= value <= 1.0:
+        raise InferenceRuntimeError(
+            f"invalid_{field}", f"model returned out-of-range {field}")
+    return round(value, 4)
+
+
+def _shape_result(result, article_text):
+    if not isinstance(result, dict):
+        raise InferenceRuntimeError("invalid_model_result",
+                                    "model returned an invalid result")
+    intent = _map_intent(result.get("strategic_intent"))
+    if intent not in ALLOWED_INTENTS:
+        raise InferenceRuntimeError("unsupported_strategic_intent",
+                                    "model returned an unsupported strategic intent")
+    tone = result.get("tone")
+    if not isinstance(tone, str) or not tone.strip():
+        raise InferenceRuntimeError("invalid_tone", "model returned an invalid tone")
+    prediction_source = result.get("prediction_source")
+    if not isinstance(prediction_source, str) or not prediction_source.strip():
+        raise InferenceRuntimeError("invalid_prediction_source",
+                                    "model returned an invalid prediction source")
+    return {
+        "strategic_intent": intent,
+        "strategic_intent_confidence": _as_confidence(
+            result, "strategic_intent_confidence", "confidence"),
+        "tone": tone,
+        "tone_confidence": _as_confidence(result, "tone_confidence"),
+        "confidence": _as_confidence(result, "confidence"),
+        "lang_detect": _detect_language(article_text),
+        "prediction_source": prediction_source,
+        "model_version": MODEL_VERSION,
+    }
 
 
 def run_inference(article_text):
@@ -91,22 +200,14 @@ def run_inference(article_text):
     can return 500 rather than a bogus Neutral (spec 449-450)."""
     service = _service_holder["service"]
     if service is None:
-        raise RuntimeError("model service not initialised")
+        raise InferenceRuntimeError("model_service_unavailable",
+                                    "model service not initialised")
 
     started = time.time()
     with _inference_slot:
         result = service.perform_inference(article_text)
     elapsed_ms = int((time.time() - started) * 1000)
 
-    intent = _map_intent(result.get("strategic_intent"))
-    si_conf = result.get("strategic_intent_confidence", result.get("confidence", 0.0))
-    return {
-        "strategic_intent": intent,
-        "strategic_intent_confidence": round(float(si_conf), 4),
-        "tone": result.get("tone", "Factual"),
-        "tone_confidence": round(float(result.get("tone_confidence", 0.0)), 4),
-        "confidence": round(float(result.get("confidence", 0.0)), 4),
-        "prediction_source": result.get("prediction_source", "ensemble"),
-        "model_version": MODEL_VERSION,
-        "processing_time_ms": elapsed_ms,
-    }
+    shaped = _shape_result(result, article_text)
+    shaped["processing_time_ms"] = elapsed_ms
+    return shaped

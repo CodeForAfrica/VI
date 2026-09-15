@@ -14,6 +14,7 @@ import urllib.request
 
 BASE = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 API_KEY = sys.argv[2] if len(sys.argv) > 2 else "smoke-key"
+REQUEST_ID = "7d86d12d-dc93-44da-8e03-06ba1aab36cc"
 
 ok = 0
 
@@ -45,12 +46,12 @@ s, b = call("GET", "/readyz")
 check("readyz 503 loading (warmup skipped)", s == 503 and b.get("models_loaded") is False)
 
 s, b = call("POST", "/api/v1/inference",
-            {"request_id": "smoke", "article_text": "hi"},
+            {"request_id": REQUEST_ID, "article_text": "hi"},
             {"Content-Type": "application/json"})
 check("inference without key -> 401", s == 401 and b["error"]["code"] == "unauthorized")
 
 s, b = call("POST", "/api/v1/inference",
-            {"request_id": "smoke", "article_text": "hi"},
+            {"request_id": REQUEST_ID, "article_text": "hi"},
             {"Content-Type": "application/json", "X-API-Key": API_KEY})
 check("valid key but not ready -> 503 models_not_ready",
       s == 503 and b["error"]["code"] == "models_not_ready")

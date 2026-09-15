@@ -1,13 +1,17 @@
 # Classification half of the split: runs the ML inference off Lambda so it is
 # not capped by Lambda's 10GB image/memory limits. CPU torch (same index trick
 # as Dockerfile.lambda) keeps the image small; the inference code auto-selects
-# cuda when a GPU is present (ml_inference_service.py:45), so this same image
-# also works on the GPU box later with no change.
+# cuda when available, but this image intentionally installs CPU-only PyTorch.
+# A separately tested CUDA image is required before enabling GPU inference.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    MODEL_CACHE_DIR=/models \
+    LOCAL_MODELS_DIR=/models \
+    HF_HOME=/models/hf \
+    TRANSFORMERS_CACHE=/models/hf
 
 WORKDIR /app
 
@@ -36,4 +40,9 @@ COPY config/ ./config/
 # gunicorn config.inference_wsgi:application (see docker-compose.inference.yml).
 COPY inference_api/ ./inference_api/
 
-CMD ["python", "manage.py", "fill_missing_intents"]
+VOLUME ["/models"]
+EXPOSE 8000
+
+# Production-safe default for the dedicated Dokku inference application. Local
+# batch-classifier Compose explicitly overrides this command.
+CMD ["gunicorn", "config.inference_wsgi:application", "--workers", "1", "--threads", "2", "--timeout", "180", "--bind", "0.0.0.0:8000"]

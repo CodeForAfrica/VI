@@ -24,14 +24,22 @@ def _load_accepted_keys():
         entries = json.loads(raw)
     except json.JSONDecodeError:
         return []
+    if not isinstance(entries, list):
+        return []
     return [
         {"caller": e["caller"], "key": e["key"]}
         for e in entries
-        if e.get("caller") and e.get("key")
+        if (isinstance(e, dict)
+            and isinstance(e.get("caller"), str) and e["caller"].strip()
+            and isinstance(e.get("key"), str) and e["key"])
     ]
 
 
 _ACCEPTED_KEYS = _load_accepted_keys()
+
+
+def accepted_key_count():
+    return len(_ACCEPTED_KEYS)
 
 
 def authenticate(supplied_key):
