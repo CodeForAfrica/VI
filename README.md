@@ -125,24 +125,47 @@ The score ranges between **0 and 1**.
                  
 ---
 
-# Deployment Topology (ingestion / classification split)
+# Deployment Topology (ingestion / inference split)
 
-The ML ensemble (~13GB) exceeds AWS Lambda's 10GB limits, so **ingestion** and
-**classification** run as two decoupled halves that communicate only through the
-`dashboard_medianarrative` database table:
+The ML ensemble (~13GB) exceeds AWS Lambda's 10GB image limit, so ingestion and
+model inference run as separate deployments:
 
-- **Ingestion (AWS Lambda)** — `lambda_function.py` pulls articles from MediaCloud
-  and writes rows with a null `strategic_intent`. It installs ingestion-only
-  dependencies (`requirements-lambda.txt`, built via `Dockerfile.lambda`) to stay
-  under the Lambda image limit.
-- **Classification (dedicated container)** — `Dockerfile.classifier` runs the
-  `fill_missing_intents` command, which drains rows with a null intent, runs the
-  ensemble + Groq arbitration, and writes back `strategic_intent`, `tone`,
-  `confidence`, and `ml_processed_at`.
+- **Ingestion (AWS Lambda)** — `lambda_function.py` pulls articles from
+  MediaCloud, stores them in PostgreSQL, and calls the inference service over
+  HTTPS. Its `Dockerfile.lambda` contains no PyTorch, Transformers, or model
+  weights.
+- **Inference (Dokku)** — `Dockerfile.classifier` runs a long-lived HTTP service
+  at `https://vi-model-inference.codeforafrica.org`. It authenticates requests
+  with one `X-API-Key`, keeps models warm, and persists its model cache at
+  `/models`. It has no PostgreSQL, Redis, or Valkey dependency.
 
-The two never call each other directly — the table is the seam. See
-[Local Testing](#local-testing-classification-split) to run the classification
-half end-to-end on your machine.
+The Lambda inserts an article before requesting inference. If the API is down,
+the article stays pending and a later invocation retries it. Because the API is
+public HTTPS, Lambda needs only its URL and API key; it does not need an ingress
+security-group rule for the inference host. Any existing Lambda VPC settings
+may still be required for private PostgreSQL access.
+
+See [solution-spec.md](solution-spec.md) for the full contract, security model,
+traffic flow, failure handling, and logging requirements.
+
+## Deploying the inference service
+
+The `Deploy model inference` GitHub Actions workflow is deliberately
+manual-only because the model image is large. It builds one `linux/amd64` image,
+reuses an immutable ECR image for the same source/config when possible, and
+serializes releases so two model deployments cannot compete for host capacity.
+
+After the corresponding IaC stack has been applied, configure:
+
+- Repository variable `VI_MODEL_INFERENCE_PULUMI_STACK`, set to the fully
+  qualified `cfa-platform-infra-vi-model-inference/prod` stack reference.
+- Repository secret `PULUMI_ACCESS_TOKEN`, scoped to read that stack.
+
+The workflow reads the live role ARN, ECR repository, Dokku host, app name, and
+URL from Pulumi. Do not copy those replaceable values into GitHub variables.
+The Lambda's sensitive Terraform variable `inference_api_key` must equal the
+`key` in one entry of the inference stack's `inferenceApiKeys` JSON secret; the
+API uses that entry's `caller` only for identification, rate limiting, and logs.
 
 ---
 
