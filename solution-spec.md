@@ -190,6 +190,13 @@ that same value in the API request. The API must include it in every related log
 and return it in the response. This allows one article to be traced across both
 services.
 
+Every Lambda event must also include the AWS invocation ID. Before the payload
+has supplied a valid `request_id`, the API must generate an internal `trace_id`
+so authentication, rate-limit, and malformed-request events can still be
+correlated. Network attempts must record the attempt number, maximum attempts,
+HTTP status where available, duration, stable error code, and whether another
+retry will occur.
+
 ### Lambda events to log
 
 | Step | Success or informational event | Failure or retry event |
@@ -203,8 +210,10 @@ services.
 | Database update | `article_classification_saved` | `article_classification_save_failed` |
 | Pending retry | `pending_retry_started`, `pending_retry_completed` | `pending_retry_failed` |
 
-The final Lambda log must summarize counts such as articles found, skipped,
-inserted, classified, left pending, and failed, plus total invocation duration.
+The final Lambda log must summarize counts such as articles found, processed,
+skipped, inserted, deferred, classified, left pending, and failed, plus total
+invocation duration. These counts must reconcile even when ingestion is capped
+or stops at its deadline.
 
 ### Inference API events to log
 
@@ -245,6 +254,10 @@ and total request duration.
 Errors should include a stable `error_code`, a safe error message, and exception
 type. Unexpected server-side exceptions should include a stack trace in the
 server log, after ensuring sensitive values and article content are not present.
+The logging helpers must centrally redact sensitive fields; callers must not be
+the only protection against accidentally logging credentials. Legacy Python
+logging and `print` output in the inference process must be captured as
+structured, request-correlated JSON.
 
 ## API contract
 
@@ -615,17 +628,28 @@ Retry:
 
 - Connection failures.
 - Timeouts.
+- HTTP 408.
 - HTTP 429.
+- HTTP 500, unless the response has a known model-contract error code.
 - HTTP 502.
 - HTTP 503.
 - HTTP 504.
 
-Do not retry:
+Do not retry during the current invocation, but leave the article pending so a
+later invocation can recover after credentials or routing are corrected:
 
-- HTTP 400.
 - HTTP 401.
 - HTTP 403.
+- Other unexpected statuses such as HTTP 404 or HTTP 405.
+
+Mark the article failed because repeating it cannot repair the request or model
+output:
+
+- HTTP 400.
 - HTTP 413.
+- HTTP 422.
+- A known model-contract error code such as `invalid_tone`,
+  `invalid_confidence`, or `unknown_strategic_intent`.
 
 Use two or three attempts with exponential backoff and random jitter. Reuse the
 same `request_id` for every attempt of one logical request.
@@ -657,7 +681,7 @@ gunicorn \
   --threads 2 \
   --timeout 180 \
   --bind 0.0.0.0:8000 \
-  config.wsgi:application
+  config.inference_wsgi:application
 ```
 
 The final timeout must be based on measured inference latency and aligned with
