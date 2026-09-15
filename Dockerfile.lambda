@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements-lambda.txt
 
 # Copy only what Lambda needs
 COPY lambda_function.py .
+COPY inference_client.py .
 COPY dashboard/ ./dashboard/
 # config/ holds Django settings (config.settings), which the ingestion service
 # loads via django.conf.settings, so this must be present.
