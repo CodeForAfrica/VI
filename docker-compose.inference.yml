@@ -16,11 +16,6 @@ services:
       ALLOWED_HOSTS: "*"
       VI_SKIP_WARMUP: "1"
       VI_INFERENCE_ACCEPTED_KEYS: '[{"caller":"smoke","key":"smoke-key"}]'
-      # DB is never touched by /healthz or /readyz, but settings reads these.
-      DB_HOST: localhost
-      DB_NAME: none
-      DB_USER: none
-      DB_PASSWORD: none
     command: >
       gunicorn config.inference_wsgi:application
       --workers 1 --threads 2 --timeout 180 --bind 0.0.0.0:8000
