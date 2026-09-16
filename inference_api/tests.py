@@ -7,6 +7,11 @@ calls are mocked and readiness is toggled, so the suite runs fast with no torch
 and no DB server. The gunicorn/real-model integration boot is Phase 5.
 """
 import importlib
+import ast
+import logging
+import os
+import time
+from pathlib import Path
 import io
 import json
 import sys
@@ -421,6 +426,53 @@ class ResponseMappingTests(SimpleTestCase):
         runtime._service_holder["service"] = None
         with self.assertRaises(RuntimeError):
             runtime.run_inference("x")
+
+
+class LocalOnlyStrategicInferenceTests(SimpleTestCase):
+    """Execute the actual service method without importing heavyweight ML SDKs."""
+
+    def setUp(self):
+        from dashboard.services.strategic_arbitration import choose_strategic_prediction
+        path = Path(__file__).resolve().parents[1] / "dashboard/services/ml_inference_service.py"
+        tree = ast.parse(path.read_text())
+        method = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef)
+                      and node.name == "perform_strategic_intent_inference")
+        self.events = mock.Mock()
+        namespace = {"os": os, "time": time, "choose_strategic_prediction": choose_strategic_prediction,
+                     "logging": logging, "logger": logging.getLogger(__name__),
+                     "np": types.SimpleNamespace(max=max), "_api_event": self.events}
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), "exec"), namespace)
+        self.infer = namespace[method.name]
+        self.service = mock.Mock()
+        self.service._load_strategic_classifier.return_value.predict.return_value = (
+            ["Economic"], [[0.2, 0.8]])
+        self.service._decode_label.return_value = "Economic"
+        self.service.lookup_risk.return_value = 0.0
+
+    def test_api_uses_local_result_even_with_groq_key_present(self):
+        with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "1", "GROQ_API_KEY": "unused"}):
+            result = self.infer(self.service, "article")
+        self.assertEqual(result, ("Economic", 0.8, 0.0, "model", "Local models only"))
+        self.service._get_llm_strategic_intent.assert_not_called()
+        self.events.assert_any_call("INFO", "arbitration_skipped", reason="local_models_only")
+
+    def test_legacy_dashboard_still_uses_its_existing_arbitration(self):
+        self.service._get_llm_strategic_intent.return_value = ("Economic", 0.9, "confirmed")
+        with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "0"}):
+            result = self.infer(self.service, "article")
+        self.service._get_llm_strategic_intent.assert_called_once_with("article")
+        self.assertEqual(result[3], "ensemble_matched_confirmed")
+
+    def test_local_failure_raises_without_external_fallback(self):
+        for failure in (None, RuntimeError("model failed")):
+            with self.subTest(failure=failure):
+                self.service._load_strategic_classifier.return_value = None
+                self.service._load_strategic_classifier.side_effect = failure
+                with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "1"}):
+                    with self.assertRaisesRegex(RuntimeError, "Local strategic model"):
+                        self.infer(self.service, "article")
+                self.service._get_llm_strategic_intent.assert_not_called()
 
 
 class StrategicInferenceAvailabilityTests(SimpleTestCase):

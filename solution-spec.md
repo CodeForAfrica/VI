@@ -79,7 +79,7 @@ short-lived serverless function.
                             |  | - persistent model cache    |
                             |  | - strategic-intent model    |
                             |  | - tone model                |
-                            |  | - Groq/Ollama arbitration   |
+                            |  | - Local classifiers only   |
                             |  +--------------+--------------+
                             |                 | JSON result
                             |   <-------------+
@@ -96,9 +96,9 @@ short-lived serverless function.
                     +------------------+
 ```
 
-Deployment on the Ollama host does not require the inference API to use Ollama
-immediately. The first version can retain Groq arbitration. Replacing Groq with
-local Ollama should be a separate, measurable change.
+The inference API uses only its local classifiers. It must not call Groq or
+Ollama, even if external-provider credentials exist in its environment. Local
+model failures return retryable errors, not external-provider fallbacks.
 
 ## Responsibilities after the split
 
@@ -129,7 +129,7 @@ The Dokku application is responsible for:
 - Authenticating every inference request.
 - Validating and bounding input data.
 - Running strategic-intent and tone inference.
-- Optionally performing Groq or Ollama arbitration.
+- Returning local classifier predictions without Groq or Ollama arbitration.
 - Returning a versioned, structured JSON response.
 - Reporting liveness and readiness separately.
 
@@ -233,7 +233,7 @@ or stops at its deadline.
 | Request validation | `inference_request_validated` | `inference_request_invalid`, `payload_too_large` |
 | Strategic-intent inference | `strategic_inference_started`, `strategic_inference_completed` | `strategic_inference_failed` |
 | Tone inference | `tone_inference_started`, `tone_inference_completed` | `tone_inference_failed` |
-| LLM arbitration | `arbitration_started`, `arbitration_completed`, `arbitration_skipped` | `arbitration_failed` |
+| External arbitration disabled | `arbitration_skipped` (`local_models_only`) | Not applicable |
 | Response | `inference_completed` | `inference_failed` |
 | Process shutdown | `api_shutdown_started`, `api_shutdown_completed` | `api_shutdown_failed` |
 
@@ -739,46 +739,17 @@ The first classifier-image build and deployment workflow should be manual. This
 is a large and expensive image; automatic builds should only be enabled after
 build caching, storage use, and runner cost are understood.
 
-## Groq and Ollama phases
-
-Running on the Ollama host does not automatically replace Groq.
-
-### Phase 1: retain Groq
+## Local-only inference
 
 ```text
-PyTorch ensemble -> Groq arbitration -> API response
+Local PyTorch classifiers -> API response
 ```
 
-This isolates the infrastructure and API migration from model-quality changes.
-
-### Phase 2: configurable arbitration provider
-
-Add provider configuration:
-
-```text
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=<selected-model>
-```
-
-Supported values should include:
-
-```text
-LLM_PROVIDER=groq
-LLM_PROVIDER=ollama
-```
-
-Expose one internal interface regardless of provider:
-
-```python
-class StrategicIntentArbitrator:
-    def classify(self, text: str) -> ArbitrationResult:
-        ...
-```
-
-Groq and Ollama become implementations of that interface. Before switching
-production traffic, compare both providers against a fixed labelled article set
-and verify allowed labels, confidence values, latency, and failure behavior.
+The dedicated inference server bypasses external LLM arbitration. No Groq key
+or Ollama connection is required. An inherited Groq key must not enable external
+calls. Logs record `arbitration_skipped` with reason `local_models_only`. A local
+strategic model failure returns a retryable error; it must not silently switch
+providers. The legacy dashboard path is outside this deployment change.
 
 ## Capacity and GPU considerations
 

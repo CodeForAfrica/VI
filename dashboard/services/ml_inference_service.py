@@ -673,6 +673,19 @@ class MLInferenceService:
                        error_code="strategic_model_inference_failed",
                        error_detail=str(e)[:500], degraded=True)
 
+        # The dedicated API is local-only, regardless of any inherited Groq key.
+        # Keep legacy dashboard arbitration separate from this deployment.
+        if os.environ.get("VI_INFERENCE_SERVER") == "1":
+            _api_event("INFO", "arbitration_skipped", reason="local_models_only")
+            if not model_prediction_available:
+                _api_event("ERROR", "strategic_inference_failed",
+                           error_code="local_model_unavailable",
+                           reason="External inference is disabled; retry after local model recovery")
+                raise RuntimeError("Local strategic model did not produce a prediction")
+            return (model_intent, model_confidence,
+                    self.lookup_risk(country, model_intent, actor),
+                    "model", "Local models only")
+
         arbitration_started = time.time()
         _api_event("INFO", "arbitration_started")
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)

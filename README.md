@@ -318,6 +318,10 @@ with no access to production and no RDS or ECR required. The classifier image is
 built on your machine from `Dockerfile.classifier`; `docker-compose.classifier.yml`
 pins `DB_HOST` to the local db so a run physically cannot reach prod.
 
+The dedicated Dokku inference API (`config.inference_wsgi`) is local-model-only:
+it never calls Groq or Ollama, even with a Groq key present. Only the legacy
+classifier/dashboard path described below may use Groq arbitration.
+
 ### Prerequisites
 
 - Docker, with ~12GB memory allocated (the ensemble needs ~13GB resident; enable swap)
