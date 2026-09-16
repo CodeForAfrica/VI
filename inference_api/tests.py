@@ -264,6 +264,35 @@ class FailureSafetyTests(ApiTestBase):
 
 
 class LoggingDisciplineTests(ApiTestBase):
+    def test_every_http_access_is_logged(self):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(logs, "_STDOUT", out), \
+             mock.patch.object(logs, "_STDERR", err), \
+             mock.patch("inference_api.runtime.is_ready", return_value=False):
+            responses = [
+                self.client.get("/healthz"),
+                self.client.get("/readyz"),
+                self.client.get("/missing"),
+                self.post(self.valid_payload(), key=None),
+            ]
+        self.assertEqual([response.status_code for response in responses],
+                         [200, 503, 404, 401])
+        entries = [
+            json.loads(line)
+            for line in (out.getvalue() + err.getvalue()).splitlines()
+            if line.strip()
+        ]
+        accesses = [entry for entry in entries if entry.get("event") == "http_access"]
+        self.assertEqual(len(accesses), 4)
+        self.assertEqual([entry["http_status"] for entry in accesses],
+                         [200, 503, 404, 401])
+        for entry in accesses:
+            self.assertIn(entry["outcome"], {"success", "rejected", "failed"})
+            self.assertIn("duration_ms", entry)
+            self.assertTrue(entry.get("trace_id"))
+            self.assertNotIn("headers", entry)
+            self.assertNotIn("request_body", entry)
+
     def test_key_and_article_text_never_logged(self):
         secret_text = "TOP_SECRET_ARTICLE_BODY_QWERTY"
         out, err = io.StringIO(), io.StringIO()

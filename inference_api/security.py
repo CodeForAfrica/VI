@@ -13,8 +13,8 @@ import os
 import threading
 import time
 
-# ponytail: parsed once at import from env; process restart to rotate is fine
-# for the accepted-key list. Deploy injects this from Secrets Manager.
+# Parsed once at import; restart the process after a manual key change.
+# Deployment injects the accepted-key configuration from Secrets Manager.
 def _load_accepted_keys():
     """[{caller, key}] from VI_INFERENCE_ACCEPTED_KEYS (JSON), spec 489-496."""
     raw = os.getenv("VI_INFERENCE_ACCEPTED_KEYS", "").strip()

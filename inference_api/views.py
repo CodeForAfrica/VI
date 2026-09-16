@@ -15,10 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from . import runtime
-from .logs import (
-    log_event, reset_request_context, safe_error, safe_traceback,
-    set_request_context,
-)
+from .logs import log_event, safe_error, safe_traceback, set_request_context
 from .security import authenticate, rate_limiter
 
 MAX_BODY_BYTES = int(os.getenv("VI_MAX_BODY_BYTES", str(256 * 1024)))  # spec 467
@@ -52,14 +49,6 @@ def readyz(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def inference(request):
-    trace_token = set_request_context(trace_id=str(uuid.uuid4()))
-    try:
-        return _handle_inference(request)
-    finally:
-        reset_request_context(trace_token)
-
-
-def _handle_inference(request):
     started = time.time()
     caller = None
     request_id = None

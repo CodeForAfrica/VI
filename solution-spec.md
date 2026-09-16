@@ -169,6 +169,13 @@ unexpected failure. Logging must use standard output and standard error so AWS
 Lambda sends logs to CloudWatch and Dokku captures the API logs without adding
 another runtime service.
 
+The inference service must also emit one `http_access` event for every HTTP
+request, including health and readiness checks, unknown routes, rejected
+methods, authentication failures, rate limits, validation failures, successful
+inference calls, and server errors. Access logs include method, path, status,
+outcome, duration, and a generated trace ID, but never headers, query strings,
+request bodies, API keys, or article text.
+
 Use structured JSON logs rather than free-form `print` statements. Every log
 entry should contain the fields relevant to that event:
 
@@ -484,7 +491,7 @@ stable unless all traffic is deliberately routed through fixed egress.
 - Log request ID, result status, duration, and model version.
 - Keep health responses free of sensitive data.
 - Store all authentication material in AWS Secrets Manager.
-- Support secret rotation without downtime.
+- Keep API-key replacement manual and operationally simple.
 
 ### Recommended authentication: API key
 
@@ -503,8 +510,7 @@ The API keeps an accepted-key list so each key also identifies its caller:
 
 ```json
 [
-  {"caller": "vi-lambda-prod", "key": "<random-api-key>"},
-  {"caller": "vi-developer-test", "key": "<different-random-api-key>"}
+  {"caller": "vi-lambda-prod", "key": "<random-api-key>"}
 ]
 ```
 
@@ -518,7 +524,7 @@ for rate limiting and audit logs.
 |---|---|
 | `X-API-Key` header | Gives the Lambda one simple place to send its credential. |
 | Random API key | Proves that the caller knows a secret shared with the API. A long randomly generated value cannot be practically guessed. |
-| Accepted-key list | Allows the API to identify callers, revoke one caller without affecting others, and accept an old and new key during rotation. |
+| Accepted-key list | Allows the API to identify the caller for rate limiting and logs. One active production key is sufficient for the initial deployment. |
 | AWS Secrets Manager | Keeps keys out of source control, Docker images, Terraform output, and ordinary configuration files. |
 | HTTPS | Encrypts the header, article text, and response in transit. The API key is present in the HTTP request, but TLS prevents network observers from reading it. |
 | Constant-time comparison | Avoids leaking useful information through small timing differences when keys are compared. |
@@ -527,8 +533,14 @@ for rate limiting and audit logs.
 
 This intentionally does not use nonces or request signatures. The tradeoff is
 that a stolen API key can be reused until it is revoked. HTTPS, secret storage,
-log redaction, rate limiting, monitoring, and straightforward key rotation are
+log redaction, rate limiting, monitoring, and straightforward manual replacement are
 the controls for that simpler design.
+
+There is no automatic rotation requirement. If the production key leaks, create
+a replacement, update the API's accepted-key configuration and the Lambda's
+`VI_INFERENCE_API_KEY`, redeploy both, verify requests, and remove the leaked
+value. A short coordinated maintenance window is acceptable for this initial
+deployment.
 
 The API must:
 
@@ -538,7 +550,7 @@ The API must:
 - Return the same generic `401` for every authentication failure.
 - Record the matched caller name for rate limiting and audit logs without
   recording the key itself.
-- Support an old and new key during credential rotation.
+- Allow an operator to replace the configured key manually.
 
 ### Rate limiting
 
@@ -794,6 +806,8 @@ Before production deployment:
 
 ### API tests
 
+- Every HTTP access, including health, readiness, 404, and authentication
+  failure responses, emits exactly one safe `http_access` event.
 - A valid authenticated request returns the documented schema.
 - The API logs every request step with the same `request_id` and appropriate
   success or failure event.
