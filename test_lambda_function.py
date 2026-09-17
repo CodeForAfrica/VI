@@ -1,5 +1,7 @@
 """Parity checks: the HTTP adapter changes model location, not business rules."""
 import os
+import io
+import json
 import sys
 import unittest
 from unittest import mock
@@ -86,6 +88,61 @@ class PipelineParityTests(unittest.TestCase):
         self.assertEqual(call["messages"][1]["content"], "Article text")
         self.assertEqual(call["model"], "test-model")
         service.client.infer.assert_called_once()
+
+
+class RequestLoggingTests(unittest.TestCase):
+    def capture(self, responses):
+        from inference_client import InferenceClient
+        from test_inference_client import FakeSession
+        service = PipelineParityTests().service(True, "Economic", .9, "Economic", .8)
+        service.client = InferenceClient(
+            "https://api.example", "private-key-not-for-logs",
+            session=FakeSession(responses), sleep=lambda _: None)
+        service.event_logger = lf._log
+        output = io.StringIO()
+        token = lf._LOG_CONTEXT.set({"invocation_id": "invocation-123", "article_id": 42})
+        try:
+            with mock.patch("sys.stdout", output), mock.patch("sys.stderr", output), \
+                    mock.patch("dashboard.services.remote_inference_service.uuid.uuid4", return_value="r"):
+                service.perform_inference("private article body")
+        finally:
+            lf._LOG_CONTEXT.reset(token)
+        raw = output.getvalue()
+        self.assertNotIn("private article body", raw)
+        self.assertNotIn("private-key-not-for-logs", raw)
+        events = [json.loads(line) for line in raw.splitlines() if line.startswith("{")]
+        for event in events:
+            self.assertEqual(event["article_id"], 42)
+            self.assertEqual(event["invocation_id"], "invocation-123")
+        return {event["event"]: event for event in events}
+
+    def test_retry_and_response_summary_are_correlated(self):
+        from test_inference_client import Resp, good
+        events = self.capture([Resp(503), Resp(200, good())])
+        started = events["local_inference_request_started"]
+        self.assertEqual(started["method"], "POST")
+        self.assertEqual(started["path"], "/api/v1/inference")
+        self.assertEqual(started["host"], "api.example")
+        self.assertEqual(events["local_inference_retry"]["http_status"], 503)
+        completed = events["local_inference_request_completed"]
+        self.assertEqual(completed["attempts"], 2)
+        self.assertEqual(completed["strategic_intent"], "Economic")
+        self.assertEqual(completed["processing_time_ms"], 12)
+        for name in ("local_inference_request_started", "local_inference_retry",
+                     "local_inference_request_completed", "article_inference_completed"):
+            self.assertEqual(events[name]["request_id"], "r")
+        self.assertGreaterEqual(completed["duration_ms"], 0)
+
+    def test_auth_failure_logs_reason_and_existing_fallback(self):
+        from test_inference_client import Resp
+        events = self.capture([Resp(401)])
+        failure = events["local_inference_request_failed"]
+        self.assertEqual(failure["http_status"], 401)
+        self.assertEqual(failure["error_code"], "http_401")
+        self.assertEqual(failure["attempts"], 1)
+        self.assertEqual(failure["fallback"], "existing_pipeline_defaults")
+        self.assertFalse(events["article_inference_completed"]["local_models_available"])
+        self.assertNotIn("local_inference_retry", events)
 
 
 class PersistenceTests(unittest.TestCase):
