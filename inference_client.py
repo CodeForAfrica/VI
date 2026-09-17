@@ -202,7 +202,7 @@ class InferenceClient:
             raise PermanentInferenceError("response article_id does not match request",
                                           code="response_article_id_mismatch")
         intent = data.get("strategic_intent")
-        if intent not in ALLOWED_INTENTS:
+        if not isinstance(intent, str) or not intent:
             # A 200 with an out-of-enum intent is a contract violation, not a
             # transient blip - do not retry it forever.
             raise PermanentInferenceError(f"invalid strategic_intent: {intent!r}",

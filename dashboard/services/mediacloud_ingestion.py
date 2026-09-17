@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 import mediacloud.api
 import trafilatura
 import cloudscraper
+import sys
 import os
 
 # ────────────────────────────────────────────────
@@ -26,8 +27,7 @@ db_columns = [
     "target_country", "url", "lang_detect", "strategic_intent",
     "sector", "tone", "confidence", "use_afrolm", "llm_strat",
     "llm_strat_conf", "llm_strat_notes", "pseudo_kept", "pseudo_weight",
-    "llm_strat_id", "strategic_intent_id", "inference_status",
-    "inference_attempts",
+    "llm_strat_id", "strategic_intent_id"
 ]
 
 logging.basicConfig(
@@ -123,7 +123,7 @@ def url_exists(url):
     try:
         with engine.connect() as conn:
             return conn.execute(query, {"url": url}).fetchone() is not None
-    except Exception:
+    except Exception as e:
         return False
 
 def scrape_full_text_robust(url):
@@ -185,8 +185,6 @@ def main():
                         "pseudo_kept": s.get("pseudo_kept", True),
                         "pseudo_weight": s.get("pseudo_weight", 1.0),
                         "use_afrolm": s.get("use_afrolm", False),
-                        "inference_status": "pending",
-                        "inference_attempts": 0,
                         # Other fields like strategic_intent, tone, confidence, vulnerability_index remain None initially
                     })
                     all_records.append(record)

@@ -23,6 +23,9 @@ resource "aws_lambda_function" "my_lambda" {
   environment {
     variables = {
       API_KEY              = var.mediacloud_api_key
+      MEDIACLOUD_API_KEY    = var.mediacloud_api_key
+      GROQ_API_KEY         = var.groq_api_key
+      GROQ_MODEL           = var.groq_model
       DB_HOST              = var.db_host
       DB_NAME              = var.db_name
       DB_USER              = var.db_user

@@ -1,5 +1,7 @@
 import pandas as pd
 import time
+import logging
+import socket # Need this for verify_dns
 from datetime import date, timedelta # Import timedelta
 from sqlalchemy import create_engine, text
 import mediacloud.api
@@ -7,11 +9,8 @@ import trafilatura
 import cloudscraper
 import sys
 import os
-import json
-import hashlib
-import re
-from datetime import datetime, timezone
-from urllib.parse import urlsplit
+import django # Need this for cache clearing
+from django.conf import settings # Need this for cache clearing
 from django.core.cache import cache # Need this for cache clearing
 
 
@@ -32,23 +31,22 @@ db_columns = [
     "target_country", "url", "lang_detect", "strategic_intent",
     "sector", "tone", "confidence", "use_afrolm", "llm_strat",
     "llm_strat_notes", "pseudo_kept", "pseudo_weight",
-    "llm_strat_id", "strategic_intent_id", "inference_status",
-    "inference_attempts",
+    "llm_strat_id", "strategic_intent_id"
 ]
 
-engine = create_engine(
-    f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}',
-    future=True,
-    hide_parameters=True,
+logging.basicConfig(
+    filename='scraping_log.txt',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+engine = create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}', future=True)
 API_KEY = os.getenv('MEDIACLOUD_API_KEY') # Use environment variable
-mc_search = mediacloud.api.SearchApi(API_KEY) if API_KEY else None
-MEDIACLOUD_TIMEOUT_SECONDS = max(
-    1.0, float(os.getenv("MEDIACLOUD_TIMEOUT_SECONDS", "30"))
-)
-if mc_search is not None:
-    # MediaCloud's BaseApi uses this value for every requests call.
-    mc_search.TIMEOUT_SECS = MEDIACLOUD_TIMEOUT_SECONDS
+if not API_KEY:
+    print("ERROR: MEDIACLOUD_API_KEY environment variable not set.")
+    sys.exit(1) # Exit if no key
+
+mc_search = mediacloud.api.SearchApi(API_KEY)
 
 
 # Daily ingester: only pull a recent window (not a full re-scan every run).
@@ -141,52 +139,39 @@ def url_exists(url):
     try:
         with engine.connect() as conn:
             return conn.execute(query, {"url": url}).fetchone() is not None
-    except Exception:
-        # A lookup failure is not proof that the URL is new. Let the caller log
-        # and count the database failure instead of risking a duplicate insert.
-        raise
+    except Exception as e:
+        return False
 
-def scrape_full_text_robust(url, deadline=None):
+def scrape_full_text_robust(url):
     for attempt in range(2):
-        if deadline is not None and time.time() >= deadline - 1:
-            return None, {
-                "error_code": "scrape_time_budget_exhausted",
-                "error_type": "DeadlineExceeded",
-                "attempts": attempt,
-            }
         try:
-            timeout = 20
-            if deadline is not None:
-                timeout = max(1, min(timeout, int(deadline - time.time() - 1)))
-            response = scraper.get(url, timeout=timeout)
+            response = scraper.get(url, timeout=20)
             if response.status_code == 200:
                 text_extracted = trafilatura.extract(response.text)
-                if text_extracted:
-                    return text_extracted, {"attempts": attempt + 1,
-                                            "http_status": response.status_code}
-                return None, {"error_code": "scrape_extraction_empty",
-                              "error_type": "ExtractionError",
-                              "http_status": response.status_code,
-                              "attempts": attempt + 1}
-            return None, {"error_code": "scrape_http_error",
-                          "error_type": "HttpError",
-                          "http_status": response.status_code,
-                          "attempts": attempt + 1}
+                return text_extracted if text_extracted else "Failed: Empty Content"
+            return f"Failed: HTTP {response.status_code}"
         except Exception as e:
             if attempt < 1:
-                delay = 3
-                if deadline is not None:
-                    delay = min(delay, max(0, deadline - time.time() - 1))
-                if delay <= 0:
-                    return None, {"error_code": "scrape_time_budget_exhausted",
-                                  "error_type": "DeadlineExceeded",
-                                  "attempts": attempt + 1}
-                time.sleep(delay)
+                time.sleep(3)
                 continue
-            return None, {"error_code": "scrape_request_failed",
-                          "error_type": type(e).__name__,
-                          "error_detail": str(e).replace(url, "[REDACTED_URL]")[:500],
-                          "attempts": attempt + 1}
+            return f"Error: {str(e)}"
+
+def print_progress(current, total, saved, failed):
+    percent = int((current / total) * 100)
+    bar_length = 25
+    filled = int(bar_length * current // total)
+    bar = '█' * filled + ' ' * (bar_length - filled)
+    print(f"\rProcessing: {percent:3d}% |{bar}| {current}/{total} (Saved: {saved}, Failed: {failed})", end='', flush=True)
+
+def verify_dns(host):
+    """Checks if the RDS endpoint is reachable before trying to connect."""
+    try:
+        socket.gethostbyname(host)
+        return True
+    except socket.gaierror:
+        print(f"DNS Error: Cannot resolve {host}")
+        print("Check if your RDS instance is 'Publicly Accessible' or if you are on the correct VPN/Network.")
+        return False
 
 def is_article_relevant(article_content, target_country_name):
     """
@@ -201,106 +186,25 @@ def is_article_relevant(article_content, target_country_name):
     # using regular expressions if partial matches are an issue.
     return target_country_name.lower() in article_content.lower()
 
-def _structured_log(level, event, **fields):
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z"),
-        "level": level,
-        "service": "vi-ingestion-lambda",
-        "event": event,
-    }
-    sensitive_parts = ("api_key", "accepted_key", "password", "secret", "authorization",
-                       "access_key", "session_token", "article_text")
-    secrets = [value for name, value in os.environ.items()
-               if value and any(part in name.lower() for part in sensitive_parts)]
-    for key, value in fields.items():
-        normalized = str(key).lower().replace("-", "_")
-        if normalized == "key" or any(part in normalized for part in sensitive_parts):
-            entry[key] = "[REDACTED]"
-            continue
-        if isinstance(value, str):
-            for secret in secrets:
-                value = value.replace(secret, "[REDACTED]")
-            value = re.sub(r"(://[^:/\s]+:)[^@/\s]+@",
-                           r"\1[REDACTED]@", value)
-        entry[key] = value
-    stream = sys.stderr if level in ("WARNING", "ERROR") else sys.stdout
-    stream.write(json.dumps(entry) + "\n")
-    stream.flush()
-
-
-def _url_log_fields(url):
-    """Safe URL identity: enough to correlate, without logging paths/queries."""
-    return {
-        "url_host": (urlsplit(url).hostname or "unknown")[:255],
-        "url_hash": hashlib.sha256(url.encode("utf-8")).hexdigest()[:16],
-    }
-
-
-def _mediacloud_request_timeout(deadline=None):
-    """Bound one MediaCloud request, preserving time for orderly shutdown."""
-    if deadline is None:
-        return MEDIACLOUD_TIMEOUT_SECONDS
-    remaining = deadline - time.time() - 1
-    if remaining <= 0:
-        return None
-    return min(MEDIACLOUD_TIMEOUT_SECONDS, remaining)
-
-
-def _database_error_code(exc):
-    """Return a useful driver code without serializing SQL bound parameters."""
-    original = getattr(exc, "orig", None)
-    return (getattr(original, "sqlstate", None)
-            or getattr(original, "pgcode", None)
-            or "unknown")
-
-
-def main(deadline=None, event_logger=None):
-    emit = event_logger or _structured_log
-    if mc_search is None:
-        emit("ERROR", "mediacloud_query_failed", error_type="ConfigurationError",
-             error_code="mediacloud_api_key_missing")
-        raise RuntimeError("MediaCloud API key is not configured")
+def main():
     all_records = []
-    found_count = skipped_count = inserted_count = failed_count = 0
-    query_attempts = query_failure_count = 0
-    emit("INFO", "mediacloud_query_started")
+    print("🛰️ Querying MediaCloud API...")
     # Time-budget the query-gathering phase so it can't eat the whole Lambda
     # runtime before scraping/inserting begins (ponytail: this loop had no guard).
     QUERY_BUDGET_SECONDS = 300
     query_start = time.time()
     # iteration to use TARGET_COLLECTION_IDS and ACTOR_COLLECTION_IDS
     for country, country_coll_id in TARGET_COLLECTION_IDS.items():
-        if (time.time() - query_start > QUERY_BUDGET_SECONDS
-                or (deadline is not None and time.time() >= deadline)):
-            emit("WARNING", "mediacloud_query_stopped", reason="time_budget_exhausted",
-                 articles_found=len(all_records))
+        if time.time() - query_start > QUERY_BUDGET_SECONDS:
+            print(f"Query budget ({QUERY_BUDGET_SECONDS}s) reached; proceeding with {len(all_records)} gathered.")
             break
         base_query = QUERY_BY_COUNTRY.get(country)
         for actor, actor_coll_id in ACTOR_COLLECTION_IDS.items():
-            if (time.time() - query_start > QUERY_BUDGET_SECONDS
-                    or (deadline is not None and time.time() >= deadline)):
+            if time.time() - query_start > QUERY_BUDGET_SECONDS:
                 break
-            attempt_started = time.time()
-            query_attempts += 1
             try:
                 time.sleep(0.5)
-                request_timeout = _mediacloud_request_timeout(deadline)
-                if request_timeout is None:
-                    emit("WARNING", "mediacloud_query_stopped",
-                         reason="time_budget_exhausted",
-                         articles_found=len(all_records))
-                    break
-                mc_search.TIMEOUT_SECS = request_timeout
-                emit("INFO", "mediacloud_query_attempt_started",
-                     target_country=country, inferred_actor=actor,
-                     attempt=query_attempts,
-                     timeout_seconds=round(request_timeout, 3))
                 stories, _ = mc_search.story_list(base_query, START_DATE, END_DATE, collection_ids=[actor_coll_id])
-                emit("INFO", "mediacloud_query_attempt_completed",
-                     target_country=country, inferred_actor=actor,
-                     attempt=query_attempts, articles_found=len(stories),
-                     duration_ms=int((time.time() - attempt_started) * 1000))
                 for s in stories:
                     record = {col: None for col in db_columns}
                     record.update({
@@ -312,102 +216,59 @@ def main(deadline=None, event_logger=None):
                         "lang_detect": s.get("language"),
                         "pseudo_kept": True,
                         "pseudo_weight": 1.0,
-                        "use_afrolm": False,
-                        "inference_status": "pending",
-                        "inference_attempts": 0,
+                        "use_afrolm": False
                     })
                     all_records.append(record)
             except Exception as e:
-                query_failure_count += 1
-                emit("ERROR", "mediacloud_query_failed", target_country=country,
-                     inferred_actor=actor, error_type=type(e).__name__,
-                     error_code="mediacloud_query_failed",
-                     error_detail=str(e)[:500], attempt=query_attempts,
-                     duration_ms=int((time.time() - attempt_started) * 1000))
+                logging.error(f"MediaCloud Error {country}-{actor}: {e}")
 
     df = pd.DataFrame(all_records)
-    found_count = len(df)
-    emit("INFO", "mediacloud_query_completed", articles_found=found_count,
-         query_attempts=query_attempts, query_failed=query_failure_count,
-         duration_ms=int((time.time() - query_start) * 1000))
-    if query_attempts and query_failure_count == query_attempts:
-        raise RuntimeError("all MediaCloud queries failed")
     if df.empty:
-        return {"found": 0, "skipped": 0, "inserted": 0,
-                "scrape_failed": 0, "deferred": 0,
-                "query_failed": query_failure_count}
+        print("❌ No articles found.")
+        print("Your existing records remain accessible in the dashboard.")
+        return
 
     # --- ADD AUTOMATION SAFEGUARDS ---
     MAX_ARTICLES_PER_RUN = 200
     MAX_RUNTIME_SECONDS = 800 # Example limit, adjust as needed for Lambda
     df = df.head(MAX_ARTICLES_PER_RUN) # Cap the number of articles processed
-    emit("INFO", "article_scrape_batch_started", articles=len(df),
-         limit=MAX_ARTICLES_PER_RUN)
+    print(f"✅ Found {len(df)} articles (capped at {MAX_ARTICLES_PER_RUN}). Starting Scraper...")
     # --- END ADD AUTOMATION SAFEGUARDS ---
 
     # --- ADD TIME BUDGET CHECK ---
     loop_start = time.time()
-    processed_count = 0
+    saved_count = 0
+    failed_count = 0 # Initialize counter
     # --- END ADD TIME BUDGET CHECK ---
 
     for idx, row in df.iterrows():
         # --- CHECK TIME BUDGET INSIDE LOOP ---
-        if (time.time() - loop_start > MAX_RUNTIME_SECONDS
-                or (deadline is not None and time.time() >= deadline)):
-            emit("WARNING", "article_scrape_stopped", reason="time_budget_exhausted",
-                 remaining=max(0, len(df) - int(idx)))
+        if time.time() - loop_start > MAX_RUNTIME_SECONDS:
+            print(f"\n⏰ Time budget ({MAX_RUNTIME_SECONDS}s) reached at article {idx}. Stopping to avoid Lambda timeout.")
             break # Exit the loop gracefully
         # --- END CHECK TIME BUDGET INSIDE LOOP ---
-        processed_count += 1
 
         url = row['url']
-        if not url or not isinstance(url, str):
-            skipped_count += 1
-            emit("INFO", "article_skipped", source_index=int(idx),
-                 reason="missing_or_invalid_url")
-            continue
-        url_fields = _url_log_fields(url)
-        try:
-            duplicate = url_exists(url)
-        except Exception as e:
-            failed_count += 1
-            emit("ERROR", "article_duplicate_check_failed", source_index=int(idx),
-                 database_operation="duplicate_check", error_type=type(e).__name__,
-                 error_code="database_duplicate_check_failed",
-                 database_error_code=_database_error_code(e),
-                 error_detail="Database duplicate check failed",
-                 **url_fields)
-            continue
-        if duplicate:
-            skipped_count += 1
-            emit("INFO", "duplicate_article_skipped", source_index=int(idx),
-                 reason="duplicate", **url_fields)
+        if not url or not isinstance(url, str) or url_exists(url):
+            failed_count += 1 # Increment failed counter for skipped URLs
             continue
 
-        scrape_started = time.time()
-        emit("INFO", "article_scrape_started", source_index=int(idx), **url_fields)
-        content, scrape_meta = scrape_full_text_robust(url, deadline=deadline)
+        content = scrape_full_text_robust(url)
 
         # --- CHECK CONTENT QUALITY  ---
-        has_content = bool(content and len(content) > 1000)
+        is_not_error = not content.startswith("Failed:") and not content.startswith("Error:")
+        has_content = len(content) > 1000 # Increased minimum length check
 
         # --- RELEVANCE CHECK (Integrated Logic) ---
         # Extract the target country from the row
         target_country_from_query = row['target_country'] # Use the country from the query loop
 
         # Perform the relevance check: is the target country mentioned in the scraped content?
-        is_relevant = bool(
-            content
-            and isinstance(target_country_from_query, str)
-            and is_article_relevant(content, target_country_from_query)
-        )
+        is_relevant = is_article_relevant(content, target_country_from_query)
 
-        if has_content and is_relevant:
+        if is_not_error and has_content and is_relevant:
             # All checks passed: quality and relevance
-            emit("INFO", "article_scrape_completed", source_index=int(idx),
-                 target_country=target_country_from_query,
-                 duration_ms=int((time.time() - scrape_started) * 1000),
-                 attempts=scrape_meta.get("attempts"), **url_fields)
+            print(f"[{idx+1}/{len(df)}] ✅ Relevant Article: Processing {url[:40]}... (Target: {target_country_from_query})")
 
             row_data = row.to_dict()
             row_data['article_text'] = content
@@ -419,60 +280,32 @@ def main(deadline=None, event_logger=None):
                 final_df = pd.DataFrame([row_data])[db_columns]
                 with engine.begin() as conn:
                     final_df.to_sql(DB_TABLE, conn, if_exists='append', index=False) # Use DB_TABLE constant
-                inserted_count += 1
-                emit("INFO", "article_inserted", source_index=int(idx),
-                     target_country=row['target_country'], **url_fields)
+                saved_count += 1
+                print(f"[{idx+1}/{len(df)}] Saved ({row['target_country']}): {url[:40]}...")
             except Exception as e:
-                emit("ERROR", "article_insert_failed", source_index=int(idx),
-                     database_operation="insert_article",
-                     error_type=type(e).__name__, error_code="database_insert_failed",
-                     database_error_code=_database_error_code(e),
-                     error_detail="Database rejected the article insert",
-                     **url_fields)
-                failed_count += 1
-        elif content and has_content and not is_relevant:
+                logging.error(f"DB Insert Error for {url}: {e}")
+                failed_count += 1 # Increment failed counter for DB errors
+        elif not is_relevant:
             # Relevance check failed
-            skipped_count += 1
-            emit("INFO", "article_skipped", source_index=int(idx), reason="irrelevant",
-                 target_country=target_country_from_query, **url_fields)
+            print(f"[{idx+1}/{len(df)}] 🚫 Irrelevant Article: Skipping {url[:40]}... (Target: {target_country_from_query}, not found in text)")
+            failed_count += 1 # Consider this a "failure" to meet the relevance criterion
             continue # Explicitly continue, though not strictly necessary here due to elif structure
         else:
             # Either scraping failed or content was too short
             failed_count += 1 # Increment failed counter for scraping errors/low content
-            failure = scrape_meta if not content else {
-                "error_code": "scrape_content_too_short",
-                "error_type": "ContentQualityError",
-                "content_length": len(content),
-                "attempts": scrape_meta.get("attempts"),
-            }
-            emit("ERROR", "article_scrape_failed", source_index=int(idx),
-                 duration_ms=int((time.time() - scrape_started) * 1000),
-                 **failure, **url_fields)
+            print(f"[{idx+1}/{len(df)}] ❌ Real Failure: {content[:50]}... for {str(url)[:30]}")
 
         time.sleep(0.5) # Respectful delay
 
-    deferred_count = max(0, found_count - processed_count)
-    emit("INFO", "article_scrape_batch_completed", found=found_count,
-         processed=processed_count, skipped=skipped_count, inserted=inserted_count,
-         scrape_failed=failed_count, deferred=deferred_count,
-         query_failed=query_failure_count)
+    print(f"\n\n🏁 Finished. Saved: {saved_count}, Failed/Timed-out: {failed_count}. Check your database now.")
 
     # --- ADD CACHE CLEARING ---
+    print("🧹 Cleaning dashboard cache...")
     try:
         cache.clear()
-        emit("INFO", "dashboard_cache_cleared")
+        print("✅ Cache cleared successfully!")
     except Exception as e:
-        emit("WARNING", "dashboard_cache_clear_failed", error_type=type(e).__name__,
-             error_code="cache_clear_failed", error_detail=str(e)[:500])
-
-    return {
-        "found": found_count,
-        "skipped": skipped_count,
-        "inserted": inserted_count,
-        "scrape_failed": failed_count,
-        "deferred": deferred_count,
-        "query_failed": query_failure_count,
-    }
+        print(f"⚠️ Cache clear failed: {e}")
     # --- END ADD CACHE CLEARING ---
 
 

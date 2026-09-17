@@ -377,7 +377,7 @@ class ResponseMappingTests(SimpleTestCase):
         def __init__(self, payload):
             self.payload = payload
 
-        def perform_inference(self, text):
+        def perform_local_inference(self, text):
             return self.payload
 
     def run_with(self, payload):
@@ -396,27 +396,27 @@ class ResponseMappingTests(SimpleTestCase):
     def tearDown(self):
         runtime._service_holder["service"] = None
 
-    def test_raw_intent_canonicalized(self):
+    def test_raw_intent_preserved(self):
         r = self.run_with({"strategic_intent": "economic dependency", "confidence": 0.9,
                            "tone": "Factual"})
-        self.assertEqual(r["strategic_intent"], "Economic")
+        self.assertEqual(r["strategic_intent"], "economic dependency")
 
-    def test_neutral_kept_explicit_not_null(self):
+    def test_neutral_case_preserved_for_caller(self):
         for raw in ("neutral", "Neutral"):
             r = self.run_with({"strategic_intent": raw, "confidence": 0.1, "tone": "Factual"})
-            self.assertEqual(r["strategic_intent"], "Neutral")
+            self.assertEqual(r["strategic_intent"], raw)
 
-    def test_unknown_intent_raises_instead_of_becoming_neutral(self):
-        for raw in ("unknown", "some gibberish", None):
+    def test_missing_label_is_invalid(self):
+        for raw in (None, ""):
             with self.assertRaises(RuntimeError):
                 self.run_with({"strategic_intent": raw})
 
-    def test_confidences_rounded_4dp(self):
+    def test_confidence_precision_is_preserved(self):
         r = self.run_with({"strategic_intent": "Sovereignty", "confidence": 0.876543,
                            "strategic_intent_confidence": 0.876543,
                            "tone_confidence": 0.111119, "tone": "Factual"})
-        self.assertEqual(r["strategic_intent_confidence"], 0.8765)
-        self.assertEqual(r["tone_confidence"], 0.1111)
+        self.assertEqual(r["strategic_intent_confidence"], 0.876543)
+        self.assertEqual(r["tone_confidence"], 0.111119)
 
     def test_invalid_confidence_raises(self):
         with self.assertRaises(RuntimeError):
@@ -426,80 +426,6 @@ class ResponseMappingTests(SimpleTestCase):
         runtime._service_holder["service"] = None
         with self.assertRaises(RuntimeError):
             runtime.run_inference("x")
-
-
-class LocalOnlyStrategicInferenceTests(SimpleTestCase):
-    """Execute the actual service method without importing heavyweight ML SDKs."""
-
-    def setUp(self):
-        from dashboard.services.strategic_arbitration import choose_strategic_prediction
-        path = Path(__file__).resolve().parents[1] / "dashboard/services/ml_inference_service.py"
-        tree = ast.parse(path.read_text())
-        method = next(node for node in ast.walk(tree)
-                      if isinstance(node, ast.FunctionDef)
-                      and node.name == "perform_strategic_intent_inference")
-        self.events = mock.Mock()
-        namespace = {"os": os, "time": time, "choose_strategic_prediction": choose_strategic_prediction,
-                     "logging": logging, "logger": logging.getLogger(__name__),
-                     "np": types.SimpleNamespace(max=max), "_api_event": self.events}
-        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), "exec"), namespace)
-        self.infer = namespace[method.name]
-        self.service = mock.Mock()
-        self.service._load_strategic_classifier.return_value.predict.return_value = (
-            ["Economic"], [[0.2, 0.8]])
-        self.service._decode_label.return_value = "Economic"
-        self.service.lookup_risk.return_value = 0.0
-
-    def test_api_uses_local_result_even_with_groq_key_present(self):
-        with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "1", "GROQ_API_KEY": "unused"}):
-            result = self.infer(self.service, "article")
-        self.assertEqual(result, ("Economic", 0.8, 0.0, "model", "Local models only"))
-        self.service._get_llm_strategic_intent.assert_not_called()
-        self.events.assert_any_call("INFO", "arbitration_skipped", reason="local_models_only")
-
-    def test_legacy_dashboard_still_uses_its_existing_arbitration(self):
-        self.service._get_llm_strategic_intent.return_value = ("Economic", 0.9, "confirmed")
-        with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "0"}):
-            result = self.infer(self.service, "article")
-        self.service._get_llm_strategic_intent.assert_called_once_with("article")
-        self.assertEqual(result[3], "ensemble_matched_confirmed")
-
-    def test_local_failure_raises_without_external_fallback(self):
-        for failure in (None, RuntimeError("model failed")):
-            with self.subTest(failure=failure):
-                self.service._load_strategic_classifier.return_value = None
-                self.service._load_strategic_classifier.side_effect = failure
-                with mock.patch.dict(os.environ, {"VI_INFERENCE_SERVER": "1"}):
-                    with self.assertRaisesRegex(RuntimeError, "Local strategic model"):
-                        self.infer(self.service, "article")
-                self.service._get_llm_strategic_intent.assert_not_called()
-
-
-class StrategicInferenceAvailabilityTests(SimpleTestCase):
-    """Operational source failures must remain retryable, not become 422s."""
-
-    def test_both_sources_failing_raises_retryable_runtime_error(self):
-        from dashboard.services.strategic_arbitration import (
-            choose_strategic_prediction,
-        )
-
-        with self.assertRaisesRegex(
-                RuntimeError, "No strategic inference source produced"):
-            choose_strategic_prediction(
-                "unknown", 0.0, False, "Neutral", 0.0, False
-            )
-
-    def test_llm_result_is_used_when_local_model_is_unavailable(self):
-        from dashboard.services.strategic_arbitration import (
-            choose_strategic_prediction,
-        )
-
-        intent, confidence, source = choose_strategic_prediction(
-            "unknown", 0.0, False, "Neutral", 0.0, True
-        )
-        self.assertEqual(intent, "Neutral")
-        self.assertEqual(confidence, 0.0)
-        self.assertEqual(source, "llm")
 
 
 class WarmupReadinessTests(SimpleTestCase):
@@ -520,21 +446,3 @@ class WarmupReadinessTests(SimpleTestCase):
             runtime._warmup()
         self.assertFalse(runtime.is_ready())
         self.assertIsNone(runtime._service_holder["service"])
-
-
-class MigrationBackfillTests(TestCase):
-    def test_existing_classification_without_timestamp_is_completed(self):
-        from dashboard.models import MediaNarrative
-
-        article = MediaNarrative.objects.create(
-            article_text="historically classified article",
-            strategic_intent="Economic",
-            ml_processed_at=None,
-            inference_status="pending",
-        )
-        migration = importlib.import_module(
-            "dashboard.migrations.0010_medianarrative_inference_state"
-        )
-        migration.set_existing_states(apps, None)
-        article.refresh_from_db()
-        self.assertEqual(article.inference_status, "completed")

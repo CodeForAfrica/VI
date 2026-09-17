@@ -46,3 +46,15 @@ variable "security_group_ids" {
   type    = list(string)
   default = []
 }
+variable "groq_api_key" {
+  description = "Existing Groq credential used by Lambda arbitration, never the model server."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "groq_model" {
+  description = "Groq model used by the unchanged caller-side arbitration."
+  type        = string
+  default     = "qwen/qwen3.6-27b"
+}

@@ -5,11 +5,11 @@ RUN dnf install -y gcc gcc-c++ postgresql-devel cairo-devel pkg-config && dnf cl
 
 RUN pip install --upgrade pip setuptools wheel
 
-# Ingestion-only dependencies. The heavy ML stack (torch, transformers, etc.) is
-# intentionally NOT installed here - classification moved to the classifier
-# container. This is what keeps the image well under Lambda's 10GB limit.
+# Caller orchestration dependencies. Torch/Transformers classifiers are remote;
+# Groq, entity extraction, scoring, and persistence remain in Lambda.
 COPY requirements-lambda.txt .
 RUN pip install --no-cache-dir -r requirements-lambda.txt
+RUN python -m spacy download en_core_web_sm
 
 # Copy only what Lambda needs
 COPY lambda_function.py .

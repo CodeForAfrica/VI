@@ -1,7 +1,7 @@
 # dashboard/management/commands/fill_missing_intents.py
 import time
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
 from dashboard.models import MediaNarrative
 # Use your existing service helper
@@ -104,9 +104,6 @@ class Command(BaseCommand):
                 article.confidence = inference_result.get('confidence', 0.0) # Update confidence from result dict
                 article.tone = inference_result.get('tone', 'Factual') # Update tone from result dict
                 article.ml_processed_at = timezone.now() # Mark as processed so Neutral/NULL rows don't re-run forever
-                article.inference_status = 'completed'
-                article.inference_error_code = None
-                article.inference_attempts = (article.inference_attempts or 0) + 1
                 # Optionally update other fields like inferred_actor, target_country if needed
                 # article.inferred_actor = inference_result.get('inferred_actor', article.inferred_actor) # Keep original if not found
                 # article.target_country = inference_result.get('target_country', article.target_country) # Keep original if not found
@@ -150,13 +147,6 @@ class Command(BaseCommand):
                 pd.DataFrame(backup_data).to_csv(backup_file, index=False)
                 self.stdout.write(f"💾 Final backup saved to {backup_file}")
 
-            # The per-article ML work above can run for many minutes, long enough
-            # for Postgres to drop the connection opened at the start of the command
-            # (seen as "connection already closed" on this final write, losing the
-            # whole batch). Drop the stale connection so the ORM reconnects fresh for
-            # the write. Results are already in memory, so no data is lost.
-            connection.close()
-
             # Use bulk_update to efficiently save all changes
             # Chunked save might be needed for very large datasets, but bulk_update often handles this well internally
             chunk_size = 1000
@@ -165,11 +155,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
                     # Include 'tone' and 'confidence' if you updated them above
-                    fields_to_update = [
-                        'strategic_intent', 'confidence', 'tone', 'ml_processed_at',
-                        'inference_status', 'inference_error_code',
-                        'inference_attempts',
-                    ]
+                    fields_to_update = ['strategic_intent', 'confidence', 'tone', 'ml_processed_at'] # Add other fields updated above if any
                     MediaNarrative.objects.bulk_update(
                         chunk,
                         fields_to_update,
@@ -184,9 +170,9 @@ class Command(BaseCommand):
         # Final Summary
         end_time = time.time()
         duration_minutes = (end_time - start_time) / 60
-        self.stdout.write(self.style.NOTICE("--- SUMMARY ---"))
+        self.stdout.write(self.style.NOTICE(f"--- SUMMARY ---"))
         self.stdout.write(self.style.NOTICE(f"Total attempted: {total}"))
         self.stdout.write(self.style.NOTICE(f"Successfully processed: {processed_count}"))
         self.stdout.write(self.style.NOTICE(f"Failed to process: {failed_count}"))
         self.stdout.write(self.style.NOTICE(f"Duration: {duration_minutes:.2f} minutes"))
-        self.stdout.write(self.style.SUCCESS("🎉 Command completed."))
+        self.stdout.write(self.style.SUCCESS(f"🎉 Command completed."))

@@ -123,9 +123,9 @@ class InferenceClientTests(unittest.TestCase):
             c.infer("r", "t")
         self.assertEqual(cm.exception.code, "inference_dns_failed")
 
-    def test_out_of_enum_intent_is_permanent(self):
-        with self.assertRaises(PermanentInferenceError):
-            client([Resp(200, good(strategic_intent="Bogus"))]).infer("r", "t")
+    def test_raw_label_is_preserved_for_caller_arbitration(self):
+        result = client([Resp(200, good(strategic_intent="unknown"))]).infer("r", "t")
+        self.assertEqual(result["strategic_intent"], "unknown")
 
     def test_non_json_200_is_permanent(self):
         with self.assertRaises(PermanentInferenceError):

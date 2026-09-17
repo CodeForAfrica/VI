@@ -83,7 +83,7 @@ def _warmup():
             log_event("INFO", "model_download_completed", model_version=MODEL_VERSION,
                       duration_ms=int((time.time() - started) * 1000))
         failure_stage = "warmup_inference"
-        warmup_result = service.perform_inference("warmup")
+        warmup_result = service.perform_local_inference("warmup")
         failure_stage = "warmup_response_validation"
         _shape_result(warmup_result, "warmup")
         _service_holder["service"] = service
@@ -129,19 +129,6 @@ def start_warmup():
     threading.Thread(target=_warmup, name="model-warmup", daemon=True).start()
 
 
-def _map_intent(raw):
-    """Canonicalize, but keep Neutral explicit - NULL means unprocessed, a
-    correctly-Neutral article is a processed result (spec 358-360)."""
-    from dashboard.utils import map_to_canonical_intent
-    if isinstance(raw, str) and raw.strip().lower() == "neutral":
-        return "Neutral"
-    canonical = map_to_canonical_intent(raw)
-    if canonical:
-        return canonical
-    raise InferenceRuntimeError("unknown_strategic_intent",
-                                "model returned an unknown strategic intent")
-
-
 def _detect_language(article_text):
     try:
         from langdetect import LangDetectException, detect
@@ -163,17 +150,18 @@ def _as_confidence(result, field, fallback=None):
     if not 0.0 <= value <= 1.0:
         raise InferenceRuntimeError(
             f"invalid_{field}", f"model returned out-of-range {field}")
-    return round(value, 4)
+    return value
 
 
 def _shape_result(result, article_text):
     if not isinstance(result, dict):
         raise InferenceRuntimeError("invalid_model_result",
                                     "model returned an invalid result")
-    intent = _map_intent(result.get("strategic_intent"))
-    if intent not in ALLOWED_INTENTS:
-        raise InferenceRuntimeError("unsupported_strategic_intent",
-                                    "model returned an unsupported strategic intent")
+    # Preserve raw labels and precision: canonicalization/arbitration belong to
+    # the caller and must see exactly what the in-process classifier returned.
+    intent = result.get("strategic_intent")
+    if not isinstance(intent, str) or not intent:
+        raise InferenceRuntimeError("invalid_model_result", "model returned an invalid label")
     tone = result.get("tone")
     if not isinstance(tone, str) or not tone.strip():
         raise InferenceRuntimeError("invalid_tone", "model returned an invalid tone")
@@ -205,7 +193,7 @@ def run_inference(article_text):
 
     started = time.time()
     with _inference_slot:
-        result = service.perform_inference(article_text)
+        result = service.perform_local_inference(article_text)
     elapsed_ms = int((time.time() - started) * 1000)
 
     shaped = _shape_result(result, article_text)

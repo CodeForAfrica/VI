@@ -1,12 +1,11 @@
-# Ingestion-only dependencies for the Lambda image.
+# Ingestion and orchestration dependencies; only heavyweight classifiers are remote.
 #
-# The Lambda now only ingests (see lambda_function.py); classification moved to
-# the dedicated classifier container, which installs the full requirements.txt.
+# Lambda ingests and runs the existing orchestration, Groq arbitration and scoring.
+# Only the strategic/tone model implementations moved to the classifier server.
 # The heavy ML stack (torch, transformers, tokenizers, peft, accelerate,
 # scikit-learn, cleanlab, venn-abers, skops, sentencepiece) is intentionally
 # excluded here - it is multiple GB and is what pushed the Lambda image toward
-# the 10GB limit. spaCy/nltk/yake and the PDF/plot packages are web/ML-only and
-# are also excluded; the ingestion service imports only the packages below.
+# the 10GB limit. spaCy is retained for existing caller-side entity extraction.
 #
 # Versions are pinned to what resolves in the current image (via pip freeze), so
 # the Lambda builds reproducibly and matches the tested classifier environment.
@@ -38,3 +37,7 @@ botocore==1.43.87
 Django==4.2.30
 django-redis==6.0.0
 python-dotenv==1.2.2
+
+# Existing Groq arbitration and entity extraction remain in the caller.
+groq
+spacy

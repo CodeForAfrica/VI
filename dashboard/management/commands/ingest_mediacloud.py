@@ -2,6 +2,7 @@ import pandas as pd
 import time
 import os
 import logging
+import socket
 from datetime import date
 from sqlalchemy import create_engine, text
 import mediacloud.api
@@ -28,8 +29,7 @@ db_columns = [
     'prediction_source', 'lang_detect', 'use_afrolm', 'llm_strat', 'llm_strat_conf',
     'llm_strat_notes', 'pseudo_kept', 'pseudo_weight', 'llm_strat_id', 
     'strategic_intent_id', 'author',  
-    'journalist_fk_id', 'media_outlet_fk_id', 'ml_processed_at', 'is_anchor',
-    'true_label', 'inference_status', 'inference_attempts'
+    'journalist_fk_id', 'media_outlet_fk_id', 'ml_processed_at', 'is_anchor', 'true_label'
 ]
 
 logging.basicConfig(
@@ -109,7 +109,7 @@ def url_exists(url):
     try:
         with engine.connect() as conn:
             return conn.execute(query, {"url": url}).fetchone() is not None
-    except Exception:
+    except:
         return False
 
 def scrape_full_text_robust(url):
@@ -179,7 +179,7 @@ def extract_author_from_url(url, html_content=None):
                         name = author[0]['name'].strip()
                         if name and name.lower() not in ['unknown', 'none', 'n/a', 'staff', 'editor', 'by']:
                             return name
-            except Exception:
+            except:
                 continue
         
         # Strategy 3: Common CSS selectors
@@ -219,7 +219,7 @@ def extract_author_from_url(url, html_content=None):
 def main():
     check_collection_health()
     all_records = []
-    print("🛰️  Querying MediaCloud API...")
+    print(f"🛰️  Querying MediaCloud API...")       
     
     # Use a persistent session to help with headers/stability
     session = requests.Session()
@@ -227,8 +227,7 @@ def main():
 
     for target_country, target_coll_id in TARGET_COLLECTION_IDS.items():
         base_query = QUERY_BY_COUNTRY.get(target_country)
-        if not base_query:
-            continue
+        if not base_query: continue
             
         for actor_name, actor_coll_id in ACTOR_COLLECTION_IDS.items():
             stories = None
@@ -286,9 +285,7 @@ def main():
                         "pseudo_weight": 1.0,
                         "confidence": 1.0,
                         "use_afrolm": False,
-                        "author": author_name,
-                        "inference_status": "pending",
-                        "inference_attempts": 0,
+                        "author": author_name  
                     })
                     all_records.append(record)
                 

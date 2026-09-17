@@ -189,7 +189,7 @@ class Command(BaseCommand):
                 
                 # Step 6: Save to database (or dry run)
                 if dry_run:
-                    self.stdout.write(self.style.WARNING("   [DRY RUN] Would save:"))
+                    self.stdout.write(self.style.WARNING(f"   [DRY RUN] Would save:"))
                     self.stdout.write(f"       - article_text: {len(text)} chars")
                     self.stdout.write(f"       - strategic_intent: {strategic_intent}")
                     self.stdout.write(f"       - tone: {tone}")
@@ -204,11 +204,6 @@ class Command(BaseCommand):
                     article.lang_detect = lang_detect
                     article.vulnerability_index = vulnerability_index
                     article.ml_processed_at = django.utils.timezone.now()
-                    article.inference_status = 'completed'
-                    article.inference_error_code = None
-                    article.inference_attempts = (
-                        article.inference_attempts or 0
-                    ) + 1
                     article.save()
                     
                     self.stdout.write(self.style.SUCCESS(f"   ✅ Saved: ID {article.id}"))
@@ -224,7 +219,7 @@ class Command(BaseCommand):
         ml_service.cleanup()
         
         # Summary
-        self.stdout.write(self.style.SUCCESS("\n--- Pipeline Complete ---"))
+        self.stdout.write(self.style.SUCCESS(f"\n--- Pipeline Complete ---"))
         self.stdout.write(f"Processed: {processed}")
         self.stdout.write(f"Skipped: {skipped}")
         self.stdout.write(f"Errors: {errors}")

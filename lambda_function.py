@@ -7,24 +7,19 @@ import traceback
 import uuid
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
 
 # Add the dashboard directory to Python path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(CURRENT_DIR)
 
-# ML classification is intentionally NOT loaded in this process: the ~13GB
-# ensemble exceeds Lambda's 10GB limits and moved to the vi-model-inference
-# HTTP API. This Lambda ingests, then calls that API per pending article and
-# writes back the prediction (solution-spec).
+# Only the heavy classifiers are remote. Lambda retains the existing Groq,
+# arbitration, entity extraction, scoring, canonicalization and database logic.
 #
 # psycopg2 and the MediaCloud ingestion service are imported lazily inside the
 # functions that use them so this module can be imported (and unit-tested)
 # without a database driver or the ingestion stack present.
 from inference_client import (  # noqa: E402
     InferenceClient,
-    PermanentInferenceError,
-    RetryableInferenceError,
 )
 
 TABLE_NAME = "dashboard_medianarrative"
@@ -33,7 +28,6 @@ TABLE_NAME = "dashboard_medianarrative"
 # backlog (or an inference outage) cannot make a run unbounded (spec 633-635).
 MAX_INFERENCE_PER_RUN = int(os.environ.get("VI_INFERENCE_MAX_PER_RUN", "200"))
 LAMBDA_SAFETY_SECONDS = int(os.environ.get("VI_LAMBDA_SAFETY_SECONDS", "30"))
-INFERENCE_RESERVE_SECONDS = int(os.environ.get("VI_INFERENCE_RESERVE_SECONDS", "180"))
 _LOG_CONTEXT = ContextVar("vi_lambda_log_context", default={})
 _SENSITIVE_FIELD_PARTS = (
     "api_key", "accepted_key", "authorization", "password", "secret", "access_key",
@@ -110,6 +104,10 @@ def lambda_handler(event, context):
                             if context and hasattr(context, "get_remaining_time_in_millis")
                             else None))
     try:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+        import django
+        django.setup()
+
         # Map Environment Variables (Ensures consistency)
         os.environ['API_KEY'] = os.environ.get('MEDIACLOUD_API_KEY', '')
 
@@ -127,13 +125,10 @@ def lambda_handler(event, context):
 
         deadline = _lambda_deadline(context)
 
-        # 1. Ingest: query MediaCloud, scrape, insert pending rows (null intent).
-        ingestion_deadline = None
-        if deadline is not None:
-            ingestion_deadline = max(time.time(), deadline - INFERENCE_RESERVE_SECONDS)
+        # Preserve the existing MediaCloud ingestion behavior.
         phase = "mediacloud_ingestion"
-        ingestion = run_mediacloud_ingestion(
-            deadline=ingestion_deadline, event_logger=_log) or {}
+        run_mediacloud_ingestion()
+        ingestion = {}
 
         # 2. Quality validation (cheap SQL).
         phase = "quality_validation"
@@ -230,7 +225,7 @@ def fetch_pending(conn, limit):
             SELECT id, article_text, target_country, inferred_actor
             FROM {TABLE_NAME}
             WHERE ml_processed_at IS NULL
-              AND (inference_status IS NULL OR inference_status = 'pending')
+              AND (strategic_intent IS NULL OR strategic_intent = '')
               AND article_text IS NOT NULL AND article_text <> ''
               AND lower(article_text) <> 'no content available'
             ORDER BY id
@@ -240,172 +235,53 @@ def fetch_pending(conn, limit):
 
 
 def save_classification(conn, article_id, result):
-    """Persist a successful prediction. Neutral is stored as-is (an explicit,
-    processed result), never converted back to NULL (spec 358-360)."""
+    """Match fill_missing_intents: canonical intent, confidence, tone, processed time."""
+    from dashboard.utils import map_to_canonical_intent
     with conn.cursor() as cur:
         cur.execute(f"""
             UPDATE {TABLE_NAME}
-            SET strategic_intent = %s, tone = %s, confidence = %s,
-                prediction_source = %s, lang_detect = %s,
-                inference_status = 'completed', inference_error_code = NULL,
-                inference_attempts = inference_attempts + 1,
+            SET strategic_intent = %s, confidence = %s, tone = %s,
                 ml_processed_at = NOW()
             WHERE id = %s
-        """, (
-            result.get("strategic_intent"),
-            result.get("tone"),
-            result.get("confidence"),
-            result.get("prediction_source"),
-            result.get("lang_detect"),
-            article_id,
-        ))
-        conn.commit()
+        """, (map_to_canonical_intent(result.get("strategic_intent")),
+              result.get("confidence", 0.0), result.get("tone", "Factual"), article_id))
+    conn.commit()
 
 
-def mark_classification_failure(conn, article_id, status, error_code):
-    with conn.cursor() as cur:
-        cur.execute(f"""
-            UPDATE {TABLE_NAME}
-            SET inference_status = %s, inference_error_code = %s,
-                inference_attempts = inference_attempts + 1
-            WHERE id = %s
-        """, (status, str(error_code or "unknown")[:64], article_id))
-        conn.commit()
-
-
-def _error_fields(error):
-    return {
-        "error_type": type(error).__name__,
-        "error_code": error.code or "inference_unknown_error",
-        "error_detail": _safe_error(error),
-        "http_status": getattr(error, "status_code", None),
-        "attempts": getattr(error, "attempts", None),
-    }
-
-
-def _record_failure_state(conn, article_id, status, error_code, request_id):
-    try:
-        mark_classification_failure(conn, article_id, status, error_code)
-        _log("INFO", "article_classification_state_saved",
-             request_id=request_id, article_id=article_id,
-             inference_status=status, error_code=error_code)
-        return True
-    except Exception as exc:  # keep one bad status write from aborting the batch
-        conn.rollback()
-        _log("ERROR", "article_classification_save_failed",
-             request_id=request_id, article_id=article_id,
-             database_operation="update_failure_status", target_status=status,
-             error_type=type(exc).__name__, error_code="database_update_failed",
-             error_detail=_safe_error(exc), stack_trace=_safe_traceback())
-        _log("ERROR", "pending_retry_failed", request_id=request_id,
-             article_id=article_id, error_code="database_update_failed")
-        return False
-
-
-def classify_pending(conn, client=None, deadline=None):
+def classify_pending(conn, client=None, deadline=None, pipeline=None):
     rows = fetch_pending(conn, MAX_INFERENCE_PER_RUN)
-    if client is None:
-        client = _build_client()
-    if client is None:
-        _log("WARNING", "inference_skipped",
-             reason="VI_INFERENCE_API_URL / VI_INFERENCE_API_KEY not set")
-        return {"inference": "skipped", "found_pending": len(rows),
-                "classified": 0, "left_pending": len(rows), "failed": 0}
-
+    client = client or _build_client()
     counts = {"found_pending": len(rows), "classified": 0, "left_pending": 0, "failed": 0}
-    _log("INFO", "pending_retry_started", pending=len(rows), limit=MAX_INFERENCE_PER_RUN)
+    if client is None and pipeline is None:
+        _log("WARNING", "inference_skipped", reason="inference API is not configured")
+        return {**counts, "inference": "skipped", "left_pending": len(rows)}
+    if pipeline is None:
+        from dashboard.services.remote_inference_service import RemoteInferenceService
+        pipeline = RemoteInferenceService(client, deadline=deadline, event_logger=_log)
 
-    for article_id, article_text, target_country, inferred_actor in rows:
+    _log("INFO", "pending_retry_started", pending=len(rows))
+    for index, (article_id, article_text, target_country, inferred_actor) in enumerate(rows):
         if deadline is not None and time.time() >= deadline - 1:
-            remaining = len(rows) - counts["classified"] - counts["failed"] - counts["left_pending"]
-            counts["left_pending"] += remaining
-            _log("WARNING", "pending_retry_stopped", reason="time_budget_exhausted",
-                 remaining=remaining)
+            counts["left_pending"] += len(rows) - index
+            _log("WARNING", "pending_retry_stopped", reason="time_budget_exhausted")
             break
-        request_id = str(uuid.uuid4())
-        request_started = time.time()
-        _log("INFO", "inference_request_started",
-             request_id=request_id, article_id=article_id,
-             inference_host=(urlsplit(client.base_url).hostname
-                             if getattr(client, "base_url", None) else None),
-             timeout_seconds=getattr(client, "timeout", None),
-             max_attempts=getattr(client, "max_attempts", None))
+        token = _LOG_CONTEXT.set({**_LOG_CONTEXT.get(), "article_id": article_id})
         try:
-            result = client.infer(
-                request_id=request_id,
-                article_text=article_text,
-                article_id=article_id,
-                target_country=target_country,
-                inferred_actor=inferred_actor,
-                on_retry=lambda attempt, max_attempts, error,
-                rid=request_id, aid=article_id: _log(
-                    "WARNING", "inference_request_retrying",
-                    request_id=rid, article_id=aid, attempt=attempt,
-                    max_attempts=max_attempts, will_retry=True,
-                    **_error_fields(error)),
-                deadline=deadline,
-            )
-            _log("INFO", "inference_response_validated", request_id=request_id,
-                 article_id=article_id, http_status=200,
-                 attempt=result.get("_client_attempts"),
-                 attempt_duration_ms=result.get("_client_attempt_duration_ms"))
-            _log("INFO", "inference_request_completed", request_id=request_id,
-                 article_id=article_id, status="success",
-                 attempt=result.get("_client_attempts"),
-                 max_attempts=getattr(client, "max_attempts", None),
-                 duration_ms=int((time.time() - request_started) * 1000),
-                 api_processing_time_ms=result.get("processing_time_ms"),
-                 model_version=result.get("model_version"))
-        except PermanentInferenceError as e:
-            state_saved = _record_failure_state(
-                conn, article_id, "failed", e.code, request_id
-            )
-            if state_saved:
-                counts["failed"] += 1
-            else:
-                counts["left_pending"] += 1
-            _log("ERROR", "inference_response_invalid",
-                 request_id=request_id, article_id=article_id,
-                 **_error_fields(e))
-            _log("ERROR", "inference_request_failed",
-                 request_id=request_id, article_id=article_id, retryable=False,
-                 will_retry=False,
-                 duration_ms=int((time.time() - request_started) * 1000),
-                 **_error_fields(e))
-            continue
-        except RetryableInferenceError as e:
-            # Transient after all attempts: stays pending for a later invocation.
-            counts["left_pending"] += 1
-            _record_failure_state(conn, article_id, "pending", e.code, request_id)
-            _log("WARNING", "inference_request_failed",
-                 request_id=request_id, article_id=article_id,
-                 retryable=True, will_retry=False,
-                 retry_scope="later_invocation",
-                 duration_ms=int((time.time() - request_started) * 1000),
-                 **_error_fields(e))
-            continue
-
-        try:
+            # Same orchestration as the existing classifier command. Only the
+            # strategic/tone model implementations are backed by HTTP.
+            result = pipeline.perform_inference(article_text)
             save_classification(conn, article_id, result)
-        except Exception as e:
+            counts["classified"] += 1
+            _log("INFO", "article_classification_saved",
+                 strategic_intent=result.get("strategic_intent"),
+                 tone=result.get("tone"), confidence=result.get("confidence"))
+        except Exception as exc:
             conn.rollback()
-            # No completed state reached the database, so the row remains
-            # pending and will be eligible for a later invocation.
             counts["left_pending"] += 1
-            _log("ERROR", "article_classification_save_failed",
-                 request_id=request_id, article_id=article_id,
-                 database_operation="save_classification",
-                 error_type=type(e).__name__, error_code="database_update_failed",
-                 error_detail=_safe_error(e), stack_trace=_safe_traceback())
-            continue
-        counts["classified"] += 1
-        _log("INFO", "article_classification_saved",
-             request_id=request_id, article_id=article_id,
-             strategic_intent=result.get("strategic_intent"),
-             tone=result.get("tone"), confidence=result.get("confidence"),
-             prediction_source=result.get("prediction_source"),
-             model_version=result.get("model_version"),
-             duration_ms=result.get("processing_time_ms"))
-
+            _log("ERROR", "article_classification_failed",
+                 error_type=type(exc).__name__, error_detail=_safe_error(exc),
+                 stack_trace=_safe_traceback())
+        finally:
+            _LOG_CONTEXT.reset(token)
     _log("INFO", "pending_retry_completed", **counts)
     return counts

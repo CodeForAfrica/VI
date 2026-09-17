@@ -319,8 +319,9 @@ built on your machine from `Dockerfile.classifier`; `docker-compose.classifier.y
 pins `DB_HOST` to the local db so a run physically cannot reach prod.
 
 The dedicated Dokku inference API (`config.inference_wsgi`) is local-model-only:
-it never calls Groq or Ollama, even with a Groq key present. Only the legacy
-classifier/dashboard path described below may use Groq arbitration.
+it never calls Groq or Ollama. Lambda uses the existing orchestration and Groq
+arbitration, replacing only the strategic/tone classifiers with an HTTP adapter.
+The legacy classifier/dashboard path below continues to run in-process.
 
 ### Prerequisites
 

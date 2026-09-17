@@ -88,18 +88,6 @@ class MediaNarrative(Model):
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     ml_processed_at = models.DateTimeField(null=True, blank=True)
-    inference_status = models.CharField(
-        max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('completed', 'Completed'),
-            ('failed', 'Failed'),
-        ],
-        default='pending',
-        db_index=True,
-    )
-    inference_error_code = models.CharField(max_length=64, blank=True, null=True)
-    inference_attempts = models.PositiveIntegerField(default=0)
     is_anchor = models.BooleanField(default=False)
     true_label = CharField(max_length=255, blank=True, null=True,
     help_text="Human-verified ground truth strategic intent for anchor articles")
