@@ -27,6 +27,25 @@ log() { printf '[vi-deploy] %s\n' "$*" >&2; }
 fail() { log "ERROR - $*"; exit 1; }
 require_tool() { command -v "$1" >/dev/null 2>&1 || fail "required tool not found: $1"; }
 
+require_docker_daemon() {
+  local output="$WORK_DIR/docker-info.txt" pid
+  docker info >"$output" 2>&1 &
+  pid="$!"
+  for _ in $(seq 1 15); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      if wait "$pid"; then
+        return 0
+      fi
+      cat "$output" >&2
+      fail "Docker is installed but its daemon is unavailable."
+    fi
+    sleep 1
+  done
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  fail "Docker did not respond within 15 seconds. Start Docker Desktop and retry."
+}
+
 output_value() {
   jq -r --arg key "$1" '.[$key] // ""' <<<"$PULUMI_OUTPUTS"
 }
@@ -239,6 +258,7 @@ READY_ATTEMPTS="${READY_ATTEMPTS:-120}"
 APP_IMAGE="${APP_IMAGE:-}"
 
 for tool in aws base64 curl docker git jq pulumi; do require_tool "$tool"; done
+require_docker_daemon
 [[ -f "$REPO_ROOT/$DOCKERFILE_PATH" ]] || fail "Dockerfile not found: $DOCKERFILE_PATH"
 [[ -d "$REPO_ROOT/$BUILD_CONTEXT" ]] || fail "build context not found: $BUILD_CONTEXT"
 [[ "$DOCKER_PLATFORM" == "linux/amd64" ]] || fail "the provisioned host requires DOCKER_PLATFORM=linux/amd64."
