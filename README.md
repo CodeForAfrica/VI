@@ -167,6 +167,20 @@ The Lambda's sensitive Terraform variable `inference_api_key` must equal the
 `key` in one entry of the inference stack's `inferenceApiKeys` JSON secret; the
 API uses that entry's `caller` only for identification, rate limiting, and logs.
 
+For an operator-initiated deployment from a trusted workstation, the equivalent
+local path also reads those live Pulumi outputs and deploys through AWS Systems
+Manager rather than SSH:
+
+```bash
+AWS_PROFILE=cfa-bootstrap \
+  scripts/deploy-model-inference-locally.sh \
+  tech-codeforafrica-org/cfa-platform-infra-vi-model-inference/prod
+```
+
+The script builds and pushes a `linux/amd64` image only when the current source
+fingerprint is absent from ECR, deploys its immutable digest to Dokku, then waits
+for `/healthz` and `/readyz`. It never reads or prints the inference API key.
+
 ---
 
 # Data Pipeline
@@ -322,6 +336,21 @@ The dedicated Dokku inference API (`config.inference_wsgi`) is local-model-only:
 it never calls Groq or Ollama. Lambda uses the existing orchestration and Groq
 arbitration, replacing only the strategic/tone classifiers with an HTTP adapter.
 The legacy classifier/dashboard path below continues to run in-process.
+
+### Debugging Lambda inference
+
+Lambda emits structured JSON events with invocation and article IDs. Follow
+`local_inference_request_started` → `local_inference_retry` (if any) →
+`local_inference_request_completed` or `local_inference_request_failed`.
+The same `request_id` is sent to the API and reused across retries, so it can
+also be searched in the server logs. Requests log the host/path, input length,
+timeout and retry limit; responses log HTTP status, predictions/confidences,
+model version, attempts and timings. Failures log error codes and fallback use.
+`arbitration_started`/`arbitration_completed` cover the caller's Groq prediction;
+`article_inference_completed` shows the final combined result and
+`article_classification_saved` confirms the database write. A completed HTTP
+request alone does not mean the result was saved. Article bodies, authentication
+headers and raw response bodies are deliberately excluded from these events.
 
 ### Prerequisites
 
