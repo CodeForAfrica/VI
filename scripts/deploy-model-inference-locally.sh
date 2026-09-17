@@ -257,8 +257,7 @@ SKIP_HEALTH_CHECK="${SKIP_HEALTH_CHECK:-false}"
 READY_ATTEMPTS="${READY_ATTEMPTS:-120}"
 APP_IMAGE="${APP_IMAGE:-}"
 
-for tool in aws base64 curl docker git jq pulumi; do require_tool "$tool"; done
-require_docker_daemon
+for tool in aws base64 curl git jq pulumi; do require_tool "$tool"; done
 [[ -f "$REPO_ROOT/$DOCKERFILE_PATH" ]] || fail "Dockerfile not found: $DOCKERFILE_PATH"
 [[ -d "$REPO_ROOT/$BUILD_CONTEXT" ]] || fail "build context not found: $BUILD_CONTEXT"
 [[ "$DOCKER_PLATFORM" == "linux/amd64" ]] || fail "the provisioned host requires DOCKER_PLATFORM=linux/amd64."
@@ -284,11 +283,13 @@ host_arch="$(aws ec2 describe-instances --region "$AWS_REGION" --instance-ids "$
 
 account_id="$(aws sts get-caller-identity --query Account --output text)"
 ECR_REGISTRY="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-log "Logging into ECR $ECR_REGISTRY."
-aws ecr get-login-password --region "$AWS_REGION" |
-  docker login --username AWS --password-stdin "$ECR_REGISTRY" >/dev/null
 
 if [[ -z "$APP_IMAGE" ]]; then
+  require_tool docker
+  require_docker_daemon
+  log "Logging into ECR $ECR_REGISTRY."
+  aws ecr get-login-password --region "$AWS_REGION" |
+    docker login --username AWS --password-stdin "$ECR_REGISTRY" >/dev/null
   fingerprint="$(compute_build_fingerprint)"
   image_tag="source-${fingerprint:0:32}"
   existing_digest=""
