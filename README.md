@@ -125,24 +125,61 @@ The score ranges between **0 and 1**.
                  
 ---
 
-# Deployment Topology (ingestion / classification split)
+# Deployment Topology (ingestion / inference split)
 
-The ML ensemble (~13GB) exceeds AWS Lambda's 10GB limits, so **ingestion** and
-**classification** run as two decoupled halves that communicate only through the
-`dashboard_medianarrative` database table:
+The ML ensemble (~13GB) exceeds AWS Lambda's 10GB image limit, so ingestion and
+model inference run as separate deployments:
 
-- **Ingestion (AWS Lambda)** — `lambda_function.py` pulls articles from MediaCloud
-  and writes rows with a null `strategic_intent`. It installs ingestion-only
-  dependencies (`requirements-lambda.txt`, built via `Dockerfile.lambda`) to stay
-  under the Lambda image limit.
-- **Classification (dedicated container)** — `Dockerfile.classifier` runs the
-  `fill_missing_intents` command, which drains rows with a null intent, runs the
-  ensemble + Groq arbitration, and writes back `strategic_intent`, `tone`,
-  `confidence`, and `ml_processed_at`.
+- **Ingestion (AWS Lambda)** — `lambda_function.py` pulls articles from
+  MediaCloud, stores them in PostgreSQL, and calls the inference service over
+  HTTPS. Its `Dockerfile.lambda` contains no PyTorch, Transformers, or model
+  weights.
+- **Inference (Dokku)** — `Dockerfile.classifier` runs a long-lived HTTP service
+  at `https://vi-model-inference.codeforafrica.org`. It authenticates requests
+  with one `X-API-Key`, keeps models warm, and persists its model cache at
+  `/models`. It has no PostgreSQL, Redis, or Valkey dependency.
 
-The two never call each other directly — the table is the seam. See
-[Local Testing](#local-testing-classification-split) to run the classification
-half end-to-end on your machine.
+The Lambda inserts an article before requesting inference. If the API is down,
+the article stays pending and a later invocation retries it. Because the API is
+public HTTPS, Lambda needs only its URL and API key; it does not need an ingress
+security-group rule for the inference host. Any existing Lambda VPC settings
+may still be required for private PostgreSQL access.
+
+See [solution-spec.md](solution-spec.md) for the full contract, security model,
+traffic flow, failure handling, and logging requirements.
+
+## Deploying the inference service
+
+The `Deploy model inference` GitHub Actions workflow is deliberately
+manual-only because the model image is large. It builds one `linux/amd64` image,
+reuses an immutable ECR image for the same source/config when possible, and
+serializes releases so two model deployments cannot compete for host capacity.
+
+After the corresponding IaC stack has been applied, configure:
+
+- Repository variable `VI_MODEL_INFERENCE_PULUMI_STACK`, set to the fully
+  qualified `cfa-platform-infra-vi-model-inference/prod` stack reference.
+- Repository secret `PULUMI_ACCESS_TOKEN`, scoped to read that stack.
+
+The workflow reads the live role ARN, ECR repository, Dokku host, app name, and
+URL from Pulumi. Do not copy those replaceable values into GitHub variables.
+The Lambda's sensitive Terraform variable `inference_api_key` must equal the
+`key` in one entry of the inference stack's `inferenceApiKeys` JSON secret; the
+API uses that entry's `caller` only for identification, rate limiting, and logs.
+
+For an operator-initiated deployment from a trusted workstation, the equivalent
+local path also reads those live Pulumi outputs and deploys through AWS Systems
+Manager rather than SSH:
+
+```bash
+AWS_PROFILE=cfa-bootstrap \
+  scripts/deploy-model-inference-locally.sh \
+  tech-codeforafrica-org/cfa-platform-infra-vi-model-inference/prod
+```
+
+The script builds and pushes a `linux/amd64` image only when the current source
+fingerprint is absent from ECR, deploys its immutable digest to Dokku, then waits
+for `/healthz` and `/readyz`. It never reads or prints the inference API key.
 
 ---
 
@@ -295,16 +332,64 @@ with no access to production and no RDS or ECR required. The classifier image is
 built on your machine from `Dockerfile.classifier`; `docker-compose.classifier.yml`
 pins `DB_HOST` to the local db so a run physically cannot reach prod.
 
+The dedicated Dokku inference API (`config.inference_wsgi`) runs only the local
+strategic-intent and tone models. Lambda keeps its existing orchestration and
+replaces only those in-process classifiers with an HTTP adapter. The legacy
+classifier/dashboard path below continues to run in-process.
+
+### Debugging Lambda inference
+
+Lambda emits structured JSON events with invocation and article IDs. Follow
+`local_inference_request_started` → `local_inference_retry` (if any) →
+`local_inference_request_completed` or `local_inference_request_failed`.
+The same `request_id` is sent to the API and reused across retries, so it can
+also be searched in the server logs. Requests log the host/path, input length,
+timeout and retry limit; responses log HTTP status, predictions/confidences,
+model version, attempts and timings. Failures log error codes and fallback use.
+`arbitration_started`/`arbitration_completed` cover the caller's separate prediction;
+`article_inference_completed` shows the final combined result and
+`article_classification_saved` confirms the database write. A completed HTTP
+request alone does not mean the result was saved. Article bodies, authentication
+headers and raw response bodies are deliberately excluded from these events.
+
 ### Prerequisites
 
-- Docker, with ~12GB memory allocated (the ensemble needs ~13GB resident; enable swap)
-- A `.env` file — copy `.env.example` and fill in read-only S3 model-bucket
-  credentials plus a valid `GROQ_API_KEY` / `GROQ_MODEL`
+- Docker, with at least 16GB memory allocated (the ensemble needs ~13GB resident;
+  enable swap)
+- Git LFS, with the repository's model artifacts fetched (`git lfs pull`)
+
+### Production-shaped Lambda/API test
+
+Run the changed architecture end to end with one command:
+
+```bash
+make test-split-e2e
+```
+
+This builds the real Lambda and inference images, starts an isolated Postgres,
+serves the inference API through locally trusted HTTPS, loads ten deterministic
+articles, invokes the Lambda's real classification path, and verifies every
+result was persisted. It does not contact production databases or APIs. The
+local API key and database password are intentionally non-secret and only exist
+inside the Compose network.
+
+All required models live in `model_cache/` and are managed by Git LFS. The test
+runs Transformers and Hugging Face Hub in offline mode, so it fails rather than
+silently downloading a missing model. No AWS profile, cloud credentials, or
+model-bucket access is required.
+
+The equivalent raw command is:
+
+```bash
+docker compose -f docker-compose.e2e.yml up --build \
+  --abort-on-container-exit --exit-code-from e2e
+```
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
+| `make test-split-e2e` | Build the real split images and verify Lambda → trusted HTTPS inference API → local Postgres with ten articles |
 | `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
 | `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
 | `make reset` | Reload the fixture, resetting the rows back to unclassified |
@@ -313,6 +398,5 @@ pins `DB_HOST` to the local db so a run physically cannot reach prod.
 | `make clean-test` | Stop and wipe the local test database |
 
 The sample articles live in `fixtures/test_articles.json` and stand in for the
-Lambda ingestion output, so the run is deterministic and offline. Models download
-once from S3 into the mounted `model_cache/` directory and are reused on
-subsequent runs.
+Lambda ingestion output, so the run is deterministic and offline. The Git LFS
+models in `model_cache/` are mounted read-only and reused on subsequent runs.

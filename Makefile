@@ -6,8 +6,9 @@ ECR_REGISTRY = $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
 ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 
 CLF_COMPOSE = docker compose -f docker-compose.classifier.yml
+INF_COMPOSE = docker compose -f docker-compose.inference.yml
 
-.PHONY: build push build-test test results reset verify db down clean-test
+.PHONY: build push build-test test test-api test-lambda test-split-e2e smoke-api results reset verify db down clean-test
 
 # Build the web image
 build:
@@ -32,6 +33,34 @@ build-test:
 # Groq, classify, print results. Exits when the classifier finishes.
 test: build-test
 	$(CLF_COMPOSE) up --abort-on-container-exit
+
+# Run the inference-API contract test suite (inference_api/tests.py). Runs in
+# the classifier container so no local Python setup is needed. Contract-level:
+# no models are loaded, so it is fast. The tests_settings module is deliberately
+# light (Django + requests + bs4 only), so it also runs in any local venv via:
+#   python manage.py test inference_api --settings=inference_api.tests_settings
+test-api:
+	$(CLF_COMPOSE) run --rm classifier python manage.py test inference_api --settings=inference_api.tests_settings
+
+# Run the ingestion Lambda test suite (inference client + drain loop + handler).
+# Plain unittest with a fake DB and fake client - no Postgres/AWS/MediaCloud.
+# Also runs in any local venv with requests installed:
+#   python -m unittest test_inference_client test_lambda_function
+test-lambda:
+	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
+
+# One-command, production-shaped local test: isolated Postgres + real model API
+# + locally trusted HTTPS + the Lambda image as caller and database verifier.
+# Required model artifacts are checked out into ./model_cache by Git LFS.
+test-split-e2e:
+	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
+
+# Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and
+# assert the HTTP contract (/healthz, /readyz, auth, readiness gating). Warmup
+# is skipped, so no models/GPU/DB are needed. Exits non-zero if the smoke fails.
+smoke-api:
+	$(INF_COMPOSE) up --build --abort-on-container-exit --exit-code-from smoke; \
+	code=$$?; $(INF_COMPOSE) down; exit $$code
 
 # Print the current classification state of every row.
 results:

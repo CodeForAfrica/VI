@@ -4,32 +4,35 @@ provider "aws" {
 
 resource "aws_lambda_function" "my_lambda" {
   function_name = "vulnerability-tool"
-  
+
   # MANDATORY: This tells Lambda to treat this as a container
-  package_type  = "Image"
-  
-  role          = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
-  
-  # FIXED: Use the correct image name
-  image_uri     = "hannateshager/django-vi:latest"
+  package_type = "Image"
+
+  role = "arn:aws:iam::499665620971:role/VulnerabilityIndex-MediaCloud-Lambda-Role"
+
+  # Lambda container images must be immutable images in Amazon ECR.
+  image_uri = var.lambda_image_uri
 
   image_config {
     command = ["lambda_function.lambda_handler"]
   }
-  
-  memory_size   = 3008
-  timeout       = 900
-}
 
-environment {
+  memory_size = 3008
+  timeout     = 900
+
+  environment {
     variables = {
-      API_KEY      = var.mediacloud_api_key
-      GROQ_API_KEY = var.groq_api_key
-      DB_HOST      = var.db_host
-      DB_NAME      = var.db_name
-      DB_USER      = var.db_user
-      DB_PASSWORD  = var.db_password
-      DB_PORT      = var.db_port
+      API_KEY              = var.mediacloud_api_key
+      MEDIACLOUD_API_KEY    = var.mediacloud_api_key
+      GROQ_API_KEY         = var.groq_api_key
+      GROQ_MODEL           = var.groq_model
+      DB_HOST              = var.db_host
+      DB_NAME              = var.db_name
+      DB_USER              = var.db_user
+      DB_PASSWORD          = var.db_password
+      DB_PORT              = var.db_port
+      VI_INFERENCE_API_URL = var.inference_api_url
+      VI_INFERENCE_API_KEY = var.inference_api_key
     }
   }
 
