@@ -332,10 +332,10 @@ with no access to production and no RDS or ECR required. The classifier image is
 built on your machine from `Dockerfile.classifier`; `docker-compose.classifier.yml`
 pins `DB_HOST` to the local db so a run physically cannot reach prod.
 
-The dedicated Dokku inference API (`config.inference_wsgi`) is local-model-only:
-it never calls Groq or Ollama. Lambda uses the existing orchestration and Groq
-arbitration, replacing only the strategic/tone classifiers with an HTTP adapter.
-The legacy classifier/dashboard path below continues to run in-process.
+The dedicated Dokku inference API (`config.inference_wsgi`) runs only the local
+strategic-intent and tone models. Lambda keeps its existing orchestration and
+replaces only those in-process classifiers with an HTTP adapter. The legacy
+classifier/dashboard path below continues to run in-process.
 
 ### Debugging Lambda inference
 
@@ -346,7 +346,7 @@ The same `request_id` is sent to the API and reused across retries, so it can
 also be searched in the server logs. Requests log the host/path, input length,
 timeout and retry limit; responses log HTTP status, predictions/confidences,
 model version, attempts and timings. Failures log error codes and fallback use.
-`arbitration_started`/`arbitration_completed` cover the caller's Groq prediction;
+`arbitration_started`/`arbitration_completed` cover the caller's separate prediction;
 `article_inference_completed` shows the final combined result and
 `article_classification_saved` confirms the database write. A completed HTTP
 request alone does not mean the result was saved. Article bodies, authentication
@@ -356,8 +356,7 @@ headers and raw response bodies are deliberately excluded from these events.
 
 - Docker, with at least 16GB memory allocated (the ensemble needs ~13GB resident;
   enable swap)
-- A `.env` file — copy `.env.example` and fill in read-only S3 model-bucket
-  credentials plus a valid `GROQ_API_KEY` / `GROQ_MODEL`
+- Git LFS, with the repository's model artifacts fetched (`git lfs pull`)
 
 ### Production-shaped Lambda/API test
 
@@ -374,18 +373,10 @@ result was persisted. It does not contact production databases or APIs. The
 local API key and database password are intentionally non-secret and only exist
 inside the Compose network.
 
-The first run needs a read-only AWS profile in `~/.aws` to download the model
-archive and any missing Hugging Face base models. It defaults to `cfa-bootstrap`;
-select another profile with `VI_E2E_AWS_PROFILE=profile-name`. Model files are
-kept in the gitignored `model_cache/` directory, so subsequent runs do not
-download them again. Expect the first run to take substantially longer.
-
-The test exercises the existing no-Groq-key fallback by default. To also require
-and test the unchanged Groq arbitration path, supply a valid key:
-
-```bash
-GROQ_API_KEY=... VI_E2E_REQUIRE_GROQ=1 make test-split-e2e
-```
+All required models live in `model_cache/` and are managed by Git LFS. The test
+runs Transformers and Hugging Face Hub in offline mode, so it fails rather than
+silently downloading a missing model. No AWS profile, cloud credentials, or
+model-bucket access is required.
 
 The equivalent raw command is:
 
@@ -407,6 +398,5 @@ docker compose -f docker-compose.e2e.yml up --build \
 | `make clean-test` | Stop and wipe the local test database |
 
 The sample articles live in `fixtures/test_articles.json` and stand in for the
-Lambda ingestion output, so the run is deterministic and offline. Models download
-once from S3 into the mounted `model_cache/` directory and are reused on
-subsequent runs.
+Lambda ingestion output, so the run is deterministic and offline. The Git LFS
+models in `model_cache/` are mounted read-only and reused on subsequent runs.

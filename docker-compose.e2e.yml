@@ -7,8 +7,8 @@
 # The stack is isolated from production: it uses a fresh local Postgres volume,
 # a local-only API key, and Docker-internal DNS. The API is reached through
 # locally trusted HTTPS, matching the deployed Lambda -> Cloudflare -> Dokku
-# transport shape. The first run downloads the real model archive into the
-# gitignored ./model_cache directory via the selected read-only AWS profile.
+# transport shape. All required model artifacts are checked out with Git LFS;
+# the run is explicitly offline with respect to model providers.
 services:
   db:
     image: postgres:15
@@ -32,19 +32,28 @@ services:
       DJANGO_SECRET_KEY: local-e2e-not-secret
       DEBUG: "false"
       ALLOWED_HOSTS: "*"
-      AWS_PROFILE: ${VI_E2E_AWS_PROFILE:-cfa-bootstrap}
-      AWS_SDK_LOAD_CONFIG: "1"
-      AWS_S3_REGION_NAME: eu-west-1
-      S3_MODELS_BUCKET: ${S3_MODELS_BUCKET:-cfa-vulnerability-index-sandbox-models}
       MODEL_CACHE_DIR: /models
       LOCAL_MODELS_DIR: /models
       HF_HOME: /models/hf
       TRANSFORMERS_CACHE: /models/hf
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      VI_MODEL_CACHE_READ_ONLY: "1"
       MODEL_VERSION: "2026-09-04"
       VI_INFERENCE_ACCEPTED_KEYS: '[{"caller":"lambda-local-e2e","key":"local-e2e-key-not-secret"}]'
       VI_RATE_LIMIT_REQUESTS_PER_MINUTE: "60"
       VI_MAX_CONCURRENT_INFERENCE: "1"
-    command: python /app/scripts/start_inference_e2e.py
+    command:
+      - gunicorn
+      - config.inference_wsgi:application
+      - --workers
+      - "1"
+      - --threads
+      - "2"
+      - --timeout
+      - "180"
+      - --bind
+      - 0.0.0.0:8000
     healthcheck:
       test:
         - CMD
@@ -54,15 +63,12 @@ services:
       interval: 10s
       timeout: 8s
       retries: 180
-      # First run downloads a 4.5 GiB archive plus any missing Hugging Face
-      # bases. Failures during this grace period do not exhaust the retry count;
-      # the first successful /readyz check still marks the service healthy.
-      start_period: 45m
+      # Loading the CPU ensemble takes about a minute on a warm local machine.
+      # Failures during this grace period do not exhaust the retry count.
+      start_period: 10m
       start_interval: 30s
     volumes:
-      - ./model_cache:/models
-      - ./scripts:/app/scripts:ro
-      - ${HOME}/.aws:/root/.aws:ro
+      - ./model_cache:/models:ro
 
   tls:
     image: caddy:2.10-alpine
@@ -112,9 +118,6 @@ services:
       VI_INFERENCE_MAX_PER_RUN: "10"
       VI_LAMBDA_SAFETY_SECONDS: "30"
       REQUESTS_CA_BUNDLE: /caddy-data/caddy/pki/authorities/local/root.crt
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_MODEL: ${GROQ_MODEL:-qwen/qwen3.6-27b}
-      VI_E2E_REQUIRE_GROQ: ${VI_E2E_REQUIRE_GROQ:-0}
     volumes:
       - ./fixtures:/fixtures:ro
       - ./scripts:/app/scripts:ro

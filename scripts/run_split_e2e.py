@@ -51,20 +51,6 @@ def prepare_database():
     call_command("migrate", interactive=False, verbosity=0)
     call_command("loaddata", str(FIXTURE), verbosity=0)
 
-    require_groq = os.getenv("VI_E2E_REQUIRE_GROQ") == "1"
-    if require_groq or os.getenv("GROQ_API_KEY"):
-        call_command("check_groq", verbosity=1)
-    else:
-        print(
-            json.dumps(
-                {
-                    "event": "e2e_groq_skipped",
-                    "reason": "GROQ_API_KEY is not configured",
-                }
-            ),
-            flush=True,
-        )
-
 
 def run_and_verify():
     import lambda_function as lf

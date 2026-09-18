@@ -22,8 +22,13 @@ db.sqlite3
 staticfiles/
 media/
 
-# --- Model Cache (CRITICAL - Download from S3, NOT git) ---
-model_cache/
+# --- Model Cache ---
+# Local end-to-end models are versioned with Git LFS. Hugging Face creates
+# transient downloader state that is neither required nor reproducible.
+model_cache/hf/xet/
+model_cache/hf/hub/.locks/
+model_cache/hf/hub/**/.no_exist/
+model_cache/**/*.incomplete
 deberta-v3-large/
 microsoft_mdeberta-v3-base/
 calibrated_contrastive_peft/

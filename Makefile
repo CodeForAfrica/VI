@@ -51,8 +51,7 @@ test-lambda:
 
 # One-command, production-shaped local test: isolated Postgres + real model API
 # + locally trusted HTTPS + the Lambda image as caller and database verifier.
-# The first run downloads the real model archive into ./model_cache using
-# VI_E2E_AWS_PROFILE (defaults to cfa-bootstrap); subsequent runs reuse it.
+# Required model artifacts are checked out into ./model_cache by Git LFS.
 test-split-e2e:
 	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
 

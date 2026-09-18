@@ -690,6 +690,10 @@ class MLInferenceService:
         
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
+        if os.environ.get('VI_MODEL_CACHE_READ_ONLY', '').lower() in ('1', 'true', 'yes'):
+            print(f"Skipping {model_type} cache save because the model cache is read-only")
+            return
+
         cache_path = self.model_cache_dir / f'{model_type}_model'
         cache_path.mkdir(parents=True, exist_ok=True)
         
