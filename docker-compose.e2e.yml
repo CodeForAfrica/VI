@@ -1,0 +1,125 @@
+# Production-shaped local end-to-end test for the Lambda/model split.
+#
+# One command:
+#   docker compose -f docker-compose.e2e.yml up --build \
+#     --abort-on-container-exit --exit-code-from e2e
+#
+# The stack is isolated from production: it uses a fresh local Postgres volume,
+# a local-only API key, and Docker-internal DNS. The API is reached through
+# locally trusted HTTPS, matching the deployed Lambda -> Cloudflare -> Dokku
+# transport shape. The first run downloads the real model archive into the
+# gitignored ./model_cache directory via the selected read-only AWS profile.
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: vulnerability
+      POSTGRES_USER: vi
+      POSTGRES_PASSWORD: vi_local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vi -d vulnerability"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - e2e_db:/var/lib/postgresql/data
+
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.classifier
+    environment:
+      DJANGO_SECRET_KEY: local-e2e-not-secret
+      DEBUG: "false"
+      ALLOWED_HOSTS: "*"
+      AWS_PROFILE: ${VI_E2E_AWS_PROFILE:-cfa-bootstrap}
+      AWS_SDK_LOAD_CONFIG: "1"
+      AWS_S3_REGION_NAME: eu-west-1
+      S3_MODELS_BUCKET: ${S3_MODELS_BUCKET:-cfa-vulnerability-index-sandbox-models}
+      MODEL_CACHE_DIR: /models
+      LOCAL_MODELS_DIR: /models
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
+      MODEL_VERSION: "2026-09-04"
+      VI_INFERENCE_ACCEPTED_KEYS: '[{"caller":"lambda-local-e2e","key":"local-e2e-key-not-secret"}]'
+      VI_RATE_LIMIT_REQUESTS_PER_MINUTE: "60"
+      VI_MAX_CONCURRENT_INFERENCE: "1"
+    command: python /app/scripts/start_inference_e2e.py
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=5).status==200 else 1)"
+      interval: 10s
+      timeout: 8s
+      retries: 180
+      # First run downloads a 4.5 GiB archive plus any missing Hugging Face
+      # bases. Failures during this grace period do not exhaust the retry count;
+      # the first successful /readyz check still marks the service healthy.
+      start_period: 45m
+      start_interval: 30s
+    volumes:
+      - ./model_cache:/models
+      - ./scripts:/app/scripts:ro
+      - ${HOME}/.aws:/root/.aws:ro
+
+  tls:
+    image: caddy:2.10-alpine
+    depends_on:
+      inference:
+        condition: service_healthy
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+    networks:
+      default:
+        aliases:
+          - inference.local
+    volumes:
+      - ./config/Caddyfile.e2e:/etc/caddy/Caddyfile:ro
+      - e2e_caddy_data:/data
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.lambda
+    platform: linux/amd64
+    depends_on:
+      db:
+        condition: service_healthy
+      inference:
+        condition: service_healthy
+      tls:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["python /app/scripts/run_split_e2e.py"]
+    environment:
+      # Executing the mounted verifier by absolute path makes Python use
+      # /app/scripts as sys.path[0]; keep the Lambda task root importable.
+      PYTHONPATH: /var/task
+      DJANGO_SETTINGS_MODULE: config.settings
+      DJANGO_SECRET_KEY: local-e2e-not-secret
+      DEBUG: "false"
+      ALLOWED_HOSTS: "*"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vulnerability
+      DB_USER: vi
+      DB_PASSWORD: vi_local
+      VI_INFERENCE_API_URL: https://inference.local
+      VI_INFERENCE_API_KEY: local-e2e-key-not-secret
+      VI_INFERENCE_TIMEOUT: "180"
+      VI_INFERENCE_MAX_ATTEMPTS: "3"
+      VI_INFERENCE_MAX_PER_RUN: "10"
+      VI_LAMBDA_SAFETY_SECONDS: "30"
+      REQUESTS_CA_BUNDLE: /caddy-data/caddy/pki/authorities/local/root.crt
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-qwen/qwen3.6-27b}
+      VI_E2E_REQUIRE_GROQ: ${VI_E2E_REQUIRE_GROQ:-0}
+    volumes:
+      - ./fixtures:/fixtures:ro
+      - ./scripts:/app/scripts:ro
+      - e2e_caddy_data:/caddy-data:ro
+
+volumes:
+  e2e_db:
+  e2e_caddy_data:

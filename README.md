@@ -354,14 +354,51 @@ headers and raw response bodies are deliberately excluded from these events.
 
 ### Prerequisites
 
-- Docker, with ~12GB memory allocated (the ensemble needs ~13GB resident; enable swap)
+- Docker, with at least 16GB memory allocated (the ensemble needs ~13GB resident;
+  enable swap)
 - A `.env` file — copy `.env.example` and fill in read-only S3 model-bucket
   credentials plus a valid `GROQ_API_KEY` / `GROQ_MODEL`
+
+### Production-shaped Lambda/API test
+
+Run the changed architecture end to end with one command:
+
+```bash
+make test-split-e2e
+```
+
+This builds the real Lambda and inference images, starts an isolated Postgres,
+serves the inference API through locally trusted HTTPS, loads ten deterministic
+articles, invokes the Lambda's real classification path, and verifies every
+result was persisted. It does not contact production databases or APIs. The
+local API key and database password are intentionally non-secret and only exist
+inside the Compose network.
+
+The first run needs a read-only AWS profile in `~/.aws` to download the model
+archive and any missing Hugging Face base models. It defaults to `cfa-bootstrap`;
+select another profile with `VI_E2E_AWS_PROFILE=profile-name`. Model files are
+kept in the gitignored `model_cache/` directory, so subsequent runs do not
+download them again. Expect the first run to take substantially longer.
+
+The test exercises the existing no-Groq-key fallback by default. To also require
+and test the unchanged Groq arbitration path, supply a valid key:
+
+```bash
+GROQ_API_KEY=... VI_E2E_REQUIRE_GROQ=1 make test-split-e2e
+```
+
+The equivalent raw command is:
+
+```bash
+docker compose -f docker-compose.e2e.yml up --build \
+  --abort-on-container-exit --exit-code-from e2e
+```
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
+| `make test-split-e2e` | Build the real split images and verify Lambda → trusted HTTPS inference API → local Postgres with ten articles |
 | `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
 | `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
 | `make reset` | Reload the fixture, resetting the rows back to unclassified |

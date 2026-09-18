@@ -8,7 +8,7 @@ ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 CLF_COMPOSE = docker compose -f docker-compose.classifier.yml
 INF_COMPOSE = docker compose -f docker-compose.inference.yml
 
-.PHONY: build push build-test test test-api test-lambda smoke-api results reset verify db down clean-test
+.PHONY: build push build-test test test-api test-lambda test-split-e2e smoke-api results reset verify db down clean-test
 
 # Build the web image
 build:
@@ -48,6 +48,13 @@ test-api:
 #   python -m unittest test_inference_client test_lambda_function
 test-lambda:
 	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
+
+# One-command, production-shaped local test: isolated Postgres + real model API
+# + locally trusted HTTPS + the Lambda image as caller and database verifier.
+# The first run downloads the real model archive into ./model_cache using
+# VI_E2E_AWS_PROFILE (defaults to cfa-bootstrap); subsequent runs reuse it.
+test-split-e2e:
+	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
 
 # Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and
 # assert the HTTP contract (/healthz, /readyz, auth, readiness gating). Warmup
