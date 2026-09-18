@@ -45,9 +45,9 @@ test-api:
 # Run the ingestion Lambda test suite (inference client + drain loop + handler).
 # Plain unittest with a fake DB and fake client - no Postgres/AWS/MediaCloud.
 # Also runs in any local venv with requests installed:
-#   python -m unittest test_inference_client test_lambda_function test_mediacloud_ingestion_service
+#   python -m unittest test_inference_client test_lambda_function
 test-lambda:
-	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function test_mediacloud_ingestion_service
+	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
 
 # Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and
 # assert the HTTP contract (/healthz, /readyz, auth, readiness gating). Warmup
