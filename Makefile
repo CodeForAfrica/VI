@@ -49,11 +49,11 @@ test-api:
 test-lambda:
 	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
 
-# One-command, production-shaped local test: isolated Postgres + real model API
-# + locally trusted HTTPS + the Lambda image as caller and database verifier.
-# Required model artifacts are checked out into ./model_cache by Git LFS.
+# One-command, production-shaped local test: fetch any missing Git LFS models,
+# then run isolated Postgres + the real model API + locally trusted HTTPS + the
+# Lambda image as caller and database verifier.
 test-split-e2e:
-	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
+	./scripts/test-split-e2e.sh
 
 # Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and
 # assert the HTTP contract (/healthz, /readyz, auth, readiness gating). Warmup

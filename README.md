@@ -356,7 +356,8 @@ headers and raw response bodies are deliberately excluded from these events.
 
 - Docker, with at least 16GB memory allocated (the ensemble needs ~13GB resident;
   enable swap)
-- Git LFS, with the repository's model artifacts fetched (`git lfs pull`)
+- Git LFS (the test command downloads any model artifacts that are not already
+  available locally)
 
 ### Production-shaped Lambda/API test
 
@@ -374,9 +375,12 @@ local API key and database password are intentionally non-secret and only exist
 inside the Compose network.
 
 All required models live in `model_cache/` and are managed by Git LFS. The test
-runs Transformers and Hugging Face Hub in offline mode, so it fails rather than
-silently downloading a missing model. No AWS profile, cloud credentials, or
-model-bucket access is required.
+runs `git lfs pull` automatically when those artifacts are missing, verifies the
+download completed, and then starts Docker. Clear progress messages distinguish
+model download, image build, stack startup, and test completion. Inside Docker,
+Transformers and Hugging Face Hub remain in offline mode, so they cannot silently
+fetch a different model. No AWS profile, cloud credentials, Hugging Face download,
+or model-bucket access is required.
 
 The equivalent raw command is:
 
@@ -389,7 +393,7 @@ docker compose -f docker-compose.e2e.yml up --build \
 
 | Command | Description |
 |---------|-------------|
-| `make test-split-e2e` | Build the real split images and verify Lambda → trusted HTTPS inference API → local Postgres with ten articles |
+| `make test-split-e2e` | Fetch missing Git LFS models, build the real split images, and verify Lambda → trusted HTTPS inference API → local Postgres with ten articles |
 | `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
 | `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
 | `make reset` | Reload the fixture, resetting the rows back to unclassified |
