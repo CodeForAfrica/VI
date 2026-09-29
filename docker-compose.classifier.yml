@@ -54,6 +54,12 @@ services:
       - ./config:/app/config
       - ./dashboard:/app/dashboard
       - ./fixtures:/app/fixtures
+      # Lambda tests run against the working tree without baking test-only files
+      # into the production classifier image.
+      - ./lambda_function.py:/app/lambda_function.py:ro
+      - ./inference_client.py:/app/inference_client.py:ro
+      - ./test_inference_client.py:/app/test_inference_client.py:ro
+      - ./test_lambda_function.py:/app/test_lambda_function.py:ro
     # Full local end-to-end of the split, in one `up`:
     #   migrate            -> schema on the isolated local db
     #   loaddata           -> seed the sample articles from the repo file as

@@ -1,6 +1,7 @@
 .git
 .env
 db.sqlite3
+model_cache
 __pycache__
 *.pyc
 *.pyo

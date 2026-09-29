@@ -1,0 +1,42 @@
+# Local-only boot smoke for the inference API. Boots
+# gunicorn config.inference_wsgi:application from the classifier image (same ML
+# stack) under the real config.settings, then asserts the HTTP contract.
+#
+# Warmup is skipped (VI_SKIP_WARMUP=1) so this is fast and needs no model
+# weights, S3, GPU, or DB: /healthz stays 200 and /readyz reports loading. The
+# real-weights warmup + /readyz flip is Phase 5 (needs the real host).
+services:
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.classifier
+    environment:
+      DJANGO_SECRET_KEY: local-dev-not-secret
+      DEBUG: "false"
+      ALLOWED_HOSTS: "*"
+      VI_SKIP_WARMUP: "1"
+      VI_INFERENCE_ACCEPTED_KEYS: '[{"caller":"smoke","key":"smoke-key"}]'
+    command: >
+      gunicorn config.inference_wsgi:application
+      --workers 1 --threads 2 --timeout 180 --bind 0.0.0.0:8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2).status==200 else 1)"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    volumes:
+      # Live-edit: run current source without a rebuild (matches the classifier compose).
+      - ./config:/app/config
+      - ./dashboard:/app/dashboard
+      - ./inference_api:/app/inference_api
+
+  smoke:
+    build:
+      context: .
+      dockerfile: Dockerfile.classifier
+    depends_on:
+      inference:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/app/scripts
+    command: python scripts/smoke_inference.py http://inference:8000 smoke-key

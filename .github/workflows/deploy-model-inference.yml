@@ -1,0 +1,59 @@
+name: VI | Deploy model inference
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vi-model-inference-production
+  cancel-in-progress: false
+
+jobs:
+  resolve_infrastructure:
+    name: Resolve infrastructure
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS || '["ubuntu-24.04"]') }}
+    outputs:
+      aws-region: ${{ steps.resolve.outputs.aws-region }}
+      aws-role-to-assume: ${{ steps.resolve.outputs.aws-role-to-assume }}
+      ecr-repository: ${{ steps.resolve.outputs.ecr-repository }}
+      dokku-app-name: ${{ steps.resolve.outputs.dokku-app-name }}
+      dokku-app-url: ${{ steps.resolve.outputs.dokku-app-url }}
+      dokku-host-name-tag: ${{ steps.resolve.outputs.dokku-host-name-tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Pulumi CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://get.pulumi.com | sh
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve live Pulumi outputs
+        id: resolve
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          VI_MODEL_INFERENCE_PULUMI_STACK: ${{ vars.VI_MODEL_INFERENCE_PULUMI_STACK }}
+        run: bash scripts/resolve-inference-infra-config.sh
+
+  deploy:
+    name: Build, verify, and deploy
+    needs: resolve_infrastructure
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: read
+    uses: CodeForAfrica/iac-cfa-pulumi/.github/workflows/deploy-ec2-dokku-service.yml@main
+    with:
+      aws-region: ${{ needs.resolve_infrastructure.outputs.aws-region }}
+      aws-role-to-assume: ${{ needs.resolve_infrastructure.outputs.aws-role-to-assume }}
+      build-context: .
+      dockerfile-path: Dockerfile.classifier
+      docker-platform: linux/amd64
+      dokku-app-name: ${{ needs.resolve_infrastructure.outputs.dokku-app-name }}
+      dokku-app-url: ${{ needs.resolve_infrastructure.outputs.dokku-app-url }}
+      dokku-host-name-tag: ${{ needs.resolve_infrastructure.outputs.dokku-host-name-tag }}
+      ecr-repository: ${{ needs.resolve_infrastructure.outputs.ecr-repository }}

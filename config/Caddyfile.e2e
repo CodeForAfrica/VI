@@ -1,0 +1,4 @@
+https://inference.local {
+    tls internal
+    reverse_proxy inference:8000
+}

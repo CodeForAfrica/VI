@@ -47,7 +47,15 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'config.urls'
+if os.getenv('VI_INFERENCE_SERVER') == '1':
+    # First in the chain so every access is recorded, including 404/405 and
+    # failures produced by later middleware.
+    MIDDLEWARE.insert(0, 'inference_api.middleware.AccessLogMiddleware')
+
+# Env-overridable so the inference API process can boot with its own small
+# urlconf (config.inference_wsgi sets ROOT_URLCONF=inference_api.urls) instead
+# of the dashboard's full url/view module. Defaults to the dashboard app.
+ROOT_URLCONF = os.getenv('ROOT_URLCONF', 'config.urls')
 
 TEMPLATES = [
     {
@@ -68,17 +76,21 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database - SECURE: All from environment variables
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'postgres'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),  # never default to prod - DB_HOST must be set in the environment
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'CONN_MAX_AGE': 600,
+if os.getenv('VI_INFERENCE_SERVER') == '1':
+    # The public inference process is deliberately unable to open a database.
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.dummy'}}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'postgres'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 600,
+        }
     }
-}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -114,15 +126,20 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
 
 # CACHES configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+if os.getenv('VI_INFERENCE_SERVER') == '1':
+    # Rate limiting is intentionally process-local; the inference service does
+    # not need Redis or Valkey to start or serve requests.
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
         }
     }
-}
 #Logging configuration
 LOGGING = {
     'version': 1,

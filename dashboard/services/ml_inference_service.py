@@ -3,24 +3,18 @@ import tempfile
 import os
 import pickle
 import numpy as np
-import torch
-import torch.nn.functional as F
 from django.conf import settings
 import logging
-from sklearn.preprocessing import LabelEncoder
-import joblib
 import json
 import importlib.util
 from langdetect import detect, DetectorFactory, LangDetectException
 import pandas as pd
 import time
 import botocore
-from dashboard.services.tone_ensemble import ProbabilitiesEstimator
 from pathlib import Path
 import re
 import sys
 from groq import Groq
-from transformers import AutoTokenizer
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpx").propagate = False
@@ -40,6 +34,14 @@ DetectorFactory.seed = 0
 
 class MLInferenceService:
     def __init__(self):
+        # Heavy dependencies belong only to the local-model process.
+        global torch, F, LabelEncoder, joblib, ProbabilitiesEstimator, AutoTokenizer
+        import torch
+        import torch.nn.functional as F
+        from sklearn.preprocessing import LabelEncoder
+        import joblib
+        from dashboard.services.tone_ensemble import ProbabilitiesEstimator
+        from transformers import AutoTokenizer
         print("MLInferenceService.__init__ called")
         # GPU SUPPORT
         if torch.cuda.is_available():
@@ -60,11 +62,11 @@ class MLInferenceService:
         # Harmless (None) for long-term IAM user keys used by the web app.
         aws_token = getattr(settings, 'AWS_SESSION_TOKEN', None) or os.environ.get('AWS_SESSION_TOKEN')
 
-        if aws_key and aws_secret and aws_bucket:
+        if aws_bucket:
             self.s3_client = boto3.client(
                 's3',
-                aws_access_key_id=aws_key,
-                aws_secret_access_key=aws_secret,
+                aws_access_key_id=aws_key or None,
+                aws_secret_access_key=aws_secret or None,
                 aws_session_token=aws_token,
                 region_name=aws_region,
                 config=botocore.config.Config(
@@ -97,7 +99,8 @@ class MLInferenceService:
         self.local_models_dir = Path(os.environ.get("LOCAL_MODELS_DIR", self.model_cache_dir))
         
         # Load CSV risk data once at initialization
-        self._csv_risk_df = self._load_csv_risks()
+        self._csv_risk_df = (pd.DataFrame() if os.getenv("VI_INFERENCE_SERVER") == "1"
+                             else self._load_csv_risks())
         # ✅ Initialize tokenizer here
         try:
             self.tokenizer = AutoTokenizer.from_pretrained("microsoft/mdeberta-v3-base") # Or the correct base model path
@@ -687,6 +690,10 @@ class MLInferenceService:
         
     def _save_to_persistent_cache(self, model_type, model, label_encoder=None):
         """Save model to persistent cache directory (OLD CACHE PATH)"""
+        if os.environ.get('VI_MODEL_CACHE_READ_ONLY', '').lower() in ('1', 'true', 'yes'):
+            print(f"Skipping {model_type} cache save because the model cache is read-only")
+            return
+
         cache_path = self.model_cache_dir / f'{model_type}_model'
         cache_path.mkdir(parents=True, exist_ok=True)
         
@@ -1430,6 +1437,37 @@ class MLInferenceService:
         # Note: strategic_intent here should be the 'formatted_intent' for best results
         base = intent_scores.get(strategic_intent, 0.5)
         return round(base, 2)
+
+
+    def perform_local_inference(self, article_text):
+        """Only local model operations; caller owns preprocessing and arbitration."""
+        from inference_api.logs import log_event
+        model_intent, model_confidence = "unknown", 0.0
+        log_event("INFO", "strategic_inference_started")
+        try:
+            classifier = self._load_strategic_classifier()
+            if classifier:
+                predictions, probabilities = classifier.predict(
+                    [article_text], batch_size=1, calibrated=True, return_probs=True)
+                model_intent = self._decode_label(predictions[0])
+                model_confidence = float(np.max(probabilities[0]))
+            log_event("INFO", "strategic_inference_completed",
+                      prediction_available=classifier is not None)
+        except Exception as exc:
+            # Preserve the original local-model defaults so Lambda can still
+            # run the existing Groq arbitration when this classifier fails.
+            log_event("WARNING", "strategic_inference_failed",
+                      error_type=type(exc).__name__, fallback="unknown/0.0")
+        log_event("INFO", "tone_inference_started")
+        tone, tone_confidence = self.perform_tone_inference(article_text)
+        log_event("INFO", "tone_inference_completed")
+        return {
+            "strategic_intent": model_intent,
+            "strategic_intent_confidence": model_confidence,
+            "tone": tone, "tone_confidence": tone_confidence,
+            "confidence": max(model_confidence, tone_confidence),
+            "prediction_source": "model",
+        }
 
     def cleanup(self):
         """Clean up temporary directories"""
