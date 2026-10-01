@@ -86,7 +86,11 @@ def run_and_verify():
             results = cursor.fetchall()
         if len(results) != EXPECTED_ARTICLES:
             raise RuntimeError(f"expected {EXPECTED_ARTICLES} saved rows, found {len(results)}")
-        incomplete = [row[0] for row in results if not row[4] or row[2] is None or not row[3]]
+        incomplete = [
+            row[0]
+            for row in results
+            if not row[1] or row[2] is None or not row[3] or not row[4]
+        ]
         if incomplete:
             raise RuntimeError(f"classification was not fully persisted for ids: {incomplete}")
 

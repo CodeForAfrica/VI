@@ -31,6 +31,7 @@ intent_mapping = {
     "resource control": "ResourceDependency",
     "social fragility": "SocialFragility",
     "social unrest": "SocialFragility",
+    "political destabilization": "SocialFragility",
     "information warfare": "SocialFragility",
     "human rights advocacy": "LGBTQ",
     "debt trap diplomacy": "Economic",

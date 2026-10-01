@@ -168,6 +168,20 @@ class PersistenceTests(unittest.TestCase):
         self.assertNotIn("inference_status", sql)
         self.assertNotIn("prediction_source", sql)
 
+    def test_political_destabilization_uses_existing_canonical_mapping(self):
+        c = self.connection()
+        lf.save_classification(
+            c,
+            3,
+            {
+                "strategic_intent": "Political Destabilization",
+                "confidence": .7,
+                "tone": "Factual",
+            },
+        )
+        _, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertEqual(params, ("SocialFragility", .7, "Factual", 3))
+
     def test_batch_runs_orchestration_before_saving(self):
         c = self.connection([(3, "article", None, None)])
         pipeline = mock.Mock()
