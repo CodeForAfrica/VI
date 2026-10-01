@@ -57,27 +57,26 @@ while IFS= read -r model_path; do
 done < <(unavailable_model_files)
 if (( ${#missing_models[@]} > 0 )); then
   log "Models not found locally: ${#missing_models[@]} Git LFS artifact(s) are missing or have not been downloaded."
-  log "Pulling model artifacts via Git LFS. A fresh checkout downloads approximately 13 GB; this can take a while."
-
-  if ! git -C "${REPO_ROOT}" lfs pull --include='model_cache/**'; then
-    fail "Git LFS could not download the models. Review its error above, check network access, GitHub authentication, and LFS quota, then rerun 'make test-split-e2e'."
-  fi
-
-  missing_models=()
-  while IFS= read -r model_path; do
-    missing_models+=("${model_path}")
-  done < <(unavailable_model_files)
-  if (( ${#missing_models[@]} > 0 )); then
-    printf '[test-split-e2e] ERROR: Git LFS finished, but %d model artifact(s) are still unavailable:\n' "${#missing_models[@]}" >&2
-    printf '  - %s\n' "${missing_models[@]:0:10}" >&2
-    (( ${#missing_models[@]} > 10 )) && printf '  - ... and %d more\n' "$(( ${#missing_models[@]} - 10 ))" >&2
-    fail "The model checkout is incomplete. Run 'git lfs pull --include=model_cache/**' for more detail."
-  fi
-
-  log "Finished downloading and verifying the model artifacts."
 else
-  log "All Git LFS model artifacts are already available locally; no download is needed."
+  log "Model files are present locally; Git LFS will verify they are current."
 fi
+
+log "Running 'git lfs pull' for model_cache. A fresh checkout downloads approximately 13 GB; cached objects are reused."
+if ! git -C "${REPO_ROOT}" lfs pull --include='model_cache/**'; then
+  fail "Git LFS could not prepare the local models. Review its error above, check network access, GitHub authentication, and LFS quota, then rerun 'make test-split-e2e'."
+fi
+
+missing_models=()
+while IFS= read -r model_path; do
+  missing_models+=("${model_path}")
+done < <(unavailable_model_files)
+if (( ${#missing_models[@]} > 0 )); then
+  printf '[test-split-e2e] ERROR: Git LFS finished, but %d model artifact(s) are still unavailable:\n' "${#missing_models[@]}" >&2
+  printf '  - %s\n' "${missing_models[@]:0:10}" >&2
+  (( ${#missing_models[@]} > 10 )) && printf '  - ... and %d more\n' "$(( ${#missing_models[@]} - 10 ))" >&2
+  fail "The local model checkout is incomplete. Run 'git lfs pull --include=model_cache/**' for more detail."
+fi
+log "Git LFS model setup complete: all ${tracked_model_count} artifacts are available locally."
 
 require_command docker "Install Docker Desktop or Docker Engine before running this test."
 log "Models are ready. Checking Docker and Docker Compose."
