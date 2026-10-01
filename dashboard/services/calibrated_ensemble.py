@@ -16,6 +16,26 @@ import copy
 
 logger = logging.getLogger(__name__)
 
+
+def _is_complete_local_base_model(model_dir):
+    """Return True only when a local Transformers model can supply its weights.
+
+    Old model archives may leave a partial directory behind.  Treating that
+    directory as usable merely because it exists prevents Transformers from
+    falling back to the complete, Git-LFS-managed Hugging Face cache.
+    """
+    if not os.path.isfile(os.path.join(model_dir, 'config.json')):
+        return False
+
+    weight_files = (
+        'model.safetensors',
+        'model.safetensors.index.json',
+        'pytorch_model.bin',
+        'pytorch_model.bin.index.json',
+    )
+    return any(os.path.isfile(os.path.join(model_dir, name)) for name in weight_files)
+
+
 class StrategicEnsemble:
     """
     Ensemble for strategic intent classification (supports PEFT models)
@@ -210,21 +230,29 @@ class CalibratedStrategicClassifier:
             # 3. Determine the actual path for the base model
             # -CHECK ADJACENT DIRECTORY STRUCTURE -
             # The save_dir is likely /path/to/archive_cache/strategic_model
-            # The base model is expected to be in /path/to/archive_cache/microsoft_mdeberta-v3-base
-            # So, find the parent directory of save_dir, then append the expected base model subdirectory name.
+            # Legacy archives store base models beside strategic_model using a
+            # filesystem-safe form of the Hugging Face model ID.
             save_dir_parent = os.path.dirname(save_dir) # e.g., /path/to/archive_cache/
-            expected_local_base_model_subdir_name = 'microsoft_mdeberta-v3-base' # The name of the base model dir you created
+            expected_local_base_model_subdir_name = base_model_name_or_path.replace('/', '_')
             local_base_model_path = os.path.join(save_dir_parent, expected_local_base_model_subdir_name) # e.g., /path/to/archive_cache/microsoft_mdeberta-v3-base
     
-            # Check if the base model exists in the expected adjacent location
-            if os.path.exists(local_base_model_path):
+            # Only prefer the adjacent directory when it contains both config
+            # and weights. An incomplete stale directory must not shadow the
+            # complete Git LFS Hugging Face cache.
+            if _is_complete_local_base_model(local_base_model_path):
                 print(f"    📁 Found base model in adjacent directory: {local_base_model_path}")
                 actual_base_model_path = local_base_model_path
             else:
-                print(f"    ⚠️ Base model not found in adjacent directory ({local_base_model_path}).")
-                print(f"         Attempting to use Hub ID: {base_model_name_or_path}")
-                # If not found locally in the adjacent structure, use the Hub ID.
-                # This will fail gracefully if HF_HUB_OFFLINE=1 is set.
+                if os.path.exists(local_base_model_path):
+                    print(
+                        f"    ⚠️ Ignoring incomplete adjacent base model directory "
+                        f"({local_base_model_path}); config or model weights are missing."
+                    )
+                else:
+                    print(f"    ⚠️ Base model not found in adjacent directory ({local_base_model_path}).")
+                print(f"         Resolving from the local Hugging Face cache: {base_model_name_or_path}")
+                # CI and the inference container set HF_HUB_OFFLINE=1, so this
+                # model ID resolves locally and cannot trigger a network fetch.
                 actual_base_model_path = base_model_name_or_path
     
             print(f"    DEBUG: Loading base model config from: {actual_base_model_path}") 
