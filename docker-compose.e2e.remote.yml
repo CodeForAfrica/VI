@@ -1,0 +1,50 @@
+# Lightweight end-to-end test: local Lambda verifier + isolated Postgres call
+# the deployed inference API over its publicly trusted HTTPS endpoint.
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: vulnerability
+      POSTGRES_USER: vi
+      POSTGRES_PASSWORD: vi_local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vi -d vulnerability"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - e2e_remote_db:/var/lib/postgresql/data
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.lambda
+    platform: linux/amd64
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["python /app/scripts/run_split_e2e.py"]
+    environment:
+      PYTHONPATH: /var/task
+      DJANGO_SETTINGS_MODULE: config.settings
+      DJANGO_SECRET_KEY: local-e2e-not-secret
+      DEBUG: "false"
+      ALLOWED_HOSTS: "*"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vulnerability
+      DB_USER: vi
+      DB_PASSWORD: vi_local
+      VI_INFERENCE_API_URL: ${VI_INFERENCE_API_URL:-https://vi-model-inference.codeforafrica.org}
+      VI_INFERENCE_API_KEY: ${VI_INFERENCE_API_KEY:?Set VI_INFERENCE_API_KEY to run remote mode}
+      VI_INFERENCE_TIMEOUT: "180"
+      VI_INFERENCE_MAX_ATTEMPTS: "3"
+      VI_INFERENCE_MAX_PER_RUN: "10"
+      VI_LAMBDA_SAFETY_SECONDS: "30"
+    volumes:
+      - ./fixtures:/fixtures:ro
+      - ./scripts:/app/scripts:ro
+
+volumes:
+  e2e_remote_db:

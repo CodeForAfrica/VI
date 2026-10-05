@@ -354,10 +354,9 @@ headers and raw response bodies are deliberately excluded from these events.
 
 ### Prerequisites
 
-- Docker, with at least 16GB memory allocated (the ensemble needs ~13GB resident;
-  enable swap)
-- Git LFS (the test command downloads any model artifacts that are not already
-  available locally)
+- Docker. The default fully local mode requires at least 20GB memory; a 16GB
+  allocation can be OOM-killed while loading the complete ensembles.
+- Git LFS only for fully local mode. Remote mode does not download or load models.
 
 ### Production-shaped Lambda/API test
 
@@ -367,12 +366,43 @@ Run the changed architecture end to end with one command:
 make test-split-e2e
 ```
 
-This builds the real Lambda and inference images, starts an isolated Postgres,
-serves the inference API through locally trusted HTTPS, loads ten deterministic
-articles, invokes the Lambda's real classification path, and verifies every
-result was persisted. It does not contact production databases or APIs. The
-local API key and database password are intentionally non-secret and only exist
-inside the Compose network.
+To exercise the real Lambda path against the deployed API while keeping the
+database isolated and local, supply its API key:
+
+```bash
+make test-split-e2e VI_INFERENCE_API_KEY='<deployed-api-key>'
+```
+
+Supplying the key automatically selects
+`https://vi-model-inference.codeforafrica.org`. Set `VI_INFERENCE_API_URL` as
+well only when intentionally testing another deployment. The key is never
+printed. Remote mode skips Git LFS and starts only Postgres plus the Lambda
+verifier, so it does not need the 20GB local-model allocation.
+
+Without a key, this builds the real Lambda and inference images, starts an
+isolated Postgres, and serves the local inference API through trusted HTTPS.
+With a key, it builds only the Lambda image and calls the deployed HTTPS API.
+Both modes load ten deterministic articles and invoke the Lambda's real
+classification path. The output shows
+six numbered stages and one `ARTICLE nn/10 PASS` line per fixture, including its
+saved intent, tone, and confidence. It also retains the earlier ten-row results
+table with `id`, intent, confidence, tone, and processed time. The verifier checks
+the fixture/pending order, all ten HTTPS responses, API-to-Lambda prediction
+agreement, database persistence, and the empty pending queue. It does not contact
+production databases or APIs. The local API key and database password are
+intentionally non-secret and only exist inside the Compose network.
+
+The original machine-readable `e2e_https_ready` and `split_e2e_passed` events,
+per-result `id`/`strategic_intent`/`confidence`/`tone`/`processed` fields, and
+final success message remain unchanged for existing readers. The staged and
+per-article output is additional information.
+
+This is an architecture/regression test: it proves that the frozen model output
+travels through every split component unchanged and in the correct order. It is
+not a model-accuracy benchmark against human judgement because the sample fixture
+does not currently contain reviewed expected intent/tone labels. Add a separately
+reviewed labelled fixture before describing these ten predictions as semantically
+correct.
 
 All required models live in `model_cache/` and are managed by Git LFS. The test
 always runs `git lfs pull` for that directory, verifies every tracked artifact,

@@ -8,6 +8,11 @@ ECR_URI      = $(ECR_REGISTRY)/$(IMAGE_NAME)
 CLF_COMPOSE = docker compose -f docker-compose.classifier.yml
 INF_COMPOSE = docker compose -f docker-compose.inference.yml
 
+# Allow `make test-split-e2e VI_INFERENCE_API_KEY=...` and an optional URL
+# override without echoing the secret in the recipe itself.
+export VI_INFERENCE_API_KEY
+export VI_INFERENCE_API_URL
+
 .PHONY: build push build-test test test-api test-lambda test-split-e2e smoke-api results reset verify db down clean-test
 
 # Build the web image
@@ -49,9 +54,9 @@ test-api:
 test-lambda:
 	$(CLF_COMPOSE) run --rm classifier python -m unittest test_inference_client test_lambda_function
 
-# One-command, production-shaped local test: fetch any missing Git LFS models,
-# then run isolated Postgres + the real model API + locally trusted HTTPS + the
-# Lambda image as caller and database verifier.
+# One command with two modes. With no key, run the entire stack locally. When
+# VI_INFERENCE_API_KEY is supplied, keep Lambda/Postgres local and call the
+# deployed HTTPS inference API (or VI_INFERENCE_API_URL when explicitly set).
 test-split-e2e:
 	./scripts/test-split-e2e.sh
 
