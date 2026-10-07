@@ -26,8 +26,6 @@ jobs:
     runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS || '["ubuntu-24.04"]') }}
     timeout-minutes: 60
     env:
-      # Buildx setup and deployment must share plugin, builder, and auth state.
-      DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
       AWS_REGION: eu-west-1
       AWS_MAX_ATTEMPTS: '1'
       AWS_PAGER: ''
@@ -54,6 +52,10 @@ jobs:
               fi ;;
             *) echo '::error::Select action deploy or rollback.'; exit 1 ;;
           esac
+      - name: Share temporary Docker configuration across all steps
+        run: |
+          # Establish the path before Buildx installs its plugin and builder.
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/vi-lambda-docker-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           lfs: false
