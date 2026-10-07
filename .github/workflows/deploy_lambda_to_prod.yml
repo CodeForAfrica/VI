@@ -1,0 +1,268 @@
+name: deploy_lambda_to_prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Deploy main, or restore a previous deployment
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+      backup_secret:
+        description: Only for rollback; backup name printed by a deployment
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: vi-lambda-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS || '["ubuntu-24.04"]') }}
+    timeout-minutes: 60
+    env:
+      AWS_REGION: eu-west-1
+      AWS_MAX_ATTEMPTS: '1'
+      AWS_PAGER: ''
+      FUNCTION_NAME: vulnerability-tool
+      SCHEDULE_NAME: daily-vulnerability-ingestion
+      RUNTIME_SECRET: vi-model-inference-runtime-config
+      INFERENCE_URL: https://vi-model-inference.codeforafrica.org
+      DEPLOY_ACTION: ${{ inputs.action }}
+      BACKUP_SECRET: ${{ inputs.backup_secret }}
+      SELECTED_REF: ${{ github.ref }}
+    steps:
+      - name: Validate branch and inputs
+        run: |
+          if [[ "$SELECTED_REF" != refs/heads/main ]]; then
+            echo "::error::Select main in Run workflow; selected ref is $SELECTED_REF. No AWS changes were made."
+            exit 1
+          fi
+          case "$DEPLOY_ACTION" in
+            deploy) ;;
+            rollback)
+              if [[ -z "$BACKUP_SECRET" || "$BACKUP_SECRET" != vi/rollback/* ]]; then
+                echo '::error::Rollback requires a vi/rollback/... backup name. Normal deploy does not need this input.'
+                exit 1
+              fi ;;
+            *) echo '::error::Select action deploy or rollback.'; exit 1 ;;
+          esac
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Authenticate to AWS using OIDC
+        id: aws_auth
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: arn:aws:iam::499665620971:role/vi-lambda-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Explain authentication failure
+        if: steps.aws_auth.outcome == 'failure'
+        run: |
+          echo '::error::AWS authentication failed. Check the preceding error. Role vi-lambda-github-deploy must trust repo:CodeForAfrica/VI:ref:refs/heads/main with audience sts.amazonaws.com. Confirm the GitHub OIDC provider exists. No deployment was attempted.'
+          exit 1
+      - name: Prepare self-contained deployment and health checks
+        run: |
+          for tool in aws docker python3 curl; do
+            command -v "$tool" >/dev/null || { echo "::error::Runner is missing $tool. Install it on the CFA runner and rerun."; exit 1; }
+          done
+          cat > "$RUNNER_TEMP/vi-lambda-workflow.py" <<'PY'
+          import datetime, json, os, subprocess, sys
+          function, schedule = os.environ['FUNCTION_NAME'], os.environ['SCHEDULE_NAME']
+          region, secrets = os.environ['AWS_REGION'], []
+
+          def log(message):
+              print('[vi-deploy] ' + message, flush=True)
+
+          def run(args, payload=None, visible=False):
+              result = subprocess.run(args, input=payload, text=True, capture_output=not visible)
+              if result.returncode:
+                  detail = result.stderr or 'See preceding command output.'
+                  for secret in secrets:
+                      if secret:
+                          detail = detail.replace(secret, '[REDACTED]')
+                  raise RuntimeError(f'{args[0]} {args[1]} failed: {detail.strip()}')
+              return result.stdout or ''
+
+          def aws(*args, payload=None):
+              raw = run(['aws', *args, '--region', region, '--output', 'json', '--no-cli-pager'], payload)
+              return json.loads(raw) if raw.strip() else {}
+
+          def live():
+              value = aws('lambda', 'get-function', '--function-name', function)
+              secrets.extend(value['Configuration'].get('Environment', {}).get('Variables', {}).values())
+              return value
+
+          def wait():
+              aws('lambda', 'wait', 'function-updated-v2', '--function-name', function)
+
+          def check_api(url):
+              if not url.startswith('https://'):
+                  raise RuntimeError('Inference URL must use trusted HTTPS.')
+              for path in ('/healthz', '/readyz'):
+                  # Curl uses the runner's CA store. Do not disable certificate
+                  # validation or follow redirects to another endpoint.
+                  raw = run(['curl', '--silent', '--show-error', '--max-time', '30', '--proto', '=https', '--write-out', '\n%{http_code}', url.rstrip('/') + path])
+                  text, status = raw.rsplit('\n', 1)
+                  if status != '200':
+                      raise RuntimeError(f'{path} returned HTTP {status}; check inference service, DNS, and Cloudflare access rules.')
+                  body = json.loads(text)
+                  if path == '/readyz' and body.get('models_loaded') is not True:
+                      raise RuntimeError('/readyz reports models not loaded; inspect inference service model_load_failed logs.')
+                  log(f'{path}: HTTP 200 over trusted HTTPS' + (f'; model={body.get("model_version")}' if path == '/readyz' else ''))
+
+          def health():
+              config = live()['Configuration']
+              if config.get('State') != 'Active' or config.get('LastUpdateStatus') != 'Successful':
+                  raise RuntimeError(f'Lambda unhealthy: State={config.get("State")}, LastUpdateStatus={config.get("LastUpdateStatus")}. Inspect its AWS update status.')
+              env = config.get('Environment', {}).get('Variables', {})
+              for key in ('VI_INFERENCE_API_URL', 'VI_INFERENCE_API_KEY'):
+                  if not env.get(key):
+                      raise RuntimeError(f'Lambda missing {key}; check runtime secret and deployment configuration.')
+              check_api(env['VI_INFERENCE_API_URL'])
+              log('HEALTH PASSED: Lambda Active, update Successful; inference models loaded. This does not invoke ingestion or test prediction accuracy.')
+
+          def restore(backup):
+              original = backup['lambda']
+              secrets.extend(original['Configuration'].get('Environment', {}).get('Variables', {}).values())
+              aws('lambda', 'update-function-code', '--function-name', function,
+                  '--revision-id', live()['Configuration']['RevisionId'], '--image-uri', original['Code']['ResolvedImageUri'])
+              wait()
+              aws('lambda', 'update-function-configuration', '--function-name', function,
+                  '--revision-id', live()['Configuration']['RevisionId'], '--environment', 'file:///dev/stdin',
+                  payload=json.dumps({'Variables': original['Configuration'].get('Environment', {}).get('Variables', {})}))
+              wait()
+              log('Previous image and environment restored. Database rows were not changed by this workflow.')
+
+          def deploy():
+              account = aws('sts', 'get-caller-identity')['Account']
+              if account != '499665620971':
+                  raise RuntimeError('Wrong AWS account; expected 499665620971. Check the OIDC role.')
+              original = live()
+              rule = aws('events', 'describe-rule', '--name', schedule)
+              targets = aws('events', 'list-targets-by-rule', '--rule', schedule)
+              rollback = os.environ['DEPLOY_ACTION'] == 'rollback'
+              changed = False
+              if rollback:
+                  backup = json.loads(aws('secretsmanager', 'get-secret-value', '--secret-id', os.environ['BACKUP_SECRET'])['SecretString'])
+                  if backup.get('lambda', {}).get('Configuration', {}).get('FunctionName') != function:
+                      raise RuntimeError('Backup is missing or belongs to another Lambda; select this function\'s backup.')
+              else:
+                  runtime = json.loads(aws('secretsmanager', 'get-secret-value', '--secret-id', os.environ['RUNTIME_SECRET'])['SecretString'])
+                  secrets.extend(str(value) for value in runtime.values())
+                  keys = json.loads(runtime.get('VI_INFERENCE_ACCEPTED_KEYS', '[]'))
+                  if len(keys) != 1 or not keys[0].get('key'):
+                      raise RuntimeError('Runtime secret needs exactly one non-empty key in VI_INFERENCE_ACCEPTED_KEYS.')
+                  env = dict(original['Configuration'].get('Environment', {}).get('Variables', {}))
+                  env.update(VI_INFERENCE_API_URL=os.environ['INFERENCE_URL'], VI_INFERENCE_API_KEY=keys[0]['key'])
+                  env['DJANGO_SECRET_KEY'] = env.get('DJANGO_SECRET_KEY') or runtime.get('DJANGO_SECRET_KEY', '')
+                  secrets.extend(env.values())
+                  if not env['DJANGO_SECRET_KEY']:
+                      raise RuntimeError('DJANGO_SECRET_KEY missing from both Lambda and runtime secret.')
+                  check_api(env['VI_INFERENCE_API_URL'])
+                  stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dt%H%M%Sz').lower()
+                  registry = f'{account}.dkr.ecr.{region}.amazonaws.com'
+                  image = f'{registry}/{function}:release-{stamp}'
+                  log('Building linux/amd64 Lambda from checked-in main; no model downloads.')
+                  run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--provenance=false', '--load', '-f', 'Dockerfile.lambda', '-t', image, '.'], visible=True)
+                  if any('\n' in value or '\r' in value for value in env.values()):
+                      raise RuntimeError('Multiline environment values cannot be passed to the container smoke test.')
+                  run(['docker', 'run', '--rm', '--platform', 'linux/amd64', '--env-file', '/dev/stdin', '--entrypoint', 'python', image, '-c', 'import django; django.setup(); import lambda_function; from dashboard.services.remote_inference_service import RemoteInferenceService'], payload=''.join(f'{key}={value}\n' for key, value in env.items()))
+                  log('Release image import smoke passed.')
+                  password = run(['aws', 'ecr', 'get-login-password', '--region', region])
+                  run(['docker', 'login', '--username', 'AWS', '--password-stdin', registry], payload=password)
+                  run(['docker', 'push', image], visible=True)
+                  digest = aws('ecr', 'describe-images', '--repository-name', function, '--image-ids', 'imageTag=release-' + stamp)['imageDetails'][0]['imageDigest']
+                  release = f'{registry}/{function}@{digest}'
+                  old_digest = original['Code']['ResolvedImageUri'].split('@')[1]
+                  manifest = aws('ecr', 'batch-get-image', '--repository-name', function, '--image-ids', 'imageDigest=' + old_digest)['images'][0]['imageManifest']
+                  aws('ecr', 'put-image', '--repository-name', function, '--image-tag', 'rollback-' + stamp, '--image-manifest', 'file:///dev/stdin', payload=manifest)
+                  versions = aws('lambda', 'list-versions-by-function', '--function-name', function)['Versions']
+                  fields = ('CodeSha256', 'Role', 'MemorySize', 'Timeout', 'Architectures', 'Environment', 'VpcConfig', 'ImageConfigResponse', 'EphemeralStorage', 'LoggingConfig')
+                  version = next((v['Version'] for v in reversed(versions) if v['Version'] != '$LATEST' and all(v.get(k) == original['Configuration'].get(k) for k in fields)), None)
+                  if version is None:
+                      version = aws('lambda', 'publish-version', '--function-name', function, '--revision-id', original['Configuration']['RevisionId'], '--code-sha256', original['Configuration']['CodeSha256'])['Version']
+                  backup = {'lambda': original, 'eventbridge_rule': rule, 'eventbridge_targets': targets, 'rollback_lambda_version': version, 'release_image': release}
+                  backup_name = 'vi/rollback/release-' + stamp
+                  aws('secretsmanager', 'create-secret', '--name', backup_name, '--secret-string', 'file:///dev/stdin', payload=json.dumps(backup))
+                  log(f'Encrypted rollback backup: {backup_name}; immutable Lambda version: {version}')
+              current = live()['Configuration']
+              unchanged_fields = ('CodeSha256', 'Role', 'MemorySize', 'Timeout', 'Architectures', 'Environment', 'VpcConfig', 'ImageConfigResponse', 'EphemeralStorage', 'LoggingConfig')
+              if any(current.get(k) != original['Configuration'].get(k) for k in unchanged_fields):
+                  raise RuntimeError('Lambda changed during build or backup; rerun against the new configuration. No Lambda update attempted.')
+              expected_revision = current['RevisionId']
+              aws('events', 'disable-rule', '--name', schedule)
+              resume = True
+              try:
+                  log('Schedule paused; checking for invocations in the last 16 minutes.')
+                  since = int((datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=16)).timestamp() * 1000)
+                  events = aws('logs', 'filter-log-events', '--log-group-name', '/aws/lambda/' + function, '--start-time', str(since), '--filter-pattern', '"START RequestId"')['events']
+                  if events:
+                      raise RuntimeError('An invocation started within 16 minutes. Wait for completion and rerun; no Lambda update attempted.')
+                  if live()['Configuration']['RevisionId'] != expected_revision:
+                      raise RuntimeError('Lambda changed during preparation; rerun against the new configuration.')
+                  if rollback:
+                      resume = False
+                      restore(backup)
+                      resume = True
+                  else:
+                      aws('lambda', 'update-function-configuration', '--function-name', function, '--revision-id', expected_revision, '--environment', 'file:///dev/stdin', payload=json.dumps({'Variables': env}))
+                      changed = True
+                      wait()
+                      aws('lambda', 'update-function-code', '--function-name', function, '--revision-id', live()['Configuration']['RevisionId'], '--image-uri', release)
+                      wait()
+                      health()
+                      config = live()['Configuration']
+                      versions = aws('lambda', 'list-versions-by-function', '--function-name', function)['Versions']
+                      if not any(v['Version'] != '$LATEST' and all(v.get(k) == config.get(k) for k in unchanged_fields) for v in versions):
+                          aws('lambda', 'publish-version', '--function-name', function, '--revision-id', config['RevisionId'])
+                      log('Deployment passed health checks; no ingestion triggered.')
+              except Exception:
+                  if changed:
+                      resume = False
+                      log('Deployment failed; attempting automatic image/environment rollback.')
+                      restore(backup)
+                      resume = True
+                  raise
+              finally:
+                  if resume:
+                      desired = backup['eventbridge_rule']['State'] if rollback else rule['State']
+                      if desired == 'ENABLED':
+                          aws('events', 'enable-rule', '--name', schedule)
+                      log('Schedule restored to ' + desired)
+                  else:
+                      log('ERROR: restoration failed; schedule remains paused. Restore the backup before enabling it.')
+
+          try:
+              health() if sys.argv[1] == 'health' else deploy()
+          except Exception as error:
+              message = str(error)
+              for secret in secrets:
+                  if secret:
+                      message = message.replace(secret, '[REDACTED]')
+              print('::error::' + message.replace('\n', ' '), flush=True)
+              sys.exit(1)
+          PY
+      - name: Deploy or restore Lambda with rollback protection
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python3 "$RUNNER_TEMP/vi-lambda-workflow.py" deploy
+      - name: Verify deployed Lambda and HTTPS inference health
+        run: python3 "$RUNNER_TEMP/vi-lambda-workflow.py" health
+      - name: Remove temporary Docker credentials
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          # Remove only this run's credential file, not the shared runner config.
+          if [[ -f "$DOCKER_CONFIG/config.json" ]]; then
+            rm -- "$DOCKER_CONFIG/config.json"
+          fi
