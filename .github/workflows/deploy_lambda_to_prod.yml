@@ -26,6 +26,8 @@ jobs:
     runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS || '["ubuntu-24.04"]') }}
     timeout-minutes: 60
     env:
+      # Buildx setup and deployment must share plugin, builder, and auth state.
+      DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
       AWS_REGION: eu-west-1
       AWS_MAX_ATTEMPTS: '1'
       AWS_PAGER: ''
@@ -252,15 +254,11 @@ jobs:
               sys.exit(1)
           PY
       - name: Deploy or restore Lambda with rollback protection
-        env:
-          DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
         run: python3 "$RUNNER_TEMP/vi-lambda-workflow.py" deploy
       - name: Verify deployed Lambda and HTTPS inference health
         run: python3 "$RUNNER_TEMP/vi-lambda-workflow.py" health
       - name: Remove temporary Docker credentials
         if: always()
-        env:
-          DOCKER_CONFIG: ${{ runner.temp }}/vi-lambda-docker-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           # Remove only this run's credential file, not the shared runner config.
           if [[ -f "$DOCKER_CONFIG/config.json" ]]; then
