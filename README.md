@@ -148,6 +148,60 @@ may still be required for private PostgreSQL access.
 See [solution-spec.md](solution-spec.md) for the full contract, security model,
 traffic flow, failure handling, and logging requirements.
 
+## Lambda operation modes
+
+The normal daily event still ingests articles, validates them, then classifies
+pending rows. The additional event below skips MediaCloud ingestion and quality
+validation and spends the remaining Lambda time budget on existing pending rows:
+
+```json
+{"operation": "processing-only"}
+```
+
+For ingestion into the database plus the existing quality validation, without
+classification or inference API calls, use:
+
+```json
+{"operation": "ingestion-only"}
+```
+
+Omitting `operation` (for example `{}` or the existing daily EventBridge event)
+keeps ingestion followed by processing. The operation is included in logs;
+ingestion-only responses explicitly report processing skipped and unknown
+pending counts, rather than suggesting that the backlog is empty.
+
+All Lambda classification paths (daily, pending-only, and targeted verification) acquire
+the same non-blocking PostgreSQL session advisory lock before selecting rows.
+If another worker holds it, classification exits with
+`reason: classification_lock_held`; the pending counts are `null` because no
+queue query ran. Daily ingestion is not blocked. The lock survives per-article
+commits/rollbacks and is released on completion, failure, or session termination;
+no Redis, new table, or database migration is needed. Unknown operation names
+fail rather than accidentally starting ingestion.
+
+Pending-only runs retain the oldest-first selection, the existing 200-row cap,
+the safety margin before timeout, and all existing prediction/fallback rules.
+An empty queue exits without creating an inference client. Logs identify mode,
+ingestion skipped, lock acquisition/busy/release, time-budget stops, per-article
+results, and completion counts. `left_pending` describes the selected batch,
+not the total database backlog. Transport fallbacks already saved as processed
+are not made retryable by this change.
+
+**Rollout:** deploy this Lambda code first, then add a separate four-hour
+EventBridge trigger with `rate(4 hours)` and input
+`{"operation":"processing-only"}`.
+Keep the daily rule unchanged. This adds up to six pending-only invocations per
+day, each bounded by the existing 15-minute runtime and article cap. This is a
+legacy app: manage this schedule directly with AWS CLI until the Lambda is
+migrated to Pulumi. Do not apply the app repo's legacy Terraform just to enable
+this rule or add it through the deployment workflow.
+
+**Verify after rollout:** confirm pending-only logs never show ingestion, check
+saved classifications across successive runs, and check a competing classifier
+logs a lock-busy skip. **Rollback:** disable the new four-hour rule before
+restoring older Lambda code; an older handler would treat this event as normal
+daily ingestion. No database rollback is required.
+
 ## Deploying the inference service
 
 The `Deploy model inference` GitHub Actions workflow is deliberately

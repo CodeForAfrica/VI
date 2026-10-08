@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import unittest
+import types
 from unittest import mock
 from django.test import override_settings
 
@@ -145,10 +146,134 @@ class RequestLoggingTests(unittest.TestCase):
         self.assertNotIn("local_inference_retry", events)
 
 
+class HandlerVerificationTests(unittest.TestCase):
+    def invoke(self, event):
+        module = types.ModuleType("dashboard.services.mediacloud_ingestion_service")
+        module.main = mock.Mock()
+        with mock.patch.dict(sys.modules, {module.__name__: module}), \
+                mock.patch("django.setup"), \
+                mock.patch.object(lf, "get_db_connection", return_value=mock.MagicMock()), \
+                mock.patch.object(lf, "get_count", return_value=10), \
+                mock.patch.object(lf, "run_quality_validation"), \
+                mock.patch.object(lf, "classify_pending", return_value={
+                    "classified": 3, "failed": 0, "left_pending": 0}) as classify:
+            response = lf.lambda_handler(event, None)
+        return response, module.main, classify
+
+    def test_targeted_verification_bypasses_ingestion(self):
+        response, ingest, classify = self.invoke({
+            "operation": "verify_inference", "article_ids": [2, 4, 6]})
+        self.assertEqual(response["statusCode"], 200)
+        ingest.assert_not_called()
+        self.assertEqual(classify.call_args.kwargs["article_ids"], [2, 4, 6])
+
+    def test_invalid_verification_ids_never_classify_or_ingest(self):
+        for ids in (None, [], [1, 2, 3, 4], [True], [0], [-1], ["1"], [1, 1]):
+            with self.subTest(ids=ids):
+                response, ingest, classify = self.invoke({
+                    "operation": "verify_inference", "article_ids": ids})
+                self.assertEqual(response["statusCode"], 500)
+                ingest.assert_not_called()
+                classify.assert_not_called()
+
+    def test_pending_only_skips_ingestion_and_targets_normal_pending_rows(self):
+        response, ingest, classify = self.invoke({"operation": "processing-only"})
+        self.assertEqual(response["statusCode"], 200)
+        ingest.assert_not_called()
+        classify.assert_called_once()
+        self.assertNotIn("article_ids", classify.call_args.kwargs)
+        summary = json.loads(response["body"])
+        self.assertEqual(summary["operation"], "processing-only")
+        self.assertEqual(summary["ingested"], 0)
+
+    def test_daily_events_still_ingest_then_classify(self):
+        for event in ({}, {"source": "aws.events", "detail-type": "Scheduled Event"}):
+            with self.subTest(event=event):
+                response, ingest, classify = self.invoke(event)
+                self.assertEqual(response["statusCode"], 200)
+                ingest.assert_called_once()
+                classify.assert_called_once()
+
+    def test_typo_in_operation_does_not_accidentally_ingest(self):
+        response, ingest, classify = self.invoke({"operation": "processing-onyl"})
+        self.assertEqual(response["statusCode"], 500)
+        ingest.assert_not_called()
+        classify.assert_not_called()
+
+    def test_pending_only_does_not_import_mediacloud_or_run_validation(self):
+        with mock.patch.dict(sys.modules, {"dashboard.services.mediacloud_ingestion_service": None}), \
+                mock.patch("django.setup"), \
+                mock.patch.object(lf, "get_db_connection", return_value=mock.MagicMock()) as connect, \
+                mock.patch.object(lf, "get_count", return_value=10) as count, \
+                mock.patch.object(lf, "run_quality_validation") as validate, \
+                mock.patch.object(lf, "classify_pending", return_value={"classified": 0}) as classify:
+            response = lf.lambda_handler({"operation": "processing-only"}, None)
+        self.assertEqual(response["statusCode"], 200)
+        classify.assert_called_once()
+        validate.assert_not_called()
+        count.assert_not_called()
+        connect.return_value.close.assert_called_once()
+
+    def test_pending_only_failure_is_logged_and_connection_closed(self):
+        output = io.StringIO()
+        conn = mock.MagicMock()
+        with mock.patch("django.setup"), \
+                mock.patch.object(lf, "get_db_connection", return_value=conn), \
+                mock.patch.object(lf, "get_count", return_value=10), \
+                mock.patch.object(lf, "classify_pending", side_effect=RuntimeError("database failed")), \
+                mock.patch("sys.stdout", output), mock.patch("sys.stderr", output):
+            response = lf.lambda_handler({"operation": "processing-only"}, None)
+        self.assertEqual(response["statusCode"], 500)
+        self.assertIn('"event": "pending_processing_failed"', output.getvalue())
+        conn.close.assert_called_once()
+
+    def test_ingestion_only_never_classifies(self):
+        response, ingest, classify = self.invoke({"operation": "ingestion-only"})
+        self.assertEqual(response["statusCode"], 200)
+        ingest.assert_called_once()
+        classify.assert_not_called()
+        summary = json.loads(response["body"])
+        self.assertEqual(summary["operation"], "ingestion-only")
+        self.assertEqual(summary["classified"], 0)
+        self.assertIsNone(summary["left_pending"])
+        self.assertEqual(summary["reason"], "ingestion_only")
+
+    def test_ingestion_only_validates_counts_and_closes_without_inference_dependencies(self):
+        module = types.ModuleType("dashboard.services.mediacloud_ingestion_service")
+        module.main = mock.Mock()
+        conn = mock.MagicMock()
+        with mock.patch.dict(sys.modules, {module.__name__: module}), \
+                mock.patch("django.setup"), \
+                mock.patch.object(lf, "get_db_connection", return_value=conn), \
+                mock.patch.object(lf, "get_count", side_effect=[10, 12, 12]), \
+                mock.patch.object(lf, "run_quality_validation") as validate, \
+                mock.patch.object(lf, "_build_client", side_effect=AssertionError("must not call API")), \
+                mock.patch.object(lf, "classification_lock", side_effect=AssertionError("must not classify")):
+            response = lf.lambda_handler({"operation": "ingestion-only"}, None)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(json.loads(response["body"])["ingested"], 2)
+        module.main.assert_called_once()
+        validate.assert_called_once_with(conn)
+        conn.close.assert_called_once()
+
+    def test_ingestion_failure_does_not_start_processing(self):
+        module = types.ModuleType("dashboard.services.mediacloud_ingestion_service")
+        module.main = mock.Mock(side_effect=RuntimeError("ingestion unavailable"))
+        with mock.patch.dict(sys.modules, {module.__name__: module}), \
+                mock.patch("django.setup"), \
+                mock.patch.object(lf, "get_db_connection", return_value=mock.MagicMock()), \
+                mock.patch.object(lf, "get_count", return_value=10), \
+                mock.patch.object(lf, "classify_pending") as classify:
+            response = lf.lambda_handler({"operation": "ingestion-only"}, None)
+        self.assertEqual(response["statusCode"], 500)
+        classify.assert_not_called()
+
+
 class PersistenceTests(unittest.TestCase):
     def connection(self, rows=()):
         c = mock.MagicMock()
         c.cursor.return_value.__enter__.return_value.fetchall.return_value = rows
+        c.cursor.return_value.__enter__.return_value.fetchone.return_value = (True,)
         return c
 
     def test_original_pending_predicate(self):
@@ -158,6 +283,43 @@ class PersistenceTests(unittest.TestCase):
         self.assertIn("ml_processed_at IS NULL", sql)
         self.assertIn("strategic_intent IS NULL OR strategic_intent = ''", sql)
         self.assertNotIn("inference_status", sql)
+
+    def test_verification_fetch_is_restricted_to_recorded_ids(self):
+        c = self.connection()
+        lf.fetch_pending(c, 200, article_ids=[2, 4, 6])
+        sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertIn("id = ANY(%s)", sql)
+        self.assertEqual(params, ([2, 4, 6],))
+
+    def test_verification_rejects_missing_selected_rows(self):
+        c = self.connection([(2, "article", None, None)])
+        with self.assertRaises(ValueError):
+            lf.classify_pending(c, pipeline=mock.Mock(), article_ids=[2, 4])
+
+    def test_verification_never_saves_an_api_failure_fallback(self):
+        c = self.connection([(2, "article", None, None)])
+        pipeline = mock.Mock()
+        pipeline._error = RuntimeError("HTTPS failed")
+        with mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(c, pipeline=pipeline, article_ids=[2])
+        save.assert_not_called()
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["classified"], 0)
+        self.assertEqual(result["left_pending"], 1)
+
+    def test_verification_returns_api_and_persisted_result_evidence(self):
+        c = self.connection([(2, "article", None, None)])
+        pipeline = mock.Mock()
+        pipeline._error = None
+        pipeline._request_id = "request-2"
+        pipeline._result = {"strategic_intent": "Information Warfare", "tone": "Factual", "confidence": .7, "model_version": "2026-09-04"}
+        pipeline.perform_inference.return_value = {"strategic_intent": "Economic", "tone": "Factual", "confidence": .9}
+        with mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(c, pipeline=pipeline, article_ids=[2])
+        save.assert_called_once()
+        self.assertEqual(result["results"][0]["api_intent"], "Information Warfare")
+        self.assertEqual(result["results"][0]["saved_intent"], "Economic")
+        self.assertEqual(result["results"][0]["saved_confidence"], .9)
 
     def test_neutral_keeps_original_null_mapping(self):
         c = self.connection()
@@ -195,7 +357,115 @@ class PersistenceTests(unittest.TestCase):
         with mock.patch.object(lf, "save_classification", side_effect=RuntimeError("write failed")):
             result = lf.classify_pending(c, pipeline=mock.Mock())
         self.assertEqual(result["left_pending"], 1)
-        c.rollback.assert_called_once()
+        self.assertEqual(c.rollback.call_count, 2)  # failed article and lock cleanup
+
+
+class ClassificationLockTests(unittest.TestCase):
+    def connection(self, acquired=True, released=True):
+        conn = mock.MagicMock()
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.fetchone.side_effect = [(acquired,), (released,)]
+        return conn, cur
+
+    def test_busy_lock_never_fetches_calls_api_or_saves(self):
+        conn, cur = self.connection(acquired=False)
+        pipeline = mock.Mock()
+        with mock.patch.object(lf, "fetch_pending") as fetch, \
+                mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(conn, pipeline=pipeline)
+        self.assertEqual(result["reason"], "classification_lock_held")
+        self.assertIsNone(result["left_pending"])
+        fetch.assert_not_called()
+        save.assert_not_called()
+        pipeline.perform_inference.assert_not_called()
+        self.assertEqual(cur.execute.call_count, 1)
+
+    def test_lock_wraps_selection_and_is_released_after_success(self):
+        conn, cur = self.connection()
+        with mock.patch.object(lf, "_classify_pending_locked", return_value={"classified": 1}) as classify:
+            self.assertEqual(lf.classify_pending(conn), {"classified": 1})
+        classify.assert_called_once()
+        self.assertEqual(cur.execute.call_args_list, [
+            mock.call("SELECT pg_try_advisory_lock(%s)", (lf.CLASSIFICATION_LOCK_ID,)),
+            mock.call("SELECT pg_advisory_unlock(%s)", (lf.CLASSIFICATION_LOCK_ID,))])
+
+    def test_lock_released_when_selection_or_processing_raises(self):
+        conn, cur = self.connection()
+        with mock.patch.object(lf, "_classify_pending_locked", side_effect=RuntimeError("failed")):
+            with self.assertRaisesRegex(RuntimeError, "failed"):
+                lf.classify_pending(conn)
+        self.assertIn("pg_advisory_unlock", cur.execute.call_args.args[0])
+        conn.rollback.assert_called_once()
+
+    def test_lock_release_failure_is_not_silently_successful(self):
+        conn, cur = self.connection(released=False)
+        with mock.patch.object(lf, "_classify_pending_locked", return_value={}):
+            with self.assertRaisesRegex(RuntimeError, "not held"):
+                lf.classify_pending(conn)
+
+    def test_lock_acquisition_database_error_is_not_a_busy_skip(self):
+        conn, cur = self.connection()
+        cur.execute.side_effect = RuntimeError("database unavailable")
+        with self.assertRaisesRegex(RuntimeError, "database unavailable"):
+            lf.classify_pending(conn)
+
+    def test_empty_queue_never_builds_client_or_pipeline(self):
+        conn, _ = self.connection()
+        with mock.patch.object(lf, "fetch_pending", return_value=[]), \
+                mock.patch.object(lf, "_build_client") as build:
+            result = lf.classify_pending(conn)
+        build.assert_not_called()
+        self.assertEqual(result["classified"], 0)
+        self.assertEqual(result["left_pending"], 0)
+
+    def test_time_budget_leaves_unattempted_articles_pending(self):
+        conn, _ = self.connection()
+        pipeline = mock.Mock()
+        with mock.patch.object(lf, "fetch_pending", return_value=[(1, "text", None, None), (2, "text", None, None)]), \
+                mock.patch.object(lf.time, "time", return_value=100):
+            result = lf.classify_pending(conn, pipeline=pipeline, deadline=100)
+        self.assertEqual(result["left_pending"], 2)
+        pipeline.perform_inference.assert_not_called()
+
+
+@unittest.skipUnless(os.environ.get("VI_TEST_POSTGRES_HOST"), "isolated PostgreSQL integration database not configured")
+class PostgreSQLClassificationLockTests(unittest.TestCase):
+    def setUp(self):
+        import psycopg2
+        self.first = psycopg2.connect(host=os.environ["VI_TEST_POSTGRES_HOST"], dbname="postgres", user="postgres", connect_timeout=5)
+        self.second = psycopg2.connect(host=os.environ["VI_TEST_POSTGRES_HOST"], dbname="postgres", user="postgres", connect_timeout=5)
+        self.addCleanup(self.first.close)
+        self.addCleanup(self.second.close)
+
+    def test_competing_worker_skips_until_owner_finishes(self):
+        with lf.classification_lock(self.first) as acquired:
+            self.assertTrue(acquired)
+            # Session locking must survive successful and failed row transactions.
+            self.first.commit()
+            self.first.rollback()
+            with mock.patch.object(lf, "fetch_pending") as fetch:
+                result = lf.classify_pending(self.second)
+            self.assertEqual(result["reason"], "classification_lock_held")
+            fetch.assert_not_called()
+        with lf.classification_lock(self.second) as acquired:
+            self.assertTrue(acquired)
+
+    def test_failed_transaction_is_rolled_back_before_unlock(self):
+        import psycopg2
+        with self.assertRaises(psycopg2.errors.UndefinedTable):
+            with lf.classification_lock(self.first):
+                with self.first.cursor() as cur:
+                    cur.execute("SELECT * FROM vi_deliberately_missing_lock_test_table")
+        with lf.classification_lock(self.second) as acquired:
+            self.assertTrue(acquired)
+
+    def test_disconnected_owner_does_not_leave_permanent_lock(self):
+        with self.first.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (lf.CLASSIFICATION_LOCK_ID,))
+            self.assertTrue(cur.fetchone()[0])
+        self.first.close()
+        with lf.classification_lock(self.second) as acquired:
+            self.assertTrue(acquired)
 
 
 if __name__ == "__main__":
