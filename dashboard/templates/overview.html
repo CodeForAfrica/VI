@@ -203,7 +203,7 @@
                 <div class="mb-3 mt-2">
                     <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
                     <!-- Use the canonical intent value from the view -->
-                    <span class="badge badge-intent">Intent: {{ article.canonical_strategic_intent|default:"Information"|title }}</span>
+                    <span class="badge badge-intent">Intent: {{ article.canonical_strategic_intent|default:"Social Fragility"|title }}</span>
                 </div>
                 <p class="small text-muted mb-3">{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
                 <div class="d-flex justify-content-between align-items-center">
