@@ -26,6 +26,17 @@ causing HTTP 500 on direct access. Their unused handlers were removed rather tha
 introducing new pages outside the current dashboard scope. Direct requests now
 return HTTP 404; the existing overview filters and `/articles/` search remain.
 
+## Dashboard translation
+
+Dashboard display translation uses Amazon Translate in `AWS_REGION_NAME`
+(default `eu-west-1`). Production uses the EC2 instance role, not human access
+keys in the container. The role needs `translate:TranslateText` and
+`comprehend:DetectDominantLanguage` for automatic language detection. Successful
+translations are cached for 24 hours; failures keep the original text and are
+cached for 60 seconds to avoid retry storms. Requests have a 2-second connection
+timeout, a 3-second read timeout, and no SDK retries. Translate and automatic
+language detection are billable; caching avoids paying again on every page load.
+
 # Concept
 
 Influence operations are not only driven by messaging strength. Their impact depends heavily on **pre-existing vulnerabilities within the target environment**, including:

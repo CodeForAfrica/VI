@@ -52,14 +52,14 @@ class Command(BaseCommand):
         aws_bucket = getattr(settings, 'S3_MODELS_BUCKET', None) or os.environ.get('S3_MODELS_BUCKET')
         aws_region = getattr(settings, 'AWS_S3_REGION_NAME', None) or os.environ.get('AWS_S3_REGION_NAME', 'eu-west-1')
 
-        if not all([aws_key, aws_secret, aws_bucket]):
-            self.stderr.write(self.style.ERROR("AWS credentials not configured."))
+        if not aws_bucket:
+            self.stderr.write(self.style.ERROR("S3_MODELS_BUCKET is not configured."))
             return None, None
 
         client = boto3.client(
             's3',
-            aws_access_key_id=aws_key,
-            aws_secret_access_key=aws_secret,
+            aws_access_key_id=aws_key or None,
+            aws_secret_access_key=aws_secret or None,
             region_name=aws_region,
             config=botocore.config.Config(
                 retries={'max_attempts': 10, 'mode': 'adaptive'},

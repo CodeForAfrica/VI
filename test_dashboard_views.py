@@ -16,6 +16,7 @@ from pypdf.generic import ContentStream
 
 @override_settings(
     GROQ_API_KEY="test-only-not-a-credential",
+    AWS_REGION_NAME="eu-west-1",
     TEMPLATES=[{"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}],
 )
 class DashboardViewTests(TestCase):
@@ -119,33 +120,65 @@ class DashboardViewTests(TestCase):
             client.return_value.chat.completions.create.assert_not_called()
 
     def test_translation_success_and_failure_preserve_display_contract(self):
-        with mock.patch.object(self.views.requests, "get") as request:
-            request.return_value.status_code = 200
-            request.return_value.text = '<div class="t0">English title</div>'
+        with mock.patch.object(self.views, "get_translate_client") as factory:
+            request = factory.return_value.translate_text
+            request.return_value = {'TranslatedText': 'English title'}
             self.assertEqual(self.views.translate_to_english("Titre français"), "English title")
-            self.assertEqual(request.call_args.kwargs["timeout"], (1, 1))
-            self.assertFalse(request.call_args.kwargs["allow_redirects"])
+            factory.assert_called_once_with('eu-west-1')
+            request.assert_called_once_with(Text='Titre français', SourceLanguageCode='auto', TargetLanguageCode='en')
             self.assertEqual(self.views.translate_to_english("Titre français"), "English title")
             request.assert_called_once()
-            request.side_effect = self.views.requests.Timeout("test provider failure")
+            request.side_effect = TimeoutError("test provider failure")
             with self.assertLogs(self.views.logger.name, level="WARNING"):
                 self.assertEqual(self.views.translate_to_english("Autre titre"), "Autre titre")
+            self.assertEqual(self.views.translate_to_english("Autre titre"), "Autre titre")
+            self.assertEqual(request.call_count, 2)
             self.assertIsNone(self.views.translate_to_english(None))
 
     def test_translation_handles_provider_and_cache_failures(self):
-        with mock.patch.object(self.views.requests, "get") as request:
-            for status, body in ((429, ""), (200, "<html>No translation</html>")):
-                with self.subTest(status=status, body=body):
-                    request.return_value.status_code = status
-                    request.return_value.text = body
+        from botocore.exceptions import ClientError
+        with mock.patch.object(self.views, "get_translate_client") as factory:
+            request = factory.return_value.translate_text
+            for result in ({}, {'TranslatedText': ''}, {'TranslatedText': None}):
+                with self.subTest(result=result):
+                    cache.clear()
+                    request.return_value = result
                     with self.assertLogs(self.views.logger.name, level="WARNING"):
                         self.assertEqual(self.views.translate_to_english("Texte"), "Texte")
-            request.return_value.status_code = 200
-            request.return_value.text = '<div class="result-container">English text</div>'
+            cache.clear()
+            request.side_effect = ClientError({'Error': {'Code': 'AccessDeniedException', 'Message': 'test'}}, 'TranslateText')
+            with self.assertLogs(self.views.logger.name, level='WARNING') as logs:
+                self.assertEqual(self.views.translate_to_english('Texte'), 'Texte')
+            self.assertIn('AccessDeniedException', '\n'.join(logs.output))
+            cache.clear()
+            request.side_effect = None
+            request.return_value = {'TranslatedText': 'English text'}
             with mock.patch.object(cache, "get", side_effect=RuntimeError("cache unavailable")):
                 with mock.patch.object(cache, "set", side_effect=RuntimeError("cache unavailable")):
                     with self.assertLogs(self.views.logger.name, level="WARNING"):
                         self.assertEqual(self.views.translate_to_english("Texte"), "English text")
+
+    def test_translate_client_has_bounded_requests_and_explicit_region(self):
+        self.views.get_translate_client.cache_clear()
+        with mock.patch.object(self.views.boto3, 'client') as create:
+            self.views.get_translate_client('eu-west-1')
+            self.views.get_translate_client('eu-west-1')
+            create.assert_called_once()
+            self.assertEqual(create.call_args.kwargs['region_name'], 'eu-west-1')
+            config = create.call_args.kwargs['config']
+            self.assertEqual((config.connect_timeout, config.read_timeout), (2, 3))
+            self.assertEqual(config.retries['total_max_attempts'], 1)
+        self.views.get_translate_client.cache_clear()
+
+    @override_settings(AWS_ACCESS_KEY_ID=None, AWS_SECRET_ACCESS_KEY=None, S3_MODELS_BUCKET='test-model-bucket')
+    def test_s3_import_supports_role_credentials(self):
+        from dashboard.management.commands.import_initial_data import Command
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch('dashboard.management.commands.import_initial_data.boto3.client') as create:
+            client, bucket = Command().get_s3_client()
+            self.assertEqual(bucket, 'test-model-bucket')
+            self.assertIs(client, create.return_value)
+            self.assertIsNone(create.call_args.kwargs['aws_access_key_id'])
+            self.assertIsNone(create.call_args.kwargs['aws_secret_access_key'])
 
     @override_settings(ROOT_URLCONF="dashboard.urls")
     def test_overview_displays_translations_without_rewriting_article(self):

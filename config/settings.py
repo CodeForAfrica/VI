@@ -115,6 +115,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'eu-west-1')
+AWS_REGION_NAME = os.getenv('AWS_REGION_NAME') or os.getenv('AWS_DEFAULT_REGION') or AWS_S3_REGION_NAME
 S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 
 # API Keys - SECURE: All from environment

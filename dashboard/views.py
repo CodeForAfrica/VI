@@ -3,6 +3,8 @@ import os
 import re
 import io
 import hashlib
+from functools import lru_cache
+from botocore.config import Config
 import pandas as pd
 import plotly.express as px
 from django.shortcuts import render
@@ -64,8 +66,6 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
-from deep_translator import GoogleTranslator
-from bs4 import BeautifulSoup
 
 
 
@@ -847,29 +847,45 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             }
         return stats
         
-# Initialize boto3 Translate client
-translate_client = boto3.client('translate', region_name=getattr(settings, 'AWS_REGION_NAME', 'us-east-1'))
+@lru_cache(maxsize=1)
+def get_translate_client(region):
+    # Resolve credentials only when needed; local page imports need no AWS identity.
+    return boto3.client('translate', region_name=region, config=Config(
+        connect_timeout=2, read_timeout=3, retries={'total_max_attempts': 1},
+    ))
 
 def translate_to_english(text):
-    """
-    Translates text to English using AWS Translate API.
-    Returns original text on failure or empty string.
-    """
+    """Cache display translations; preserve original text on provider failure."""
     if not text or not str(text).strip():
         return text
+    region = getattr(settings, 'AWS_REGION_NAME', 'eu-west-1')
+    cache_key = 'display_translation_en:' + region + ':' + hashlib.sha256(str(text).encode('utf-8')).hexdigest()
     try:
-        response = translate_client.translate_text(
-            Text=text,
-            SourceLanguageCode='auto',
-            TargetLanguageCode='en'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception as error:
+        logger.warning('Translation cache read failed (error_type=%s)', type(error).__name__)
+    translated = text
+    cache_seconds = 60
+    try:
+        response = get_translate_client(region).translate_text(
+            Text=str(text), SourceLanguageCode='auto', TargetLanguageCode='en',
         )
-        return response.get('TranslatedText', text)
-    except ClientError as e:
-        logger.error(f"AWS Translate Error: {e}")
-        return text
-    except Exception as e:
-        logger.error(f"Unexpected Translation Error: {e}")
-        return text
+        translated = response.get('TranslatedText')
+        if not isinstance(translated, str) or not translated.strip():
+            raise ValueError('AWS Translate returned no translated text')
+        cache_seconds = 86400
+        logger.info('Display translation completed (region=%s, characters=%s)', region, len(str(text)))
+    except Exception as error:
+        translated = text
+        code = error.response.get('Error', {}).get('Code') if isinstance(error, ClientError) else type(error).__name__
+        logger.warning('Display translation failed; showing original text (region=%s, error_code=%s)', region, code)
+    try:
+        cache.set(cache_key, translated, timeout=cache_seconds)
+    except Exception as error:
+        logger.warning('Translation cache write failed (error_type=%s)', type(error).__name__)
+    return translated
 
 
 # Instantiate the chatbot once
