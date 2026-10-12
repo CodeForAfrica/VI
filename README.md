@@ -18,6 +18,14 @@ The platform provides:
 
 ---
 
+## Removed unused dashboard routes
+
+`/intents/` and `/all-articles/` are intentionally not exposed. Neither was linked
+from the dashboard navigation or templates, and both referenced missing templates,
+causing HTTP 500 on direct access. Their unused handlers were removed rather than
+introducing new pages outside the current dashboard scope. Direct requests now
+return HTTP 404; the existing overview filters and `/articles/` search remain.
+
 # Concept
 
 Influence operations are not only driven by messaging strength. Their impact depends heavily on **pre-existing vulnerabilities within the target environment**, including:

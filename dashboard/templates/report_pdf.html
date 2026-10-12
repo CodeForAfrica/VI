@@ -203,7 +203,7 @@
                 <strong style="color: #334155;">Summary:</strong><br>{{ narrative.summary }}
             </div>
             <div>
-                <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">🔗 Read Full Article</a>
+                <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">Read Full Article</a>
             </div>
         </div>
         {% endfor %}
@@ -212,7 +212,7 @@
     <div class="section">
         <div class="section-title">Insights & Analysis</div>
         <div class="ai-insights">
-            <div style="white-space: pre-wrap;">{{ ai_insights|linebreaks }}</div>
+            {{ ai_insights|linebreaks }}
         </div>
     </div>
 
@@ -220,7 +220,7 @@
         <div class="section-title">Narrative Volume Over Time</div>
         <div class="chart-container">
             {% if volume_chart %}
-            <img src="data:image/png;base64,{{ volume_chart }}" style="width: 100%;">
+            <img src="data:image/jpeg;base64,{{ volume_chart }}" style="width: 420pt; height: 210pt;">
             {% else %}
             <p>No volume chart data available.</p>
             {% endif %}
@@ -231,7 +231,7 @@
         <div class="section-title">Factor Chart</div>
         <div class="chart-container">
             {% if factor_chart %}
-            <img src="data:image/png;base64,{{ factor_chart }}" style="width: 100%;">
+            <img src="data:image/jpeg;base64,{{ factor_chart }}" style="width: 420pt; height: 240pt;">
             {% else %}
             <p>No factor chart data available.</p>
             {% endif %}

@@ -2,6 +2,7 @@
 import os
 import re
 import io
+import hashlib
 import pandas as pd
 import plotly.express as px
 from django.shortcuts import render
@@ -58,13 +59,13 @@ from django.template.loader import get_template
 from django.core.cache import cache 
 from django.db.models import Q, Count, Avg, Sum
 from django.db.models.functions import TruncMonth
-from django.utils.dateparse import parse_date
 from botocore.exceptions import ClientError, NoCredentialsError
 # from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
 from deep_translator import GoogleTranslator
+from bs4 import BeautifulSoup
 
 
 
@@ -159,24 +160,20 @@ intent_mapping = {
     "cultural influence": "SocialFragility",
 }    
 
-def translate_to_english(text):
-    """
-    Translates text to English if it is in French, Arabic, or any other language.
-    Returns the original text if empty or if translation fails.
-    """
-    if not text or not str(text).strip():
-        return text
-    try:
-        translated = GoogleTranslator(source='auto', target='en').translate(text)
-        return translated
-    except Exception as e:
-        logger.error(f"Translation error: {e}")
-        return text
-
-
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
+def clean_ai_response(content):
+    """Keep final answer text, never display model reasoning or truncated reasoning."""
+    if not isinstance(content, str):
+        raise ValueError("AI response contains no text")
+    content = re.sub(r"<think\b[^>]*>.*?(?:</think\s*>|$)", "", content, flags=re.IGNORECASE | re.DOTALL)
+    content = content.strip()
+    if not content:
+        raise ValueError("AI response contains no final answer")
+    return content
+
+
 class DisinfoAnalysisChatbot:
     def __init__(self):
         # Initializing the Groq client with your specific Llama 4 model
@@ -237,7 +234,6 @@ class DisinfoAnalysisChatbot:
             "diplomatic influence": "Sovereignty",
         }
 
-
     def process_query(self, query):
         query_l = query.lower().strip()
 
@@ -295,7 +291,7 @@ class DisinfoAnalysisChatbot:
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.1
                     )
-                    return response.choices[0].message.content.strip()
+                    return clean_ai_response(response.choices[0].message.content)
                 except Exception:
                     return f"I found {articles.count()} articles for {db_country}, but the AI synthesis is currently unavailable. Most stories involve {articles[0].inferred_actor}."
             else:
@@ -783,7 +779,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
 
             # If all checks pass, return the content
             print(f"DEBUG: Successfully retrieved content (type: {type(content)}, length: {len(content) if content else 0})") 
-            return content
+            return clean_ai_response(content)
 
         except Exception as e:
             # Catch any exception during the API call or processing
@@ -851,6 +847,44 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             }
         return stats
         
+def translate_to_english(text):
+    """Translate display text without interrupting rendering on provider failure."""
+    if not text or not str(text).strip():
+        return text
+    cache_key = "display_translation_en:" + hashlib.sha256(str(text).encode("utf-8")).hexdigest()
+    try:
+        translated = cache.get(cache_key)
+        if translated is not None:
+            return translated
+    except Exception as error:
+        logger.warning("Display translation cache read failed (error_type=%s)", type(error).__name__)
+    try:
+        # The pinned provider wrapper has no HTTP timeout; bound the same request here.
+        translator = GoogleTranslator(source='auto', target='en')
+        response = requests.get(
+            translator._base_url, params={"sl": "auto", "tl": "en", "q": str(text).strip()},
+            timeout=(1, 1), allow_redirects=False,
+        )
+        try:
+            if response.status_code != 200:
+                raise requests.HTTPError("Translation provider returned HTTP " + str(response.status_code))
+            soup = BeautifulSoup(response.text, "html.parser")
+            element = soup.find("div", class_="t0") or soup.find("div", class_="result-container")
+            if element is None or not element.get_text(strip=True):
+                raise ValueError("Translation provider returned no translated text")
+            translated = element.get_text(strip=True)
+        finally:
+            response.close()
+    except Exception as error:
+        logger.warning("Display translation failed; showing original text (error_type=%s)", type(error).__name__)
+        return text
+    try:
+        cache.set(cache_key, translated, timeout=60 * 60 * 24)
+    except Exception as error:
+        logger.warning("Display translation cache write failed (error_type=%s)", type(error).__name__)
+    return translated
+
+
 # Instantiate the chatbot once
 chatbot_instance = DisinfoAnalysisChatbot()
 
@@ -1514,7 +1548,7 @@ def generate_report(request):
                         model="qwen/qwen3.6-27b",
                         max_tokens=1024
                     )
-                    ai_summary = sum_response.choices[0].message.content.strip()
+                    ai_summary = clean_ai_response(sum_response.choices[0].message.content)
                 except Exception as e:
                     logger.error(f"Article summary error for article ID {getattr(article, 'id', 'unknown')}: {e}")
                     # ai_summary remains the fallback
@@ -1566,7 +1600,7 @@ def generate_report(request):
                     messages=[{"role": "user", "content": insight_prompt}],
                     model="qwen/qwen3.6-27b"
                 )
-                ai_insights = chat_completion.choices[0].message.content
+                ai_insights = clean_ai_response(chat_completion.choices[0].message.content)
             except Exception as e_insight:
                  logger.error(f"AI Insights generation error: {e_insight}")
                  ai_insights = f"AI analysis could not be completed. (Error: {str(e_insight)[:50]})" # Short error message
@@ -1607,7 +1641,8 @@ def generate_report(request):
             plt.tight_layout()
 
             buf = BytesIO()
-            plt.savefig(buf, format='png', dpi=150) # Save as PNG buffer
+            # JPEG avoids xhtml2pdf's unstable cache identity for decoded PNG buffers.
+            plt.savefig(buf, format='jpeg', dpi=150, pil_kwargs={"quality": 95})
             buf.seek(0)
             volume_chart_bytes = buf.read()
             if volume_chart_bytes: # Ensure the buffer is not empty
@@ -1644,7 +1679,7 @@ def generate_report(request):
             plt.tight_layout()
 
             buf = BytesIO()
-            plt.savefig(buf, format='png', dpi=150) # Save as PNG buffer
+            plt.savefig(buf, format='jpeg', dpi=150, pil_kwargs={"quality": 95})
             buf.seek(0)
             factor_chart_bytes = buf.read()
             if factor_chart_bytes: # Ensure the buffer is not empty
@@ -2212,80 +2247,6 @@ def articles_view(request):
     }
     return render(request, "articles.html", context)
     
-def intents(request):
-    intent_name = request.GET.get('intent', '').strip()
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-    if intent_name: qs = qs.filter(strategic_intent__iexact=intent_name)
-    
-    top_intents = MediaNarrative.objects.exclude(strategic_intent__in=['', None]).values('strategic_intent').annotate(article_count=Count('strategic_intent')).order_by('-article_count')[:10]
-    context = {
-        'top_intents': top_intents,
-        'page_obj': Paginator(qs, 10).get_page(request.GET.get('page')),
-    }
-    return render(request, 'intents.html', context)
-    
-def all_articles(request):
-    # Apply filters if present
-    target_country = request.GET.get('target_country', '').strip()
-    inferred_actor = request.GET.get('inferred_actor', '').strip()
-    strategic_intent = request.GET.get('strategic_intent', '').strip()
-    start_date = request.GET.get('start_date', '').strip()
-    end_date = request.GET.get('end_date', '').strip()
-
-    # Build queryset
-    qs = MediaNarrative.objects.all().order_by('-posting_time')
-
-    if target_country:
-        qs = qs.filter(target_country__iexact=target_country)
-    if inferred_actor:
-        qs = qs.filter(inferred_actor__iexact=inferred_actor)
-    if strategic_intent:
-        qs = qs.filter(strategic_intent__iexact=strategic_intent)
-    if start_date:
-        parsed_start = parse_date(start_date)
-        if parsed_start:
-            qs = qs.filter(posting_time__date__gte=parsed_start)
-    if end_date:
-        parsed_end = parse_date(end_date)
-        if parsed_end:
-            qs = qs.filter(posting_time__date__lte=parsed_end)
-
-    # Pagination
-    paginator = Paginator(qs, 20)  # Show 20 articles per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Process articles for display (title, summary)
-    for article in page_obj:
-        # Use cached title/summary if available, otherwise compute
-        if not hasattr(article, 'display_title'):
-            lines = [line.strip() for line in article.article_text.splitlines() if line.strip()]
-            article.display_title = lines[0][:100] if lines else "No Title Available"
-        if not hasattr(article, 'display_summary'):
-            text = article.article_text.replace('\n', ' ').strip()
-            if len(text) > 500:
-                cut = text[:500].rfind(' ')
-                article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
-            else:
-                article.display_summary = text
-        article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent)
-    context = {
-        'page_obj': page_obj,
-        'filters_applied': bool(target_country or inferred_actor or strategic_intent or start_date or end_date),
-        'target_countries': COUNTRIES,
-        'foreign_actors': FOREIGN_ACTORS,
-        'strategic_intents': INTENT_CHOICES,
-        'selected_filters': {
-            'target_country': target_country,
-            'inferred_actor': inferred_actor,
-            'strategic_intent': strategic_intent,
-            'start_date': start_date,
-            'end_date': end_date,
-        }
-    }
-    return render(request, 'dashboard/all_articles.html', context)
-
-
 def dashboard_home(request):
     # Quick stats for the home dashboard page
     total_articles = MediaNarrative.objects.count()

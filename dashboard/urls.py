@@ -9,9 +9,7 @@ urlpatterns = [
     path('authors/', views.authors, name='authors'),
     # CHECK THE COMMA AT THE END OF THE LINE BELOW:
     path('outlets/', views.media, name='media'),
-    path('intents/', views.intents, name='intents'),
     path('countries/', views.countries, name='countries'),
-    path('all-articles/', views.all_articles, name='all_articles'),
     path('articles/', views.articles_view, name='articles'),
     path('generate-report/', views.generate_report, name='generate_report'),
     path('chat/', views.chatbot_response, name='chatbot_response'),

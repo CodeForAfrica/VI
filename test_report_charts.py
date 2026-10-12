@@ -62,7 +62,7 @@ class ReportFactorChartTests(TestCase):
         self.assertEqual(list(result["df_f"]["Factor"]), ["Sovereignty", "Economic"])
         self.assertEqual(list(result["df_f"]["Val"]), [1, 2])
         self.assertEqual(result["primary_intent"], "Economic")
-        self.assertTrue(base64.b64decode(result["factor_chart_base64"]).startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertTrue(base64.b64decode(result["factor_chart_base64"]).startswith(b"\xff\xd8\xff"))
 
     def test_empty_or_unknown_only_intents_skip_factor_chart(self):
         for intents in ([], ["", "Unknown"]):
