@@ -21,11 +21,11 @@ env:
   DASHBOARD_URL: ${{ vars.VI_DASHBOARD_URL || 'https://vi.dev.codeforafrica.org' }}
 
 jobs:
-  deploy:
-    name: Build, deploy and verify production dashboard
+  validate:
+    name: Validate
     runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
     environment: prod
-    timeout-minutes: 60
+    timeout-minutes: 5
     steps:
       - name: Validate main branch and deployment configuration
         env:
@@ -53,6 +53,15 @@ jobs:
           [[ "$DASHBOARD_URL" =~ ^https://[a-zA-Z0-9.-]+/?$ ]] || { echo '::error::VI_DASHBOARD_URL must be an HTTPS origin without a path or credentials.'; exit 1; }
           echo '[dashboard] OK - main branch and required configuration validated.'
 
+  build:
+    name: Build
+    needs: validate
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
+    environment: prod
+    timeout-minutes: 60
+    outputs:
+      digest: ${{ steps.published.outputs.digest }}
+    steps:
       - name: Isolate Docker credentials and Buildx configuration
         run: |
           set -euo pipefail
@@ -98,15 +107,27 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: Select the immutable image digest
+        id: published
         env:
           BUILT_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
           echo '[dashboard] Selecting the image built by this run, not the cached main tag.'
           [[ "$BUILT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Build did not return a valid image digest. Deployment was not attempted.'; exit 1; }
-          echo "DEPLOY_IMAGE=$IMAGE_NAME@$BUILT_DIGEST" >> "$GITHUB_ENV"
+          echo "digest=$BUILT_DIGEST" >> "$GITHUB_OUTPUT"
           echo "[dashboard] OK - deploying commit $GITHUB_SHA as $IMAGE_NAME@$BUILT_DIGEST."
 
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
+    environment: prod
+    timeout-minutes: 20
+    outputs:
+      digest: ${{ needs.build.outputs.digest }}
+    env:
+      BUILT_DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
       - name: Prepare verified SSH access to Dokku
         env:
           DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
@@ -128,12 +149,52 @@ jobs:
       - name: Deploy the exact built image through Dokku
         run: |
           set -euo pipefail
+          [[ "$BUILT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Build job did not supply a valid digest. No deployment was attempted.'; exit 1; }
+          DEPLOY_IMAGE="$IMAGE_NAME@$BUILT_DIGEST"
           echo "[dashboard] Deploying $DEPLOY_IMAGE; Dokku will run its release health checks."
           if ! ssh -i "$DEPLOY_SSH_DIR/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$DEPLOY_SSH_DIR/known_hosts" -o ConnectTimeout=15 "dokku@$DOKKU_HOST" "git:from-image $APP_NAME $DEPLOY_IMAGE"; then
             echo '::error::Dokku deployment failed. Check the preceding SSH, registry pull, startup or health-check error. Deployment may have partially completed; inspect the running app before retrying.'
             exit 1
           fi
           echo '[dashboard] OK - Dokku deployment command completed.'
+
+      - name: Remove temporary SSH credentials
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -n "${DEPLOY_SSH_DIR:-}" && "$DEPLOY_SSH_DIR" == "$RUNNER_TEMP"/vi-dashboard-ssh.* ]]; then
+            rm -f -- "$DEPLOY_SSH_DIR/key" "$DEPLOY_SSH_DIR/known_hosts"
+            rmdir -- "$DEPLOY_SSH_DIR"
+            echo '[dashboard] OK - temporary SSH credentials removed.'
+          fi
+
+  verify:
+    name: Verify
+    needs: deploy
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
+    environment: prod
+    timeout-minutes: 10
+    env:
+      BUILT_DIGEST: ${{ needs.deploy.outputs.digest }}
+    steps:
+      - name: Prepare verified SSH access to Dokku
+        env:
+          DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_SSH_HOST_KEY: ${{ secrets.DOKKU_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Preparing independent verification credentials; jobs may use different CFA runners.'
+          [[ "$BUILT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Build job did not supply a valid digest for verification.'; exit 1; }
+          for tool in ssh python3 curl; do
+            command -v "$tool" >/dev/null || { echo "::error::Runner is missing $tool."; exit 1; }
+          done
+          ssh_directory=$(mktemp -d "$RUNNER_TEMP/vi-dashboard-ssh.XXXXXX")
+          chmod 700 "$ssh_directory"
+          echo "DEPLOY_SSH_DIR=$ssh_directory" >> "$GITHUB_ENV"
+          printf '%s\n' "$DOKKU_SSH_PRIVATE_KEY" > "$ssh_directory/key"
+          printf '%s\n' "$DOKKU_SSH_HOST_KEY" > "$ssh_directory/known_hosts"
+          chmod 600 "$ssh_directory/key" "$ssh_directory/known_hosts"
+          echo '[dashboard] OK - pinned SSH access prepared for verification.'
 
       - name: Verify the running dashboard matches this commit
         run: |
@@ -184,7 +245,7 @@ jobs:
             fi
           done
           echo '[dashboard] HEALTH PASSED - homepage and report form respond over trusted HTTPS. This does not test AI summaries or PDF generation.'
-          printf '### Dashboard deployment verified\n\nCommit: %s\n\nImage: %s\n\nHomepage and report form: HTTP 200 over trusted HTTPS. PDF generation and AI output were not tested.\n' "$GITHUB_SHA" "$DEPLOY_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          printf '### Dashboard deployment verified\n\nCommit: %s\n\nImage: %s\n\nHomepage and report form: HTTP 200 over trusted HTTPS. PDF generation and AI output were not tested.\n' "$GITHUB_SHA" "$IMAGE_NAME@$BUILT_DIGEST" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove temporary SSH credentials
         if: always()
