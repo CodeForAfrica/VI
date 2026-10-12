@@ -1,4 +1,4 @@
-<!-- overview.html -->
+<!-- dashboard/templates/overview.html -->
 
 {% extends "base.html" %}
 {% block content %}
@@ -141,7 +141,7 @@
                 <div class="formula-box text-center">
                     (Content Signal + Contextual Signal) = Vulnerability Index
                 </div>
-                <p class="text-muted mt-2 mb-0" style="font-size: 0.7rem;"><strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>Current focus: <em>{{ selected_intent|default:"General Influence" }}</em>.</p>
+                <p class="text-muted mt-2 mb-0" style="font-size: 0.7rem;"><strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>Current focus: <em>{{ selected_intent|default:"Social Fragility" }}</em>.</p>
             </div>
             <p class="small text-muted mt-3">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
         {% else %}
@@ -170,8 +170,8 @@
                 <ul class="list-group list-group-flush">
                     {% for sub in top_subjects %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <!-- Use the canonical intent value from the view -->
-                        {{ sub.canonical_intent|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
+                        <!-- Display canonical intent value or fallback to Social Fragility -->
+                        {{ sub.canonical_intent|default:"Social Fragility"|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
                         <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
                     </li>
                     {% empty %}
@@ -191,7 +191,9 @@
             <div class="card-body">
                 <h6 class="fw-bold">
                     <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
-                        {% if article.title %}
+                        {% if article.display_title %}
+                            {{ article.display_title }}
+                        {% elif article.title %}
                             {{ article.title }}
                         {% elif article.article_text %}
                             {{ article.article_text|truncatewords:12 }}
@@ -202,7 +204,7 @@
                 </h6>
                 <div class="mb-3 mt-2">
                     <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
-                    <!-- Use the canonical intent value from the view -->
+                    <!-- Canonical intent default explicitly set to Social Fragility -->
                     <span class="badge badge-intent">Intent: {{ article.canonical_strategic_intent|default:"Social Fragility"|title }}</span>
                 </div>
                 <p class="small text-muted mb-3">{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
@@ -216,8 +218,7 @@
     {% endfor %}
 </div>
 
-
-<!-- ADD PAGINATION CONTROLS HERE -->
+<!-- PAGINATION CONTROLS -->
 <div class="row g-4 mb-5">
     <div class="col-12 text-center">
         {% if page_obj.has_other_pages %}
@@ -234,7 +235,6 @@
                         </li>
                     {% endif %}
 
-                    <!-- Show First, Ellipsis, Current, Ellipsis, Last -->
                     {% if page_obj.paginator.num_pages > 7 %}
                         {% if page_obj.number > 4 %}
                             <li class="page-item"><a class="page-link" href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a></li>
