@@ -64,6 +64,8 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
+from deep_translator import GoogleTranslator
+
 
 
 logger = logging.getLogger(__name__)
@@ -107,9 +109,8 @@ INTENT_CHOICES = [
     ('ElectionInfluence', 'Election Influence'),
 ]
 
-# intent_mapping DICTIONARY
 intent_mapping = {
-    # Direct matches (if ML outputs match CSV exactly)
+    # Direct matches
     "economic": "Economic",
     "sovereignty": "Sovereignty",
     "lgbtq": "LGBTQ",
@@ -119,17 +120,35 @@ intent_mapping = {
     "resourcedependency": "ResourceDependency",
     "socialfragility": "SocialFragility",
 
-    # Common variations/spelling from ML model output (case-insensitive)
+    # Agriculture & Economic variations (Fixes misclassifications on farm/trade stories)
+    "agriculture": "Economic",
+    "farming": "Economic",
+    "crop yield": "Economic",
+    "food security": "Economic",
+    "trade": "Economic",
     "economic dependency": "Economic",
-    "sovereignty erosion": "Sovereignty",
-    "sovereignty threat": "Sovereignty",
+    "debt trap diplomacy": "Economic",
+    "cultural exchange": "Economic",
+    "diplomatic cooperation": "Economic",
+
+    # Explicit LGBTQ mappings only 
     "lgbtq rights": "LGBTQ",
     "lgbt advocacy": "LGBTQ",
+     
+    
+    # Other categories
+    "human rights": "SocialFragility", 
+    "sovereignty erosion": "Sovereignty",
+    "sovereignty threat": "Sovereignty",
+    "centralization of power": "Sovereignty",
+    "cultural hegemony": "Sovereignty",
+    "diplomatic influence": "Sovereignty",
     "religious influence": "Religious",
     "religious polarisation": "Religious",
     "election influence": "ElectionInfluence",
     "election interference": "ElectionInfluence",
     "electoral interference": "ElectionInfluence",
+    "democratic interference": "ElectionInfluence",
     "military presence": "MilitaryPresence",
     "military base": "MilitaryPresence",
     "resource dependency": "ResourceDependency",
@@ -137,17 +156,9 @@ intent_mapping = {
     "social fragility": "SocialFragility",
     "social unrest": "SocialFragility",
     "information warfare": "SocialFragility",
-    "human rights advocacy": "LGBTQ",
-    "debt trap diplomacy": "Economic",
     "cultural influence": "SocialFragility",
-    "centralization of power": "Sovereignty",
-    "cultural exchange": "Economic",
-    "cultural hegemony": "Sovereignty",
-    "democratic interference": "ElectionInfluence",
-    "diplomatic cooperation": "Economic",
-    "diplomatic influence": "Sovereignty",
-}
-    
+}    
+
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
@@ -210,6 +221,22 @@ class DisinfoAnalysisChatbot:
             "diplomatic cooperation": "Economic",
             "diplomatic influence": "Sovereignty",
         }
+
+
+def translate_to_english(text):
+    """
+    Translates text to English if it is in French, Arabic, or any other language.
+    Returns the original text if empty or if translation fails.
+    """
+    if not text or not str(text).strip():
+        return text
+    try:
+        # GoogleTranslator auto-detects source language and translates to English
+        translated = GoogleTranslator(source='auto', target='en').translate(text)
+        return translated
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return text
 
     def process_query(self, query):
         query_l = query.lower().strip()
@@ -1045,11 +1072,8 @@ def overview(request):
     page_obj = paginator.get_page(page_number)
 
 
-    # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    # Its only consumer below is disabled; avoid loading the local ML stack for display.
-    # ml_service = get_ml_service()
-
-    # --- OPTIMIZATION: Define extract_title_from_text once before the loop ---
+# 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary + Translation)
+    # --- Helper function: Keep this defined before the loop ---
     def extract_title_from_text(text):
         if not text:
             return "No Content Available"
@@ -1064,35 +1088,27 @@ def overview(request):
         fallback = " ".join(words[:20])
         return f"{fallback}..." if len(words) > 20 else fallback
 
-    # CORRECTLY INDENTED LOOP - aligned with ml_service, paginator, etc.
-    for article in page_obj.object_list: # <-- This should be at the same level as ml_service, paginator
-        article.display_title = extract_title_from_text(article.article_text)
+    # Process each article for display
+    for article in page_obj.object_list:
+        # 1. Extract raw title
+        raw_title = extract_title_from_text(article.article_text)
+        
+        # 2. Extract raw summary
         if hasattr(article, 'ai_summary') and article.ai_summary:
-            article.display_summary = article.ai_summary
+            raw_summary = article.ai_summary
         else:
             text = article.article_text.replace('\n', ' ').strip()
             if len(text) > 500:
                 cut = text[:500].rfind(' ')
-                article.display_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
+                raw_summary = (text[:cut] + '…') if cut > 0 else text[:500] + '…'
             else:
-                article.display_summary = text
+                raw_summary = text
 
-        # --- COMMENT OUT INEFFICIENT PER-ARTICLE CALCULATION ---
-        # This calculation should ideally happen during ingestion, not display.
-        # C. Individual Article Vulnerability Score
-        # if article.vulnerability_index is None:
-        #     vi_score = ml_service.calculate_vulnerability_index(
-        #         article.strategic_intent or 'neutral',
-        #         article.tone or 'neutral',
-        #         article.target_country,
-        #         article.inferred_actor,
-        #         article.confidence or 0.5
-        #     )
-        #     article.vulnerability_index = float(vi_score) if vi_score else 0.0
-        # else:
-        #     article.vulnerability_index = float(article.vulnerability_index)
+        # 3. Translate titles & summaries to English
+        article.display_title = translate_to_english(raw_title)
+        article.display_summary = translate_to_english(raw_summary)
 
-        # This ensures the displayed value matches the canonical form from INTENT_CHOICES
+        # 4. Map intent to canonical format
         article.canonical_strategic_intent = map_to_canonical_intent(article.strategic_intent) 
         
     # 10. Methodology / Description
