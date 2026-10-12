@@ -2244,6 +2244,11 @@ def articles_view(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    for article in page_obj:
+        text = (article.article_text or '').strip()
+        article.display_title = next((line.strip() for line in text.splitlines() if line.strip()), 'Untitled article')
+        article.display_summary = ' '.join(text.split())
+
     context = {
         "page_obj": page_obj,
         "search_query": search_query,

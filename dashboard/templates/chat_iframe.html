@@ -25,6 +25,7 @@
 
         <div class="input-area">
             <div class="input-group">
+                {% csrf_token %}
                 <input type="text" id="user-input" class="form-control form-control-sm" placeholder="Type your message...">
                 <button class="btn btn-primary btn-sm" onclick="handleSend()">Send</button>
             </div>
@@ -55,7 +56,10 @@
             try {
                 const response = await fetch("{% url 'chatbot_response' %}", {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
                     body: JSON.stringify({ message: message })
                 });
                 const data = await response.json();

@@ -3,11 +3,12 @@ from datetime import timedelta
 from io import BytesIO
 import importlib
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.core.cache import cache
 from django.utils import timezone
 from pypdf import PdfReader
@@ -87,6 +88,50 @@ class DashboardViewTests(TestCase):
                 self.assertEqual(self.client.get(path).status_code, 404)
                 with self.assertRaises(NoReverseMatch):
                     reverse(name)
+
+    @override_settings(ROOT_URLCONF="dashboard.urls", MIDDLEWARE=['django.middleware.csrf.CsrfViewMiddleware'])
+    def test_standalone_chat_supplies_a_token_and_keeps_csrf_enforced(self):
+        client = Client(enforce_csrf_checks=True)
+        page = client.get('/chat/')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'name="csrfmiddlewaretoken"')
+        self.assertContains(page, "'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value")
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page.content.decode()).group(1)
+        self.assertIn('csrftoken', client.cookies)
+        with mock.patch.object(self.views.chatbot_instance, 'process_query', return_value='Sample reply') as process:
+            rejected = client.post('/chat/', {'message': 'hello'}, content_type='application/json')
+            self.assertEqual(rejected.status_code, 403)
+            process.assert_not_called()
+            accepted = client.post('/chat/', {'message': 'hello'}, content_type='application/json', HTTP_X_CSRFTOKEN=token)
+            self.assertEqual(accepted.status_code, 200)
+            self.assertEqual(accepted.json(), {'reply': 'Sample reply', 'success': True})
+            process.assert_called_once_with('hello')
+
+    @override_settings(ROOT_URLCONF="dashboard.urls")
+    def test_articles_render_existing_text_and_url_without_changing_records(self):
+        from dashboard.models import MediaNarrative
+        text = '\n  Sample article title\nTrade cooperation news with <script>unsafe</script> markup.'
+        article = MediaNarrative.objects.create(article_text=text, url='https://example.org/news', posting_time=timezone.now())
+        page = self.client.get('/articles/', {'q': 'cooperation'})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Sample article title</h5>')
+        self.assertContains(page, 'Trade cooperation news with &lt;script&gt;unsafe&lt;/script&gt; markup.')
+        self.assertContains(page, 'href="https://example.org/news"')
+        self.assertNotContains(page, 'href=""')
+        self.assertNotContains(page, '<script>unsafe</script>')
+        article.refresh_from_db()
+        self.assertEqual(article.article_text, text)
+        self.assertEqual(article.url, 'https://example.org/news')
+        self.assertEqual(self.client.get('/articles/', {'q': 'no-match'}).context['page_obj'].paginator.count, 0)
+
+    @override_settings(ROOT_URLCONF="dashboard.urls")
+    def test_articles_with_no_text_or_url_do_not_render_empty_links(self):
+        from dashboard.models import MediaNarrative
+        MediaNarrative.objects.create(article_text='  \n ', posting_time=timezone.now())
+        page = self.client.get('/articles/')
+        self.assertContains(page, 'Untitled article')
+        self.assertNotContains(page, 'Read full article')
+        self.assertNotContains(page, 'href=""')
 
     @override_settings(ROOT_URLCONF="dashboard.urls")
     def test_chat_requests_and_local_cache_clear(self):
