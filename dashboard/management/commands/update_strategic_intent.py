@@ -89,7 +89,7 @@ class Command(BaseCommand):
                     text = article['article_text'][:4000]
                     try:
                         response = client.chat.completions.create(
-                            model="meta-llama/llama-4-scout-17b-16e-instruct",
+                            model="qwen/qwen3.6-27b",
                             messages=[system_message, {"role": "user", "content": text}],
                             temperature=0.0
                         )
