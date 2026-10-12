@@ -155,7 +155,7 @@ class DisinfoAnalysisChatbot:
     def __init__(self):
         # Initializing the Groq client with your specific Llama 4 model
         self.client = Groq(api_key=settings.GROQ_API_KEY)
-        self.model = "meta-llama/llama-4-scout-17b-16e-instruct"
+        self.model = "qwen/qwen3.6-27b"
         self.country_mapping = {
             "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
             "ivory coast": "Côte d'Ivoire", "south africa": "South Africa",
@@ -1495,7 +1495,7 @@ def generate_report(request):
                     sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:1500]}"
                     sum_response = client.chat.completions.create(
                         messages=[{"role": "user", "content": sum_prompt}],
-                        model="meta-llama/llama-4-scout-17b-16e-instruct",
+                        model="qwen/qwen3.6-27b",
                         max_tokens=1024
                     )
                     ai_summary = sum_response.choices[0].message.content.strip()
@@ -1548,7 +1548,7 @@ def generate_report(request):
             try:
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": insight_prompt}],
-                    model="meta-llama/llama-4-scout-17b-16e-instruct"
+                    model="qwen/qwen3.6-27b"
                 )
                 ai_insights = chat_completion.choices[0].message.content
             except Exception as e_insight:
