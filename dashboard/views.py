@@ -847,42 +847,29 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             }
         return stats
         
+# Initialize boto3 Translate client
+translate_client = boto3.client('translate', region_name=getattr(settings, 'AWS_REGION_NAME', 'us-east-1'))
+
 def translate_to_english(text):
-    """Translate display text without interrupting rendering on provider failure."""
+    """
+    Translates text to English using AWS Translate API.
+    Returns original text on failure or empty string.
+    """
     if not text or not str(text).strip():
         return text
-    cache_key = "display_translation_en:" + hashlib.sha256(str(text).encode("utf-8")).hexdigest()
     try:
-        translated = cache.get(cache_key)
-        if translated is not None:
-            return translated
-    except Exception as error:
-        logger.warning("Display translation cache read failed (error_type=%s)", type(error).__name__)
-    try:
-        # The pinned provider wrapper has no HTTP timeout; bound the same request here.
-        translator = GoogleTranslator(source='auto', target='en')
-        response = requests.get(
-            translator._base_url, params={"sl": "auto", "tl": "en", "q": str(text).strip()},
-            timeout=(1, 1), allow_redirects=False,
+        response = translate_client.translate_text(
+            Text=text,
+            SourceLanguageCode='auto',
+            TargetLanguageCode='en'
         )
-        try:
-            if response.status_code != 200:
-                raise requests.HTTPError("Translation provider returned HTTP " + str(response.status_code))
-            soup = BeautifulSoup(response.text, "html.parser")
-            element = soup.find("div", class_="t0") or soup.find("div", class_="result-container")
-            if element is None or not element.get_text(strip=True):
-                raise ValueError("Translation provider returned no translated text")
-            translated = element.get_text(strip=True)
-        finally:
-            response.close()
-    except Exception as error:
-        logger.warning("Display translation failed; showing original text (error_type=%s)", type(error).__name__)
+        return response.get('TranslatedText', text)
+    except ClientError as e:
+        logger.error(f"AWS Translate Error: {e}")
         return text
-    try:
-        cache.set(cache_key, translated, timeout=60 * 60 * 24)
-    except Exception as error:
-        logger.warning("Display translation cache write failed (error_type=%s)", type(error).__name__)
-    return translated
+    except Exception as e:
+        logger.error(f"Unexpected Translation Error: {e}")
+        return text
 
 
 # Instantiate the chatbot once
