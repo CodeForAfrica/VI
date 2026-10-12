@@ -21,7 +21,7 @@ import boto3
 import requests
 from .models import MediaNarrative, Journalist, MediaOutlet, VulnerabilityIndex
 from dashboard.services.summarizer import get_summary
-from dashboard.services.ml_inference_service import get_ml_service # Changed to lazy loading function
+# from dashboard.services.ml_inference_service import get_ml_service
 
 from math import isfinite
 from django.http import HttpResponse, JsonResponse
@@ -60,7 +60,7 @@ from django.db.models import Q, Count, Avg, Sum
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
 from botocore.exceptions import ClientError, NoCredentialsError
-from dashboard.services.ml_inference_service import MLInferenceService
+# from dashboard.services.ml_inference_service import MLInferenceService
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
@@ -1046,8 +1046,8 @@ def overview(request):
 
 
     # 9. PROCESS ARTICLES (Vulnerability Index + Title + Summary)
-    # --- OPTIMIZATION: Use Lazy Loading Function ---
-    ml_service = get_ml_service() # Load ML service only when needed
+    # Its only consumer below is disabled; avoid loading the local ML stack for display.
+    # ml_service = get_ml_service()
 
     # --- OPTIMIZATION: Define extract_title_from_text once before the loop ---
     def extract_title_from_text(text):
@@ -1605,9 +1605,14 @@ def generate_report(request):
             logger.info("No data available for the main volume chart.")
             volume_chart_base64 = "" # Or assign a default image/data URI
 
-        # Factor chart logic
-        intent_counts = base_query.exclude(
-            strategic_intent__in=['', None, 'Unknown']
+    except Exception:
+        logger.exception("Report volume chart generation failed")
+        volume_chart_base64 = ""
+
+    try:
+        # None in an __in lookup does not exclude SQL NULL intent labels.
+        intent_counts = base_query.exclude(strategic_intent__isnull=True).exclude(
+            strategic_intent__in=['', 'Unknown']
         ).values('strategic_intent').annotate(count=Count('id')).order_by('-count')[:5]
 
         if intent_counts.exists():
@@ -1638,12 +1643,9 @@ def generate_report(request):
             factor_chart_base64 = "" # Or assign a default image/data URI
             # Keep primary_intent as default if no intents found
 
-    except Exception as e_chart:
-        logger.error(f"Chart Generation Error in PDF: {e_chart}")
-        # Assign empty strings or default image URIs on chart error
-        volume_chart_base64 = ""
+    except Exception:
+        logger.exception("Report factor chart generation failed")
         factor_chart_base64 = ""
-        # Do not raise the exception here, let the PDF generation proceed with missing charts
 
 
     # --- FINAL CONTEXT ---
