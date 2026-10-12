@@ -159,6 +159,21 @@ intent_mapping = {
     "cultural influence": "SocialFragility",
 }    
 
+def translate_to_english(text):
+    """
+    Translates text to English if it is in French, Arabic, or any other language.
+    Returns the original text if empty or if translation fails.
+    """
+    if not text or not str(text).strip():
+        return text
+    try:
+        translated = GoogleTranslator(source='auto', target='en').translate(text)
+        return translated
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return text
+
+
 # =========================
 # CHATBOT ASSISTANCE SYSTEM (Enhanced with Consistent Calculation)
 # =========================
@@ -222,21 +237,6 @@ class DisinfoAnalysisChatbot:
             "diplomatic influence": "Sovereignty",
         }
 
-
-def translate_to_english(text):
-    """
-    Translates text to English if it is in French, Arabic, or any other language.
-    Returns the original text if empty or if translation fails.
-    """
-    if not text or not str(text).strip():
-        return text
-    try:
-        # GoogleTranslator auto-detects source language and translates to English
-        translated = GoogleTranslator(source='auto', target='en').translate(text)
-        return translated
-    except Exception as e:
-        logger.error(f"Translation error: {e}")
-        return text
 
     def process_query(self, query):
         query_l = query.lower().strip()
