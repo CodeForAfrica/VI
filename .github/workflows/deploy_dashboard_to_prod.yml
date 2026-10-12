@@ -1,0 +1,197 @@
+name: deploy_dashboard_to_prod
+
+# Automatic main deployments retain the ARM build and GitHub cache cost on CFA runners.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vi-dashboard-production
+  # Cancelling during Dokku release can leave an unfinished production rollout.
+  cancel-in-progress: false
+
+env:
+  APP_NAME: ${{ secrets.DOKKU_APP_NAME }}
+  DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+  IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'codeforafrica/vulnerability-index-tool' }}
+  DASHBOARD_URL: ${{ vars.VI_DASHBOARD_URL || 'https://vi.dev.codeforafrica.org' }}
+
+jobs:
+  deploy:
+    name: Build, deploy and verify production dashboard
+    runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
+    environment: prod
+    timeout-minutes: 60
+    steps:
+      - name: Validate main branch and deployment configuration
+        env:
+          SELECTED_REF: ${{ github.ref }}
+          DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_SSH_HOST_KEY: ${{ secrets.DOKKU_SSH_HOST_KEY }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Validating branch and required configuration.'
+          if [[ "$SELECTED_REF" != refs/heads/main ]]; then
+            echo '::error::Select main in Run workflow. No production changes were made.'
+            exit 1
+          fi
+          for name in APP_NAME DOKKU_HOST DOKKU_SSH_PRIVATE_KEY DOKKU_SSH_HOST_KEY DOCKER_HUB_USERNAME DOCKER_HUB_ACCESS_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing $name. Check repository/prod environment secrets. No deployment was attempted."
+              exit 1
+            fi
+          done
+          [[ "$APP_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo '::error::DOKKU_APP_NAME must be a valid Dokku app name.'; exit 1; }
+          [[ "$DOKKU_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo '::error::DOKKU_HOST must be a hostname or IPv4 address without a scheme or port.'; exit 1; }
+          [[ "$IMAGE_NAME" =~ ^[a-z0-9][a-z0-9./_-]*$ ]] || { echo '::error::DOCKERHUB_IMAGE must be an untagged Docker Hub repository name.'; exit 1; }
+          [[ "$DASHBOARD_URL" =~ ^https://[a-zA-Z0-9.-]+/?$ ]] || { echo '::error::VI_DASHBOARD_URL must be an HTTPS origin without a path or credentials.'; exit 1; }
+          echo '[dashboard] OK - main branch and required configuration validated.'
+
+      - name: Isolate Docker credentials and Buildx configuration
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Using a run-specific Docker configuration on the shared CFA runner.'
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/vi-dashboard-docker-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          echo '[dashboard] OK - Buildx and registry login will share the isolated configuration.'
+
+      - name: Check out the exact commit to deploy
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
+          lfs: false
+
+      - name: Enable ARM image builds on CFA x64 runners
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
+
+      - name: Authenticate to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Build and publish the dashboard image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:main
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Select the immutable image digest
+        env:
+          BUILT_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Selecting the image built by this run, not the cached main tag.'
+          [[ "$BUILT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Build did not return a valid image digest. Deployment was not attempted.'; exit 1; }
+          echo "DEPLOY_IMAGE=$IMAGE_NAME@$BUILT_DIGEST" >> "$GITHUB_ENV"
+          echo "[dashboard] OK - deploying commit $GITHUB_SHA as $IMAGE_NAME@$BUILT_DIGEST."
+
+      - name: Prepare verified SSH access to Dokku
+        env:
+          DOKKU_SSH_PRIVATE_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_SSH_HOST_KEY: ${{ secrets.DOKKU_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Preparing temporary SSH credentials with pinned host-key verification.'
+          for tool in ssh python3 curl; do
+            command -v "$tool" >/dev/null || { echo "::error::Runner is missing $tool."; exit 1; }
+          done
+          ssh_directory=$(mktemp -d "$RUNNER_TEMP/vi-dashboard-ssh.XXXXXX")
+          chmod 700 "$ssh_directory"
+          echo "DEPLOY_SSH_DIR=$ssh_directory" >> "$GITHUB_ENV"
+          printf '%s\n' "$DOKKU_SSH_PRIVATE_KEY" > "$ssh_directory/key"
+          printf '%s\n' "$DOKKU_SSH_HOST_KEY" > "$ssh_directory/known_hosts"
+          chmod 600 "$ssh_directory/key" "$ssh_directory/known_hosts"
+          echo '[dashboard] OK - temporary SSH access prepared; credentials are not logged.'
+
+      - name: Deploy the exact built image through Dokku
+        run: |
+          set -euo pipefail
+          echo "[dashboard] Deploying $DEPLOY_IMAGE; Dokku will run its release health checks."
+          if ! ssh -i "$DEPLOY_SSH_DIR/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$DEPLOY_SSH_DIR/known_hosts" -o ConnectTimeout=15 "dokku@$DOKKU_HOST" "git:from-image $APP_NAME $DEPLOY_IMAGE"; then
+            echo '::error::Dokku deployment failed. Check the preceding SSH, registry pull, startup or health-check error. Deployment may have partially completed; inspect the running app before retrying.'
+            exit 1
+          fi
+          echo '[dashboard] OK - Dokku deployment command completed.'
+
+      - name: Verify the running dashboard matches this commit
+        run: |
+          set -euo pipefail
+          echo "[dashboard] Checking live web containers against commit $GITHUB_SHA."
+          cat > "$RUNNER_TEMP/vi-dashboard-verify.py" <<'PY'
+          import json, os, re, sys
+          try:
+              containers = json.load(sys.stdin)
+              if not isinstance(containers, list) or any(not isinstance(c, dict) for c in containers):
+                  raise ValueError('Dokku did not return a container inspection list.')
+              pattern = rf"/{re.escape(os.environ['APP_NAME'])}\.web\.\d+"
+              web = [c for c in containers if re.fullmatch(pattern, c.get('Name', ''))]
+              if not web:
+                  raise ValueError('No live dashboard web containers found.')
+              for container in web:
+                  state = container.get('State', {})
+                  revision = (container.get('Config', {}).get('Labels') or {}).get('org.opencontainers.image.revision')
+                  if not state.get('Running') or state.get('Health', {}).get('Status') == 'unhealthy':
+                      raise ValueError(f"{container['Name']} is not healthy/running.")
+                  if revision != os.environ['GITHUB_SHA']:
+                      raise ValueError(f"Stale deployment: {container['Name']} runs {revision}, expected {os.environ['GITHUB_SHA']}.")
+                  print(f"[dashboard] OK - {container['Name']} is running commit {revision}.")
+          except (ValueError, TypeError, KeyError) as error:
+              sys.exit(f'::error::Revision verification failed: {error} Inspect the Dokku deployment logs; do not assume a green build means the new code is running.')
+          PY
+          ssh -i "$DEPLOY_SSH_DIR/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$DEPLOY_SSH_DIR/known_hosts" -o ConnectTimeout=15 "dokku@$DOKKU_HOST" "ps:inspect $APP_NAME" | python3 "$RUNNER_TEMP/vi-dashboard-verify.py"
+
+      - name: Verify public dashboard HTTPS health
+        run: |
+          set -euo pipefail
+          for path in / /generate-report/; do
+            passed=false
+            for attempt in 1 2 3; do
+              echo "[dashboard] Checking $path over trusted HTTPS (attempt $attempt/3)."
+              status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 --proto '=https' --output /dev/null --write-out '%{http_code}' "${DASHBOARD_URL%/}$path") || status=000
+              if [[ "$status" == 200 ]]; then
+                echo "[dashboard] OK - $path returned HTTP 200."
+                passed=true
+                break
+              fi
+              echo "[dashboard] $path returned HTTP $status; waiting for startup before retrying."
+              if [[ "$attempt" != 3 ]]; then sleep 5; fi
+            done
+            if [[ "$passed" != true ]]; then
+              echo "::error::Dashboard health failed for $path. Check Dokku logs, nginx, DNS and TLS; the image may already be deployed."
+              exit 1
+            fi
+          done
+          echo '[dashboard] HEALTH PASSED - homepage and report form respond over trusted HTTPS. This does not test AI summaries or PDF generation.'
+          printf '### Dashboard deployment verified\n\nCommit: %s\n\nImage: %s\n\nHomepage and report form: HTTP 200 over trusted HTTPS. PDF generation and AI output were not tested.\n' "$GITHUB_SHA" "$DEPLOY_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary SSH credentials
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -n "${DEPLOY_SSH_DIR:-}" && "$DEPLOY_SSH_DIR" == "$RUNNER_TEMP"/vi-dashboard-ssh.* ]]; then
+            rm -f -- "$DEPLOY_SSH_DIR/key" "$DEPLOY_SSH_DIR/known_hosts"
+            rmdir -- "$DEPLOY_SSH_DIR"
+            echo '[dashboard] OK - temporary SSH credentials removed.'
+          fi
