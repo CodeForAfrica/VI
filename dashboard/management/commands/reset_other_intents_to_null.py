@@ -1,5 +1,4 @@
 # dashboard/management/commands/reset_other_intents_to_null.py
-# dashboard/management/commands/reset_other_intents_to_null.py
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from dashboard.models import MediaNarrative
