@@ -11,7 +11,7 @@ import requests
 EXPECTED_ARTICLES = 10
 FIXTURE = Path("/fixtures/test_articles.json")
 BASE_URL = os.environ["VI_INFERENCE_API_URL"].rstrip("/")
-TOTAL_STEPS = 6
+TOTAL_STEPS = 7
 
 
 def progress(step, message):
@@ -300,27 +300,70 @@ def run_and_verify(fixture_rows):
             "API predictions match Lambda results and persisted intent/tone/confidence",
             flush=True,
         )
-        print(
-            json.dumps(
-                {
-                    "event": "split_e2e_passed",
-                    "transport": "https",
-                    "articles": EXPECTED_ARTICLES,
-                    "counts": counts,
-                    "results": verified,
-                }
-            ),
-            flush=True,
-        )
+        return {"event": "split_e2e_passed", "transport": "https",
+                "articles": EXPECTED_ARTICLES, "counts": counts, "results": verified}
     finally:
         connection.close()
+
+
+def verify_dashboard(fixture_rows, predictions):
+    from bs4 import BeautifulSoup
+
+    base_url = os.environ.get("VI_E2E_DASHBOARD_URL", "").rstrip("/")
+    if not base_url:
+        raise RuntimeError("VI_E2E_DASHBOARD_URL is missing; start the dashboard Compose layer")
+    progress(7, f"checking the real dashboard at {base_url} against the classified fixture database")
+    checks = []
+    with requests.Session() as session:
+        session.trust_env = False
+        for path in ("/", "/vulnerability-index/", "/dashboard/", "/vi/", "/authors/",
+                     "/outlets/", "/countries/", "/articles/", "/generate-report/", "/chat/"):
+            response = session.get(base_url + path, timeout=120, allow_redirects=False)
+            if response.status_code != 200 or "text/html" not in response.headers.get("Content-Type", ""):
+                raise RuntimeError(f"dashboard GET {path} failed: HTTP {response.status_code}; check dashboard container logs")
+            checks.append(path)
+            print(f"[test-split-e2e] DASHBOARD PASS: GET {path} HTTP 200", flush=True)
+
+        articles = session.get(base_url + "/articles/", timeout=30)
+        soup = BeautifulSoup(articles.text, "html.parser")
+        for fixture, prediction in zip(fixture_rows, predictions):
+            link = soup.find("a", href=fixture["url"])
+            row = link.find_parent("div", class_="row") if link else None
+            if row is None:
+                raise RuntimeError(f"dashboard article {fixture['id']}: saved URL is missing")
+            title = row.find("h5")
+            summary = row.select_one("p.text-secondary")
+            if not title or not title.get_text(strip=True) or not summary or not summary.get_text(strip=True):
+                raise RuntimeError(f"dashboard article {fixture['id']}: title or summary is blank")
+            for value in (f"Tone: {prediction['tone']}", f"Intent: {prediction['strategic_intent']}"):
+                if value not in row.get_text(" ", strip=True):
+                    raise RuntimeError(f"dashboard article {fixture['id']}: saved prediction not displayed ({value})")
+            print(f"[test-split-e2e] DASHBOARD ARTICLE PASS: id={fixture['id']} title, summary, URL, intent and tone rendered", flush=True)
+
+        chat = session.get(base_url + "/chat/", timeout=30)
+        token = BeautifulSoup(chat.text, "html.parser").find("input", attrs={"name": "csrfmiddlewaretoken"})
+        if token is None or not token.get("value"):
+            raise RuntimeError("dashboard chat: rendered CSRF token is missing")
+        denied = session.post(base_url + "/chat/", json={"message": "list narratives"}, timeout=30)
+        if denied.status_code != 403:
+            raise RuntimeError(f"dashboard chat: missing CSRF token must return 403, got {denied.status_code}")
+        reply = session.post(base_url + "/chat/", json={"message": "list narratives"},
+                             headers={"X-CSRFToken": token["value"]}, timeout=30)
+        body = reply.json() if reply.status_code == 200 else {}
+        if reply.status_code != 200 or body.get("success") is not True or "main strategic narratives" not in body.get("reply", ""):
+            raise RuntimeError(f"dashboard chat: database-backed request failed (HTTP {reply.status_code}); check dashboard logs")
+        print("[test-split-e2e] DASHBOARD PASS: chat rejects missing CSRF; valid token returns database narrative statistics", flush=True)
+    print("[test-split-e2e] Dashboard checks completed. AWS translation and provider-backed AI chat/report generation were not tested.", flush=True)
+    return {"pages": checks, "articles_verified": len(fixture_rows), "csrf_chat_verified": True}
 
 
 def main():
     fixture_rows = load_fixture_metadata()
     wait_for_tls_api()
     prepare_database(fixture_rows)
-    run_and_verify(fixture_rows)
+    result = run_and_verify(fixture_rows)
+    result["dashboard"] = verify_dashboard(fixture_rows, result["results"])
+    print(json.dumps(result), flush=True)
 
 
 if __name__ == "__main__":

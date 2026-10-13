@@ -7,6 +7,7 @@ readonly SCRIPT_DIR
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly REPO_ROOT
 readonly DEPLOYED_API_URL="https://vi-model-inference.codeforafrica.org"
+readonly dashboard_compose_file="${REPO_ROOT}/docker-compose.e2e.dashboard.yml"
 log() {
   printf '[test-split-e2e] %s\n' "$*"
 }
@@ -105,6 +106,7 @@ cleanup_test_stack() {
     --project-name "${compose_project}" \
     --project-directory "${REPO_ROOT}" \
     -f "${compose_file}" \
+    -f "${dashboard_compose_file}" \
     down -v --remove-orphans >/dev/null 2>&1 || true
 }
 
@@ -127,19 +129,23 @@ if [[ "${remote_mode}" == false ]]; then
 fi
 
 if [[ "${remote_mode}" == true ]]; then
-  log "Spinning up isolated Postgres and the Lambda verifier; inference stays on the deployed server."
+  log "Spinning up isolated Postgres, Redis, dashboard and Lambda verifier; inference stays on the deployed server."
 else
-  log "Spinning up the production-shaped Docker stack (Postgres, inference API, local HTTPS, and Lambda verifier)."
+  log "Spinning up the production-shaped Docker stack (Postgres, Redis, dashboard, inference API, local HTTPS, and Lambda verifier)."
   log "Building images and running ten sample articles end to end. Model loading can take several minutes."
 fi
+log "Dashboard will be available during the test at http://127.0.0.1:${VI_E2E_DASHBOARD_PORT:-8036}; it uses only the isolated fixture database."
+log "Dashboard checks cover page rendering, saved article results and CSRF-protected database chat; external translation and AI generation are not tested."
 
 if ! docker compose \
   --project-name "${compose_project}" \
   --project-directory "${REPO_ROOT}" \
   -f "${compose_file}" \
+  -f "${dashboard_compose_file}" \
   up --build --abort-on-container-exit --exit-code-from e2e; then
   fail "Docker could not build the images or complete the end-to-end test. The exact build or service error is shown immediately above. The temporary stack is cleaned automatically; fix the reported problem and rerun."
 fi
 
 log "End-to-end test passed: Lambda reached the inference API over HTTPS and all sample results were verified."
 log "Additional verification passed: all 10 articles completed fixture -> pending queue -> HTTPS inference -> Lambda pipeline -> Postgres in order, and every API prediction matched the saved intent/tone/confidence."
+log "Dashboard verification passed: pages rendered, all 10 saved articles displayed correctly, and chat accepted a valid CSRF token while rejecting a missing one."

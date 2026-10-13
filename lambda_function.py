@@ -114,6 +114,13 @@ def lambda_handler(event, context):
         phase = "event_validation"
         if operation not in (None, "processing-only", "ingestion-only", "verify_inference"):
             raise ValueError("Unknown operation; use processing-only, ingestion-only, verify_inference, or omit operation for ingestion and processing")
+        pending_article_ids = event.get("article_ids") if pending_only and "article_ids" in event else None
+        if pending_only and "article_ids" in event:
+            if (not isinstance(pending_article_ids, list)
+                    or not 1 <= len(pending_article_ids) <= MAX_INFERENCE_PER_RUN
+                    or any(type(value) is not int or value <= 0 for value in pending_article_ids)
+                    or len(set(pending_article_ids)) != len(pending_article_ids)):
+                raise ValueError(f"processing-only article_ids must contain 1-{MAX_INFERENCE_PER_RUN} distinct positive integers")
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
         import django
         django.setup()
@@ -128,15 +135,25 @@ def lambda_handler(event, context):
         if pending_only:
             phase = "pending_inference"
             _log("INFO", "ingestion_skipped", reason="processing_only")
-            inference = classify_pending(conn, deadline=deadline)
+            if pending_article_ids is None:
+                inference = classify_pending(conn, deadline=deadline)
+            else:
+                _log("INFO", "pending_processing_scope_selected", article_ids=pending_article_ids)
+                inference = classify_pending(conn, deadline=deadline, pending_article_ids=pending_article_ids)
             summary = {
                 "operation": "processing-only",
                 "ingested": 0,
                 "duration_ms": int((time.time() - started) * 1000),
                 **inference,
             }
-            _log("INFO", "pending_processing_completed", **summary)
-            return {"statusCode": 200, "body": json.dumps(summary)}
+            status = 200
+            if pending_article_ids is not None:
+                if summary.get("reason") == "classification_lock_held":
+                    status = 503
+                elif summary["failed"]:
+                    status = 500
+            _log("INFO" if status == 200 else "ERROR", "pending_processing_completed", **summary)
+            return {"statusCode": status, "body": json.dumps(summary)}
 
         # Operator-only bounded production verification. Scheduled events retain
         # the normal ingestion path; this event reprocesses only recorded IDs.
@@ -258,7 +275,7 @@ def _build_client():
     )
 
 
-def fetch_pending(conn, limit, article_ids=None):
+def fetch_pending(conn, limit, article_ids=None, pending_article_ids=None):
     """Rows never successfully classified. ml_processed_at IS NULL is the pending
     marker (spec 609); it covers both newly ingested rows and ones left pending
     by an earlier failed attempt, so this doubles as the bounded pending-retry."""
@@ -273,6 +290,8 @@ def fetch_pending(conn, limit, article_ids=None):
                 ORDER BY id
             """, (article_ids,))
             return cur.fetchall()
+        scope_sql = "AND id = ANY(%s)" if pending_article_ids is not None else ""
+        parameters = (pending_article_ids, limit) if pending_article_ids is not None else (limit,)
         cur.execute(f"""
             SELECT id, article_text, target_country, inferred_actor
             FROM {TABLE_NAME}
@@ -280,9 +299,10 @@ def fetch_pending(conn, limit, article_ids=None):
               AND (strategic_intent IS NULL OR strategic_intent = '')
               AND article_text IS NOT NULL AND article_text <> ''
               AND lower(article_text) <> 'no content available'
+              {scope_sql}
             ORDER BY id
             LIMIT %s
-        """, (limit,))
+        """, parameters)
         return cur.fetchall()
 
 
@@ -332,17 +352,20 @@ def classification_lock(conn):
             raise
 
 
-def classify_pending(conn, client=None, deadline=None, pipeline=None, article_ids=None):
+def classify_pending(conn, client=None, deadline=None, pipeline=None, article_ids=None, pending_article_ids=None):
     with classification_lock(conn) as acquired:
         if not acquired:
             return {"found_pending": None, "classified": 0, "left_pending": None,
                     "failed": 0, "inference": "skipped", "reason": "classification_lock_held"}
-        return _classify_pending_locked(conn, client, deadline, pipeline, article_ids)
+        return _classify_pending_locked(conn, client, deadline, pipeline, article_ids, pending_article_ids)
 
 
-def _classify_pending_locked(conn, client=None, deadline=None, pipeline=None, article_ids=None):
-    rows = (fetch_pending(conn, MAX_INFERENCE_PER_RUN) if article_ids is None
-            else fetch_pending(conn, MAX_INFERENCE_PER_RUN, article_ids=article_ids))
+def _classify_pending_locked(conn, client=None, deadline=None, pipeline=None, article_ids=None, pending_article_ids=None):
+    if pending_article_ids is not None:
+        rows = fetch_pending(conn, MAX_INFERENCE_PER_RUN, pending_article_ids=pending_article_ids)
+    else:
+        rows = (fetch_pending(conn, MAX_INFERENCE_PER_RUN) if article_ids is None
+                else fetch_pending(conn, MAX_INFERENCE_PER_RUN, article_ids=article_ids))
     counts = {"found_pending": len(rows), "classified": 0, "left_pending": 0, "failed": 0}
     if article_ids is not None and len(rows) != len(article_ids):
         raise ValueError("Some selected verification articles are missing or have insufficient text")
@@ -369,9 +392,9 @@ def _classify_pending_locked(conn, client=None, deadline=None, pipeline=None, ar
             # Same orchestration as the existing classifier command. Only the
             # strategic/tone model implementations are backed by HTTP.
             result = pipeline.perform_inference(article_text)
-            if article_ids is not None:
+            if article_ids is not None or pending_article_ids is not None:
                 if getattr(pipeline, "_error", None) is not None or not getattr(pipeline, "_result", None):
-                    raise RuntimeError("Production verification requires a successful HTTPS model response")
+                    raise RuntimeError("Targeted reprocessing requires a successful HTTPS model response")
             save_classification(conn, article_id, result)
             if article_ids is not None:
                 from dashboard.utils import map_to_canonical_intent

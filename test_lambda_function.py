@@ -194,6 +194,30 @@ class HandlerVerificationTests(unittest.TestCase):
                 ingest.assert_called_once()
                 classify.assert_called_once()
 
+    def test_processing_only_accepts_a_recorded_scope(self):
+        response, ingest, classify = self.invoke({"operation": "processing-only", "article_ids": [2, 4]})
+        self.assertEqual(response["statusCode"], 200)
+        ingest.assert_not_called()
+        self.assertEqual(classify.call_args.kwargs["pending_article_ids"], [2, 4])
+
+    def test_invalid_processing_scope_never_ingests_or_classifies(self):
+        for ids in (None, [], [True], [0], ["1"], [1, 1], list(range(1, lf.MAX_INFERENCE_PER_RUN + 2))):
+            with self.subTest(ids=ids):
+                response, ingest, classify = self.invoke({"operation": "processing-only", "article_ids": ids})
+                self.assertEqual(response["statusCode"], 500)
+                ingest.assert_not_called()
+                classify.assert_not_called()
+
+    def test_scoped_failure_and_lock_contention_return_explicit_status(self):
+        for summary, status in (({"classified": 0, "failed": 1, "left_pending": 1}, 500),
+                                ({"classified": 0, "failed": 0, "left_pending": None,
+                                  "reason": "classification_lock_held"}, 503)):
+            with self.subTest(status=status), mock.patch("django.setup"), \
+                    mock.patch.object(lf, "get_db_connection", return_value=mock.MagicMock()), \
+                    mock.patch.object(lf, "classify_pending", return_value=summary):
+                response = lf.lambda_handler({"operation": "processing-only", "article_ids": [2]}, None)
+            self.assertEqual(response["statusCode"], status)
+
     def test_typo_in_operation_does_not_accidentally_ingest(self):
         response, ingest, classify = self.invoke({"operation": "processing-onyl"})
         self.assertEqual(response["statusCode"], 500)
@@ -295,6 +319,46 @@ class PersistenceTests(unittest.TestCase):
         c = self.connection([(2, "article", None, None)])
         with self.assertRaises(ValueError):
             lf.classify_pending(c, pipeline=mock.Mock(), article_ids=[2, 4])
+
+    def test_scoped_processing_only_selects_still_pending_ids(self):
+        c = self.connection([])
+        lf.fetch_pending(c, 200, pending_article_ids=[2, 4])
+        sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertIn("id = ANY(%s)", sql)
+        self.assertIn("ml_processed_at IS NULL", sql)
+        self.assertIn("strategic_intent IS NULL", sql)
+        self.assertEqual(params, ([2, 4], 200))
+
+    def test_scoped_processing_failure_does_not_save_fallback(self):
+        c = self.connection([(2, "article", None, None)])
+        pipeline = mock.Mock()
+        pipeline._error = RuntimeError("HTTPS failed")
+        with mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(c, pipeline=pipeline, pending_article_ids=[2])
+        save.assert_not_called()
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["left_pending"], 1)
+
+    def test_scoped_processing_success_saves_only_selected_pending_row(self):
+        c = self.connection([(2, "article", None, None)])
+        pipeline = mock.Mock()
+        pipeline._error = None
+        pipeline._result = {"strategic_intent": "Human Rights Advocacy"}
+        pipeline.perform_inference.return_value = {"strategic_intent": "Human Rights Advocacy"}
+        with mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(c, pipeline=pipeline, pending_article_ids=[2, 4])
+        save.assert_called_once_with(c, 2, pipeline.perform_inference.return_value)
+        self.assertEqual(result["classified"], 1)
+        self.assertEqual(result["failed"], 0)
+
+    def test_completed_scoped_rows_are_a_noop(self):
+        c = self.connection([])
+        pipeline = mock.Mock()
+        with mock.patch.object(lf, "save_classification") as save:
+            result = lf.classify_pending(c, pipeline=pipeline, pending_article_ids=[2])
+        pipeline.perform_inference.assert_not_called()
+        save.assert_not_called()
+        self.assertEqual(result["found_pending"], 0)
 
     def test_verification_never_saves_an_api_failure_fallback(self):
         c = self.connection([(2, "article", None, None)])

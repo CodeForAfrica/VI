@@ -1,0 +1,58 @@
+# Shared dashboard layer for both split-test modes; never uses production data.
+services:
+  db:
+    networks: [default, dashboard]
+
+  redis:
+    image: redis:7-alpine
+    networks: [dashboard]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks: [dashboard]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${VI_E2E_DASHBOARD_PORT:-8036}:8000"
+    environment:
+      DJANGO_SECRET_KEY: local-e2e-not-secret
+      DEBUG: "false"
+      ALLOWED_HOSTS: "dashboard,localhost,127.0.0.1"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vulnerability
+      DB_USER: vi
+      DB_PASSWORD: vi_local
+      REDIS_URL: redis://redis:6379/1
+      GROQ_API_KEY: ""
+      AWS_EC2_METADATA_DISABLED: "true"
+    # The verifier owns schema migration and fixture loading to avoid a race.
+    command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "--access-logfile", "-"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/chat/',timeout=5)"]
+      interval: 5s
+      timeout: 8s
+      retries: 30
+      start_period: 30s
+
+  e2e:
+    networks: [default, dashboard]
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    environment:
+      VI_E2E_DASHBOARD_URL: http://dashboard:8000
+
+networks:
+  dashboard:
+    internal: true

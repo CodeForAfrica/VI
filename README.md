@@ -37,6 +37,51 @@ cached for 60 seconds to avoid retry storms. Requests have a 2-second connection
 timeout, a 3-second read timeout, and no SDK retries. Translate and automatic
 language detection are billable; caching avoids paying again on every page load.
 
+## Targeted correction of saved LGBTQ classifications
+
+Deploy the updated Lambda mapping before reprocessing: `Human Rights Advocacy`
+now maps to `SocialFragility`, not `LGBTQ`. This corrects the mapping; it does not
+guarantee that the underlying model prediction is correct or add calibration.
+
+Use the additive command below, **not** `fix_mappings` (which also performs the
+General News keyword cleanup) or `reset_other_intents_to_null` (which targets Other).
+Run it in the dashboard environment connected to the intended database:
+
+```sh
+# Preview only; neither resets records nor calls inference.
+python manage.py reset_lgbtq_intents_to_null
+
+# After reviewing the IDs and approving the database change:
+python manage.py reset_lgbtq_intents_to_null --apply --backup /tmp/vi.lgbtq-reset-backup.json
+```
+
+Anchor records are excluded unless explicitly approved with `--include-anchors`.
+Empty/unavailable article content is excluded. The reset stores the previous
+intent, confidence, tone and processed timestamp in a new mode-0600 JSON file
+before clearing **only** `strategic_intent` and `ml_processed_at` for the recorded
+IDs. Keep that backup outside Git and copy it to durable, access-controlled storage.
+An existing backup file is never overwritten; backup failure aborts the reset.
+
+The command prints a scoped Lambda event, for example:
+
+```json
+{"operation": "processing-only", "article_ids": [82651]}
+```
+
+Invoke the updated Lambda with the **actual IDs from the backup**, not the example.
+Each event accepts at most `VI_INFERENCE_MAX_PER_RUN` IDs (default 200); split
+larger ID lists into batches. Repeat the same event after the previous invocation
+finishes until `left_pending` and `failed` are zero. Completed IDs are skipped;
+unrelated pending rows are not selected by this event. A failed HTTPS inference
+stays pending rather than saving fallback values during this targeted rerun.
+Existing daily and four-hour scheduled events retain their normal behavior and
+may also process these newly pending records; do not overlap manual invocations.
+
+For rollback, stop/wait for processing first, then restore the four saved result
+fields by each backup record's `id` in a database transaction, parsing the saved
+`ml_processed_at` as a datetime (or keeping null). Do not reset other categories,
+modify article text, or run the General News cleanup as part of this correction.
+
 # Concept
 
 Influence operations are not only driven by messaging strength. Their impact depends heavily on **pre-existing vulnerabilities within the target environment**, including:
@@ -449,21 +494,32 @@ make test-split-e2e VI_INFERENCE_API_KEY='<deployed-api-key>'
 Supplying the key automatically selects
 `https://vi-model-inference.codeforafrica.org`. Set `VI_INFERENCE_API_URL` as
 well only when intentionally testing another deployment. The key is never
-printed. Remote mode skips Git LFS and starts only Postgres plus the Lambda
-verifier, so it does not need the 20GB local-model allocation.
+printed. Remote mode skips Git LFS and starts Postgres, Redis, the dashboard and
+the Lambda verifier, so it does not need the 20GB local-model allocation.
 
 Without a key, this builds the real Lambda and inference images, starts an
 isolated Postgres, and serves the local inference API through trusted HTTPS.
-With a key, it builds only the Lambda image and calls the deployed HTTPS API.
+Both modes also build the real dashboard image with an isolated Redis cache.
+With a key, model inference remains on the deployed HTTPS API.
 Both modes load ten deterministic articles and invoke the Lambda's real
 classification path. The output shows
-six numbered stages and one `ARTICLE nn/10 PASS` line per fixture, including its
+seven numbered stages and one `ARTICLE nn/10 PASS` line per fixture, including its
 saved intent, tone, and confidence. It also retains the earlier ten-row results
 table with `id`, intent, confidence, tone, and processed time. The verifier checks
 the fixture/pending order, all ten HTTPS responses, API-to-Lambda prediction
-agreement, database persistence, and the empty pending queue. It does not contact
-production databases or APIs. The local API key and database password are
+agreement, database persistence, and the empty pending queue. The final stage
+checks dashboard pages, all ten articles' rendered titles/summaries/links and
+saved intent/tone, and a CSRF-protected database-backed chat request. It never
+contacts a production database; remote mode contacts only the selected inference
+API. The local API key and database password are
 intentionally non-secret and only exist inside the Compose network.
+
+During the test the dashboard is available at `http://127.0.0.1:8036` (override
+with `VI_E2E_DASHBOARD_PORT`). It is removed with the test stack when the command
+exits. Its internal-only network blocks external provider calls; AWS translation,
+provider-backed AI chat, PDF report generation, and browser JavaScript execution
+are **not** covered by these dashboard checks. Original text is displayed when
+translation credentials are absent. No AWS profile or Groq key is required.
 
 The original machine-readable `e2e_https_ready` and `split_e2e_passed` events,
 per-result `id`/`strategic_intent`/`confidence`/`tone`/`processed` fields, and
@@ -489,7 +545,7 @@ or model-bucket access is required.
 The equivalent raw command is:
 
 ```bash
-docker compose -f docker-compose.e2e.yml up --build \
+docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.dashboard.yml up --build \
   --abort-on-container-exit --exit-code-from e2e
 ```
 
@@ -497,7 +553,7 @@ docker compose -f docker-compose.e2e.yml up --build \
 
 | Command | Description |
 |---------|-------------|
-| `make test-split-e2e` | Run Git LFS model setup, build the real split images, and verify Lambda → trusted HTTPS inference API → local Postgres with ten articles |
+| `make test-split-e2e` | Run model setup, verify Lambda → HTTPS inference → local Postgres with ten articles, then verify the real dashboard and database-backed chat |
 | `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
 | `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
 | `make reset` | Reload the fixture, resetting the rows back to unclassified |
