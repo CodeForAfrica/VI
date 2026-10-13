@@ -138,7 +138,8 @@ intent_mapping = {
      
     
     # Other categories
-    "human rights": "SocialFragility", 
+    "human rights": "SocialFragility",
+    "human rights advocacy": "SocialFragility",
     "sovereignty erosion": "Sovereignty",
     "sovereignty threat": "Sovereignty",
     "centralization of power": "Sovereignty",
