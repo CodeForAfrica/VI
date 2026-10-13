@@ -32,6 +32,7 @@ intent_mapping = {
     "social fragility": "SocialFragility",
     "social unrest": "SocialFragility",
     "political destabilization": "SocialFragility",
+    "human rights advocacy": "SocialFragility",
     "information warfare": "SocialFragility",
     "debt trap diplomacy": "Economic",
     "cultural influence": "SocialFragility",
