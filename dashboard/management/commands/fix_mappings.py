@@ -9,33 +9,55 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # 1. THE COMPLETE MAPPING DICTIONARY
         intent_mapping = {
-            # Economic
+            # Direct matches
             "economic": "Economic",
-            "economic dependency": "Economic",
-            "trade dominance": "Economic",
-            "economic impact": "Economic",
-            "debt trap diplomacy": "Economic",
-            "health project": "Economic",
-            "medical": "Economic",
-            # Sovereignty
             "sovereignty": "Sovereignty",
-            "sovereignty erosion": "Sovereignty",
-            "reputation damage": "Sovereignty",
-            # Social Fragility
-            "socialfragility": "SocialFragility", 
-            "social fragility": "SocialFragility", 
-            "destabilization": "SocialFragility",
-            "migration control": "SocialFragility",
-            "political destabilization": "SocialFragility",
-        
-            # Others
             "lgbtq": "LGBTQ",
             "religious": "Religious",
             "electioninfluence": "ElectionInfluence",
             "militarypresence": "MilitaryPresence",
             "resourcedependency": "ResourceDependency",
-        }
-
+            "socialfragility": "SocialFragility",
+        
+            # Agriculture & Economic variations (Fixes misclassifications on farm/trade stories)
+            "agriculture": "Economic",
+            "farming": "Economic",
+            "crop yield": "Economic",
+            "food security": "Economic",
+            "trade": "Economic",
+            "economic dependency": "Economic",
+            "debt trap diplomacy": "Economic",
+            "cultural exchange": "Economic",
+            "diplomatic cooperation": "Economic",
+        
+            # Explicit LGBTQ mappings only 
+            "lgbtq rights": "LGBTQ",
+            "lgbt advocacy": "LGBTQ",
+             
+            
+            # Other categories
+            "human rights": "SocialFragility",
+            "human rights advocacy": "SocialFragility",
+            "sovereignty erosion": "Sovereignty",
+            "sovereignty threat": "Sovereignty",
+            "centralization of power": "Sovereignty",
+            "cultural hegemony": "Sovereignty",
+            "diplomatic influence": "Sovereignty",
+            "religious influence": "Religious",
+            "religious polarisation": "Religious",
+            "election influence": "ElectionInfluence",
+            "election interference": "ElectionInfluence",
+            "electoral interference": "ElectionInfluence",
+            "democratic interference": "ElectionInfluence",
+            "military presence": "MilitaryPresence",
+            "military base": "MilitaryPresence",
+            "resource dependency": "ResourceDependency",
+            "resource control": "ResourceDependency",
+            "social fragility": "SocialFragility",
+            "social unrest": "SocialFragility",
+            "information warfare": "SocialFragility",
+            "cultural influence": "SocialFragility",
+        } 
         # 2. HALLUCINATION KEYWORDS
         general_keywords = [
             # Nature & Science (The Crocodile Fix)
