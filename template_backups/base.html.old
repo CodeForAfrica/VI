@@ -1,0 +1,105 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Title: Automatically translates based on user selection -->
+    <title>{% trans "Vulnerability Index Tool" %}</title>
+    
+    <!-- CSS Stylesheet -->
+    <!-- Ensure 'style.css' exists in your static/css/ folder -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    
+    <!-- Fallback Styles: Ensures nav looks good even if style.css is missing -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        nav {
+            background-color: #003366; 
+            color: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        nav h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+        nav span { font-size: 0.9rem; opacity: 0.9; }
+        nav a { color: white; text-decoration: none; padding: 5px 10px; border-radius: 4px; transition: background 0.2s; }
+        nav a:hover { background-color: rgba(255,255,255,0.1); }
+        
+        /* Language Switcher Styling */
+        .lang-switch select {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #fff;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            margin-left: auto; /* Pushes switcher to the right if flex allows */
+        }
+        .lang-switch select option { color: black; }
+        
+        footer {
+            background-color: #333;
+            color: #aaa;
+            text-align: center;
+            padding: 1.5rem;
+            margin-top: 3rem;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <!-- App Title -->
+        <h1>{% trans "Vulnerability Index Tool" %}</h1>
+        
+        <!-- Subtitle -->
+        <span>{% trans "Monitoring Media Narratives Across Africa" %}</span>
+
+        <!-- Language Switcher -->
+        <form action="{% url 'set_language' %}" method="post" class="lang-switch">
+            {% csrf_token %}
+            <input name="next" type="hidden" value="{{ request.get_full_path }}">
+            <select name="language" onchange="this.form.submit()">
+                <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>English</option>
+                <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>Français</option>
+            </select>
+        </form>
+
+        <!-- Navigation Links -->
+        <div class="nav-links">
+            <a href="{% url 'overview' %}">{% trans "Home" %}</a>
+            <a href="{% url 'authors' %}">{% trans "Authors" %}</a>
+            <a href="{% url 'countries' %}">{% trans "Countries" %}</a>
+            <a href="{% url 'media' %}">{% trans "Media" %}</a>
+            <a href="{% url 'generate_report' %}">{% trans "Report" %}</a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <!-- Content from child templates (e.g., overview.html) injects here -->
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer>
+        <p>© 2026 Code for Africa • {% trans "Vulnerability Index Tool" %}</p>
+        <p>{% trans "Last updated" %}: {% now "F Y" %}</p>
+    </footer>
+
+</body>
+</html>
