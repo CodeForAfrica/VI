@@ -1,105 +1,107 @@
-{% load static i18n %}
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE }}">
+{% load static i18n %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% trans "Vulnerability Index Tool - Code for Africa" %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- Title: Automatically translates based on user selection -->
-    <title>{% trans "Vulnerability Index Tool" %}</title>
-    
-    <!-- CSS Stylesheet -->
-    <!-- Ensure 'style.css' exists in your static/css/ folder -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    
-    <!-- Fallback Styles: Ensures nav looks good even if style.css is missing -->
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f9f9f9;
-            color: #333;
+        :root {
+            --navy-dark: #1a2a40;
+            --navy-medium: #2c3e50;
+            --slate: #475569;
+            --action-blue: #2563eb;
+            --bg-light: #f1f5f9;
         }
-        nav {
-            background-color: #003366; 
+
+        body { 
+            background-color: var(--bg-light); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--navy-dark);
+        }
+
+        /* Header Styling */
+        header { background-color: white; border-bottom: 1px solid #e2e8f0; }
+
+        /* Navbar Styling */
+        .navbar { background-color: white; border-bottom: 1px solid #e2e8f0; padding: 0.5rem 0; }
+        .nav-link { color: var(--slate); font-weight: 500; margin: 0 10px; }
+        .nav-link.active { color: var(--navy-dark); border-bottom: 2px solid var(--navy-dark); }
+        .nav-link:hover { color: var(--action-blue); }
+
+        /* Footer Styling */
+        .footer-navy {
+            background-color: var(--navy-dark);
             color: white;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        nav h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
-        nav span { font-size: 0.9rem; opacity: 0.9; }
-        nav a { color: white; text-decoration: none; padding: 5px 10px; border-radius: 4px; transition: background 0.2s; }
-        nav a:hover { background-color: rgba(255,255,255,0.1); }
-        
-        /* Language Switcher Styling */
-        .lang-switch select {
-            padding: 6px 10px;
-            border-radius: 4px;
-            border: 1px solid #fff;
-            background: transparent;
-            color: white;
-            cursor: pointer;
-            margin-left: auto; /* Pushes switcher to the right if flex allows */
-        }
-        .lang-switch select option { color: black; }
-        
-        footer {
-            background-color: #333;
-            color: #aaa;
+            padding: 30px 0;
+            margin-top: 50px;
             text-align: center;
-            padding: 1.5rem;
-            margin-top: 3rem;
-        }
-        .main-container {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 0 20px;
         }
     </style>
 </head>
 <body>
 
-    <nav>
-        <!-- App Title -->
-        <h1>{% trans "Vulnerability Index Tool" %}</h1>
-        
-        <!-- Subtitle -->
-        <span>{% trans "Monitoring Media Narratives Across Africa" %}</span>
+<header class="py-4">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-3 col-12 text-md-start text-center mb-md-0 mb-3">
+                <img src="{% static 'dashboard/images/Africa logo.png' %}" 
+                     alt="Code for Africa" 
+                     height="45" 
+                     style="max-height: 45px; width: auto; object-fit: contain;">
+            </div>
 
-        <!-- Language Switcher -->
-        <form action="{% url 'set_language' %}" method="post" class="lang-switch">
-            {% csrf_token %}
-            <input name="next" type="hidden" value="{{ request.get_full_path }}">
-            <select name="language" onchange="this.form.submit()">
-                <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>English</option>
-                <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>Français</option>
-            </select>
-        </form>
+            <div class="col-md-6 col-12 text-center">
+                <h1 class="h3 fw-bold mb-1" style="color: var(--navy-dark);">
+                    {% trans "Vulnerability Index Tool" %}
+                </h1>
+                <p class="small text-muted mb-0 text-uppercase tracking-wider">
+                    {% trans "Monitoring Media Narratives Across Africa" %}
+                </p>
+            </div>
 
-        <!-- Navigation Links -->
-        <div class="nav-links">
-            <a href="{% url 'overview' %}">{% trans "Home" %}</a>
-            <a href="{% url 'authors' %}">{% trans "Authors" %}</a>
-            <a href="{% url 'countries' %}">{% trans "Countries" %}</a>
-            <a href="{% url 'media' %}">{% trans "Media" %}</a>
-            <a href="{% url 'generate_report' %}">{% trans "Report" %}</a>
+            <div class="col-md-3 col-12 text-md-end text-center">
+                <!-- Minimal Language Switcher (Bootstrap styled to match your design) -->
+                <form action="{% url 'set_language' %}" method="post" style="display: inline-block; margin-bottom: 5px;">
+                    {% csrf_token %}
+                    <input name="next" type="hidden" value="{{ request.get_full_path }}">
+                    <select name="language" onchange="this.form.submit()" class="form-select form-select-sm" style="width: auto; display: inline-block; font-size: 0.875rem;">
+                        <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                        <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>🇫🇷 Français</option>
+                    </select>
+                </form>
+                <br>
+                <small class="text-muted">{% trans "Last updated" %}: {% now "F Y" %}</small>
+            </div>
         </div>
-    </nav>
-
-    <div class="main-container">
-        <!-- Content from child templates (e.g., overview.html) injects here -->
-        {% block content %}{% endblock %}
     </div>
+</header>
 
-    <footer>
-        <p>© 2026 Code for Africa • {% trans "Vulnerability Index Tool" %}</p>
-        <p>{% trans "Last updated" %}: {% now "F Y" %}</p>
-    </footer>
+<nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container">
+        <div class="navbar-nav mx-auto">
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'overview' %}">{% trans "Home" %}</a>
+            <a class="nav-link {% if '/authors/' in request.path %}active{% endif %}" href="{% url 'authors' %}">{% trans "Authors" %}</a>
+            <a class="nav-link {% if '/countries/' in request.path %}active{% endif %}" href="{% url 'countries' %}">{% trans "Countries" %}</a>
+            <a class="nav-link {% if 'outlets' in request.path %}active{% endif %}" href="{% url 'media' %}">{% trans "Media" %}</a>
+            <a class="nav-link {% if '/report/' in request.path %}active{% endif %}" href="{% url 'generate_report' %}">{% trans "Report" %}</a>
+        </div>
+    </div>
+</nav>
 
+<div class="container mt-5">
+    {% block content %}{% endblock %}
+</div>
+
+<footer class="footer-navy">
+    <div class="container">
+        <p class="mb-1">© 2026 Code for Africa • {% trans "Vulnerability Index Tool" %}</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
