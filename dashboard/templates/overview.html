@@ -1,356 +1,183 @@
-<!-- dashboard/templates/overview.html -->
-
 {% extends "base.html" %}
+{% load i18n %}
+
 {% block content %}
-
-<style>
-    :root { 
-        --navy-dark: #1a2a40; 
-        --action-blue: #2563eb; 
-        --soft-bg: #f8fafc;
-    }
-    
-    /* Stats Styling */
-    .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; }
-    .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
-    
-    /* Badge Styling */
-    .badge-tone { background-color: #10b981 !important; color: white !important; padding: 5px 10px; }
-    .badge-intent { background-color: #f59e0b !important; color: white !important; padding: 5px 10px; }
-    
-    /* CVI Calculator Panel */
-    .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 250px; }
-    .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
-    .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-    
-    /* Methodology Styles */
-    .methodology-container {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 20px;
-        margin-top: 20px;
-        width: 100%;
-        max-width: 95%;
-    }
-    .signal-box { font-size: 0.82rem; line-height: 1.4; color: #475569; }
-    .signal-header { font-weight: 800; font-size: 0.72rem; text-transform: uppercase; margin-bottom: 8px; display: block; }
-    .signal-blue { color: #2563eb; background: #eff6ff; padding: 2px 6px; border-radius: 4px; }
-    .signal-yellow { color: #92400e; background: #fefce8; padding: 2px 6px; border-radius: 4px; }
-    .formula-box {
-        background: #f1f5f9;
-        border-radius: 6px;
-        padding: 10px;
-        font-family: monospace;
-        font-size: 0.85rem;
-        margin-top: 15px;
-        color: #334155;
-    }
-
-    #chat-window { 
-        display: none; width: 350px; height: 450px; position: fixed; 
-        bottom: 90px; right: 20px; background: white; z-index: 1000; 
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
-    }
-    #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
-    #chat-box { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
-    .typing { font-style: italic; color: #888; font-size: 0.8rem; }
-</style>
-
-<div class="row g-3 mb-5">
-    <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid var(--action-blue);">
-            <div class="stat-label fw-bold text-muted small text-uppercase">Total Articles</div>
-            <div class="stat-value">{{ total_articles|default:"0" }}</div>
-        </div>
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>{% trans "Total Articles" %}</h3>
+        <p>{{ total_articles|default:"0" }}</p>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #10b981;">
-            <div class="stat-label fw-bold text-muted small text-uppercase">Media Outlets</div>
-            <div class="stat-value">{{ unique_outlets|default:"0" }}</div>
-        </div>
+    <div class="stat-card">
+        <h3>{% trans "Media Outlets" %}</h3>
+        <p>{{ unique_outlets|default:"0" }}</p>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #f59e0b;">
-            <div class="stat-label fw-bold text-muted small text-uppercase">Narratives</div>
-            <div class="stat-value">{{ unique_intents|default:"0" }}</div>
-        </div>
+    <div class="stat-card">
+        <h3>{% trans "Narratives" %}</h3>
+        <p>{{ unique_intents|default:"0" }}</p>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card" style="border-bottom: 4px solid #06b6d4;">
-            <div class="stat-label fw-bold text-muted small text-uppercase">Foreign Actors</div>
-            <div class="stat-value">{{ unique_actors|default:"0" }}</div>
-        </div>
+    <div class="stat-card">
+        <h3>{% trans "Foreign Actors" %}</h3>
+        <p>{{ unique_actors|default:"0" }}</p>
     </div>
 </div>
 
-<h4 class="text-center fw-bold mb-4" style="color: var(--navy-dark);">Vulnerability Index Calculator</h4>
-<div class="cvi-panel shadow-sm mb-5">
-    <div class="cvi-left">
-        <form method="get" action="." id="cvi-filter-form">
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Target African Country</label>
-                <select name="calc_target_country" class="form-select">
-                    <option value="">Select Country</option>
-                    {% for country in african_countries %}<option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Foreign Inferred Actor</label>
-                <select name="calc_foreign_actor" class="form-select">
-                    <option value="">Select Actor</option>
-                    {% for actor in foreign_actors %}<option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="fw-bold small text-muted">Strategic Intent (Factor Filter)</label>
-                <select name="calc_strategic_intent" class="form-select">
-                    <option value="">-- Auto-Detect Primary Factor --</option>
-                    {% for val, label in intent_choices %}
-                    <option value="{{ val }}" {% if val == selected_intent %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">Calculate & Filter</button>
-            <div class="text-center border-top pt-2"><a href="." class="reset-link text-decoration-none small text-muted fw-bold"><i class="fas fa-sync-alt me-1"></i> Reset Filters</a></div>
-        </form>
-    </div>
-    
-    <div class="cvi-right text-center">
-        {% if selected_country and selected_actor %}
-            <div class="display-3 fw-bold text-primary">{{ cvi_score|floatformat:3 }}</div>
-            <div class="h5 fw-bold text-uppercase mt-1" style="letter-spacing: 1px; color: var(--navy-dark);">Vulnerability Score</div>
+<!-- Calculator Section -->
+<div class="calculator-section">
+    <h2>{% trans "Vulnerability Index Calculator" %}</h2>
+    <form method="get">
+        <label>{% trans "Target African Country" %}</label>
+        <select name="calc_target_country">
+            <option value="">{% trans "Select Country" %}</option>
+            {% for country in african_countries %}
+                <option value="{{ country }}" {% if selected_country == country %}selected{% endif %}>{{ country }}</option>
+            {% endfor %}
+        </select>
+
+        <label>{% trans "Foreign Inferred Actor" %}</label>
+        <select name="calc_foreign_actor">
+            <option value="">{% trans "Select Actor" %}</option>
+            {% for actor in foreign_actors %}
+                <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
+            {% endfor %}
+        </select>
+
+        <label>{% trans "Strategic Intent (Factor Filter)" %}</label>
+        <select name="calc_strategic_intent">
+            <option value="">{% trans "-- Auto-Detect Primary Factor --" %}</option>
+            {% for val, label in intent_choices %}
+                <option value="{{ val }}" {% if selected_intent == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">{% trans "Calculate & Filter" %}</button>
+        <a href=".">{% trans "Reset Filters" %}</a>
+    </form>
+
+    {% if selected_country and selected_actor %}
+        <div class="results">
+            <h3>{{ cvi_score|floatformat:3 }} {% trans "Vulnerability Score" %}</h3>
+            <h4>{% trans "Methodology Breakdown" %}</h4>
             
-            <div class="methodology-container text-start">
-                <div class="d-flex align-items-center mb-3">
-                    <i class="fas fa-microscope text-primary me-2"></i>
-                    <span class="fw-bold small text-uppercase" style="color: var(--navy-dark);">Methodology Breakdown</span>
-                </div>
-                
-                <div class="row g-3">
-                    <div class="col-md-6 border-end">
-                        <span class="signal-header"><span class="signal-blue">1. Content Signal</span></span>
-                        <p class="signal-box mb-0">Measures the intensity of strategic narratives pushed by <strong>{{ selected_actor }}</strong> toward <strong>{{ selected_country }}</strong> on a specific factor (e.g., economic, elections, sovereignty, etc.). It is estimated using advanced ML models and statistically corrected using human labels via Prediction-powered Inference (PPI) to ensure reliable measurement.</p>
-                    </div>
-                    <div class="col-md-6">
-                        <span class="signal-header"><span class="signal-yellow">2. Contextual Signal</span></span>
-                        <p class="signal-box mb-0">Captures the structural susceptibility of <strong>{{ selected_country }}</strong> to influence from <strong>{{ selected_actor }}</strong> on that specific factor. It incorporates measurable actor×country conditions such as debt exposure, military presence, resource dependencies, election timing, or policy environment that may increase vulnerability.</p>
-                    </div>
-                </div>
-
-                <div class="formula-box text-center">
-                    (Content Signal + Contextual Signal) = Vulnerability Index
-                </div>
-                <p class="text-muted mt-2 mb-0" style="font-size: 0.7rem;"><strong>Interpretation:</strong> Higher values indicate greater potential influence risk. <br>Current focus: <em>{{ selected_intent|default:"Social Fragility" }}</em>.</p>
-            </div>
-            <p class="small text-muted mt-3">Analysis for {{ selected_country }} - Actor: {{ selected_actor }}</p>
-        {% else %}
-            <div class="text-muted opacity-50"><i class="fas fa-calculator fa-3x mb-3"></i><p>Select parameters to view calculations</p></div>
-        {% endif %}
-    </div>
+            <!-- DYNAMIC METHODOLOGY: Pulls translated text directly from views.py -->
+            <p>{{ vulnerability_description|linebreaks }}</p>
+            
+            <p><strong>{% trans "Formula:" %} ({% trans "Content Signal" %} + {% trans "Contextual Signal" %}) = {% trans "Vulnerability Index" %}</strong></p>
+            <p><em>
+                {% blocktrans with intent=selected_intent|default:"Social Fragility" country=selected_country actor=selected_actor %}
+                Interpretation: Higher values indicate greater potential influence risk. Current focus: {{ intent }}. Analysis for {{ country }} - Actor: {{ actor }}.
+                {% endblocktrans %}
+            </em></p>
+        </div>
+    {% else %}
+        <p>{% trans "Select parameters to view calculations" %}</p>
+    {% endif %}
 </div>
 
-<div class="row g-4 mb-5">
-    <div class="col-lg-7">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Narrative Volume Over Time</h5>
-            </div>
-            <div class="card-body p-0">
-                {% if chart %}{{ chart|safe }}{% else %}<div class="p-5 text-center text-muted">No chart data available.</div>{% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-5">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold" style="color: var(--navy-dark);">Top Strategic Intents</h5>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for sub in top_subjects %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <!-- Display canonical intent value or fallback to Social Fragility -->
-                        {{ sub.canonical_intent|default:"Social Fragility"|title }} ({{ sub.inferred_actor }} → {{ sub.target_country }})
-                        <span class="badge bg-primary rounded-pill">{{ sub.total }}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center py-4 text-muted">No strategic intent data found.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
+<!-- Charts -->
+<div class="charts-section">
+    <h3>{% trans "Narrative Volume Over Time" %}</h3>
+    {% if chart %}
+        {{ chart|safe }}
+    {% else %}
+        <p>{% trans "No chart data available." %}</p>
+    {% endif %}
 </div>
 
-<h4 class="mb-4 text-center fw-bold mt-5" style="color: var(--action-blue);">Recent Articles</h4>
-<div class="row g-4 mb-3">
+<!-- Top Subjects -->
+<div class="subjects-section">
+    <h3>{% trans "Top Strategic Intents" %}</h3>
+    <ul>
+        {% for sub in top_subjects %}
+            <li>
+                {{ sub.canonical_intent|default:"Social Fragility"|title }} 
+                ({{ sub.inferred_actor }} → {{ sub.target_country }})
+                <strong>{{ sub.total }}</strong>
+            </li>
+        {% empty %}
+            <li>{% trans "No strategic intent data found." %}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- Articles & Pagination -->
+<div class="articles-section">
+    <h3>{% trans "Recent Articles" %}</h3>
     {% for article in page_obj %}
-    <div class="col-12">
-        <div class="card shadow-sm border-0">
-            <div class="card-body">
-                <h6 class="fw-bold">
-                    <a href="{{ article.url }}" target="_blank" class="text-decoration-none" style="color: var(--action-blue);">
-                        {% if article.display_title %}
-                            {{ article.display_title }}
-                        {% elif article.title %}
-                            {{ article.title }}
-                        {% elif article.article_text %}
-                            {{ article.article_text|truncatewords:12 }}
-                        {% else %}
-                            Narrative Entry #{{ article.id }}
-                        {% endif %}
-                    </a>
-                </h6>
-                <div class="mb-3 mt-2">
-                    <span class="badge badge-tone">Tone: {{ article.tone|default:"Neutral"|title }}</span>
-                    <!-- Canonical intent default explicitly set to Social Fragility -->
-                    <span class="badge badge-intent">Intent: {{ article.canonical_strategic_intent|default:"Social Fragility"|title }}</span>
-                </div>
-                <p class="small text-muted mb-3">{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="small text-muted">{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</span>
-                    <a href="{{ article.url }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">Read Full Article →</a>
-                </div>
-            </div>
+        <div class="article-card">
+            <h4>
+                <a href="{{ article.url }}">
+                    {% if article.display_title %}
+                        {{ article.display_title }}
+                    {% elif article.title %}
+                        {{ article.title }}
+                    {% elif article.article_text %}
+                        {{ article.article_text|truncatewords:12 }}
+                    {% else %}
+                        {% trans "Narrative Entry" %} #{{ article.id }}
+                    {% endif %}
+                </a>
+            </h4>
+            <p>
+                {% trans "Tone:" %} {{ article.tone|default:"Neutral"|title }} | 
+                {% trans "Intent:" %} {{ article.canonical_strategic_intent|default:"Social Fragility"|title }}
+            </p>
+            <p>{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
+            <small>{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</small>
+            <br>
+            <a href="{{ article.url }}">{% trans "Read Full Article →" %}</a>
         </div>
-    </div>
     {% endfor %}
-</div>
 
-<!-- PAGINATION CONTROLS -->
-<div class="row g-4 mb-5">
-    <div class="col-12 text-center">
-        {% if page_obj.has_other_pages %}
-            <nav aria-label="Article pagination">
-                <ul class="pagination justify-content-center flex-wrap">
-                    {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}
-                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
-                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
-                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
-                                ← Previous
-                            </a>
-                        </li>
-                    {% endif %}
+    {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                    {% trans "← Previous" %}
+                </a>
+            {% endif %}
 
-                    {% if page_obj.paginator.num_pages > 7 %}
-                        {% if page_obj.number > 4 %}
-                            <li class="page-item"><a class="page-link" href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a></li>
-                            {% if page_obj.number > 5 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-                        {% endif %}
-                    {% endif %}
+            {% if page_obj.paginator.num_pages > 7 %}
+                {% if page_obj.number > 4 %}
+                    <a href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a>
+                    {% if page_obj.number > 5 %}…{% endif %}
+                {% endif %}
+            {% endif %}
 
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if num == page_obj.number %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% elif num < page_obj.number|add:3 and num > page_obj.number|add:-3 %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}
-                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
-                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
-                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
-                                    {{ num }}
-                                </a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
+            {% for num in page_obj.paginator.page_range %}
+                {% if num == page_obj.number %}
+                    <span class="current">{{ num }}</span>
+                {% elif num < page_obj.number|add:3 and num > page_obj.number|add:-3 %}
+                    <a href="?page={{ num }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                        {{ num }}
+                    </a>
+                {% endif %}
+            {% endfor %}
 
-                    {% if page_obj.paginator.num_pages > 7 %}
-                        {% if page_obj.number < page_obj.paginator.num_pages|add:-3 %}
-                            {% if page_obj.number < page_obj.paginator.num_pages|add:-4 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}
-                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
-                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
-                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
-                                    {{ page_obj.paginator.num_pages }}
-                                </a>
-                            </li>
-                        {% endif %}
-                    {% endif %}
+            {% if page_obj.paginator.num_pages > 7 %}
+                {% if page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+                    {% if page_obj.number < page_obj.paginator.num_pages|add:-4 %}…{% endif %}
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                        {{ page_obj.paginator.num_pages }}
+                    </a>
+                {% endif %}
+            {% endif %}
 
-                    {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}
-                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
-                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
-                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
-                                Next →
-                            </a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        {% endif %}
-    </div>
-</div>
-<!-- END PAGINATION CONTROLS -->
-
-<div id="chatbot-bubble">
-    <button class="btn btn-primary rounded-circle p-3 shadow-lg" onclick="toggleChat()">
-        <span style="font-size: 1.5rem;">💬</span>
-    </button>
-</div>
-
-<div id="chat-window" class="border">
-    <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center rounded-top">
-        <span class="fw-bold">AI Narrative Analyst</span>
-        <button class="btn-close btn-close-white" onclick="toggleChat()"></button>
-    </div>
-    <div id="chat-box" class="p-3 bg-light" style="font-size: 0.9rem;">
-        <div class="p-2 mb-2 bg-white border rounded">Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores.</div>
-    </div>
-    <div class="p-2 border-top bg-white rounded-bottom">
-        <div class="input-group">
-            <input type="text" id="chat-input" class="form-control form-control-sm" placeholder="Ask a question...">
-            <button class="btn btn-primary btn-sm" type="button" id="send-btn">Send</button>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                    {% trans "Next →" %}
+                </a>
+            {% endif %}
         </div>
-    </div>
+    {% endif %}
 </div>
 
-<script>
-    function toggleChat() {
-        const chat = document.getElementById('chat-window');
-        chat.style.display = (chat.style.display === 'flex') ? 'none' : 'flex';
-    }
-
-    document.querySelectorAll('.cvi-left select').forEach(dropdown => {
-        dropdown.addEventListener('change', function() { this.closest('form').submit(); });
-    });
-
-    document.getElementById('send-btn').addEventListener('click', function() {
-        const input = document.getElementById('chat-input');
-        const box = document.getElementById('chat-box');
-        const userText = input.value.trim();
-        if (userText !== "") {
-            box.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block">${userText}</span></div>`;
-            input.value = "";
-            const loadingId = "loading-" + Date.now();
-            box.innerHTML += `<div class="text-start mb-2" id="${loadingId}"><span class="typing">Analysing...</span></div>`;
-            box.scrollTop = box.scrollHeight;
-
-            fetch("{% url 'chatbot_response' %}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-                body: JSON.stringify({ message: userText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                const loader = document.getElementById(loadingId);
-                if (loader) loader.remove();
-                box.innerHTML += `<div class="text-start mb-2"><span class="bg-white border p-2 rounded d-inline-block">${data.reply}</span></div>`;
-                box.scrollTop = box.scrollHeight;
-            });
-        }
-    });
-
-    document.getElementById('chat-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') document.getElementById('send-btn').click();
-    });
-</script>
+<!-- Chatbot Section -->
+<div class="chatbot-section">
+    <h3>💬 {% trans "AI Narrative Analyst" %}</h3>
+    <p>{% trans "Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores." %}</p>
+    <!-- Your existing chatbot iframe/form goes here -->
+    <button>{% trans "Send" %}</button>
+</div>
 
 {% endblock %}
