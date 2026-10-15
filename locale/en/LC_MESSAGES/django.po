@@ -1,0 +1,333 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: VI\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-15 11:57+0000\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: dashboard/templates/base.html:7
+msgid "Vulnerability Index Tool - Code for Africa"
+msgstr ""
+
+#: dashboard/templates/base.html:54 dashboard/templates/base.html:95
+msgid "Vulnerability Index Tool"
+msgstr ""
+
+#: dashboard/templates/base.html:57
+msgid "Monitoring Media Narratives Across Africa"
+msgstr ""
+
+#: dashboard/templates/base.html:71
+msgid "Last updated"
+msgstr ""
+
+#: dashboard/templates/base.html:80
+msgid "Home"
+msgstr ""
+
+#: dashboard/templates/base.html:81
+msgid "Authors"
+msgstr ""
+
+#: dashboard/templates/base.html:82
+msgid "Countries"
+msgstr ""
+
+#: dashboard/templates/base.html:83
+msgid "Media"
+msgstr ""
+
+#: dashboard/templates/base.html:84
+msgid "Report"
+msgstr ""
+
+#: dashboard/templates/overview.html:64
+msgid "Total Articles"
+msgstr ""
+
+#: dashboard/templates/overview.html:70
+msgid "Media Outlets"
+msgstr ""
+
+#: dashboard/templates/overview.html:76
+msgid "Narratives"
+msgstr ""
+
+#: dashboard/templates/overview.html:82
+msgid "Foreign Actors"
+msgstr ""
+
+#: dashboard/templates/overview.html:88
+msgid "Vulnerability Index Calculator"
+msgstr ""
+
+#: dashboard/templates/overview.html:93
+msgid "Target African Country"
+msgstr ""
+
+#: dashboard/templates/overview.html:95
+msgid "Select Country"
+msgstr ""
+
+#: dashboard/templates/overview.html:100
+msgid "Foreign Inferred Actor"
+msgstr ""
+
+#: dashboard/templates/overview.html:102
+msgid "Select Actor"
+msgstr ""
+
+#: dashboard/templates/overview.html:107
+msgid "Strategic Intent (Factor Filter)"
+msgstr ""
+
+#: dashboard/templates/overview.html:109
+msgid "-- Auto-Detect Primary Factor --"
+msgstr ""
+
+#: dashboard/templates/overview.html:115
+msgid "Calculate & Filter"
+msgstr ""
+
+#: dashboard/templates/overview.html:116
+msgid "Reset Filters"
+msgstr ""
+
+#: dashboard/templates/overview.html:123
+msgid "Vulnerability Score"
+msgstr ""
+
+#: dashboard/templates/overview.html:128
+msgid "Methodology Breakdown"
+msgstr ""
+
+#: dashboard/templates/overview.html:133
+msgid "1. Content Signal"
+msgstr ""
+
+#: dashboard/templates/overview.html:135
+#, python-format
+msgid ""
+"\n"
+"                            Measures the intensity of strategic narratives "
+"pushed by <strong>%(actor)s</strong> toward <strong>%(country)s</strong> on "
+"a specific factor (e.g., economic, elections, sovereignty, etc.). It is "
+"estimated using advanced ML models and statistically corrected using human "
+"labels via Prediction-powered Inference (PPI) to ensure reliable "
+"measurement.\n"
+"                            "
+msgstr ""
+
+#: dashboard/templates/overview.html:141
+msgid "2. Contextual Signal"
+msgstr ""
+
+#: dashboard/templates/overview.html:143
+#, python-format
+msgid ""
+"\n"
+"                            Captures the structural susceptibility of "
+"<strong>%(country)s</strong> to influence from <strong>%(actor)s</strong> on "
+"that specific factor. It incorporates measurable actor×country conditions "
+"such as debt exposure, military presence, resource dependencies, election "
+"timing, or policy environment that may increase vulnerability.\n"
+"                            "
+msgstr ""
+
+#: dashboard/templates/overview.html:151
+msgid "Content Signal"
+msgstr ""
+
+#: dashboard/templates/overview.html:151
+msgid "Contextual Signal"
+msgstr ""
+
+#: dashboard/templates/overview.html:151
+msgid "Vulnerability Index"
+msgstr ""
+
+#: dashboard/templates/overview.html:154
+msgid "Interpretation:"
+msgstr ""
+
+#: dashboard/templates/overview.html:154
+msgid "Higher values indicate greater potential influence risk."
+msgstr ""
+
+#: dashboard/templates/overview.html:155
+msgid "Current focus:"
+msgstr ""
+
+#: dashboard/templates/overview.html:159
+#, python-format
+msgid "Analysis for %(country)s - Actor: %(actor)s"
+msgstr ""
+
+#: dashboard/templates/overview.html:164
+msgid "Select parameters to view calculations"
+msgstr ""
+
+#: dashboard/templates/overview.html:174
+msgid "Narrative Volume Over Time"
+msgstr ""
+
+#: dashboard/templates/overview.html:177
+msgid "No chart data available."
+msgstr ""
+
+#: dashboard/templates/overview.html:184
+msgid "Top Strategic Intents"
+msgstr ""
+
+#: dashboard/templates/overview.html:194
+msgid "No strategic intent data found."
+msgstr ""
+
+#: dashboard/templates/overview.html:202
+msgid "Recent Articles"
+msgstr ""
+
+#: dashboard/templates/overview.html:217
+msgid "Narrative Entry"
+msgstr ""
+
+#: dashboard/templates/overview.html:222
+msgid "Tone:"
+msgstr ""
+
+#: dashboard/templates/overview.html:223
+msgid "Intent:"
+msgstr ""
+
+#: dashboard/templates/overview.html:228
+msgid "Read Full Article →"
+msgstr ""
+
+#: dashboard/templates/overview.html:248
+msgid "← Previous"
+msgstr ""
+
+#: dashboard/templates/overview.html:297
+msgid "Next →"
+msgstr ""
+
+#: dashboard/templates/overview.html:316
+msgid "AI Narrative Analyst"
+msgstr ""
+
+#: dashboard/templates/overview.html:320
+msgid ""
+"Hello! I am your AI analyst. Ask me anything about media narratives or "
+"vulnerability scores."
+msgstr ""
+
+#: dashboard/templates/overview.html:324
+msgid "Ask a question..."
+msgstr ""
+
+#: dashboard/templates/overview.html:325
+msgid "Send"
+msgstr ""
+
+#: dashboard/templates/overview.html:348
+msgid "Analysing..."
+msgstr ""
+
+#: dashboard/views.py:100
+msgid "Senegal"
+msgstr ""
+
+#: dashboard/views.py:100
+msgid "Ethiopia"
+msgstr ""
+
+#: dashboard/views.py:100
+msgid "Côte d'Ivoire"
+msgstr ""
+
+#: dashboard/views.py:100
+msgid "DRC"
+msgstr ""
+
+#: dashboard/views.py:100
+msgid "South Africa"
+msgstr ""
+
+#: dashboard/views.py:103
+msgid "US"
+msgstr ""
+
+#: dashboard/views.py:103
+msgid "China"
+msgstr ""
+
+#: dashboard/views.py:103
+msgid "France"
+msgstr ""
+
+#: dashboard/views.py:103
+msgid "Russia"
+msgstr ""
+
+#: dashboard/views.py:103
+msgid "UAE"
+msgstr ""
+
+#: dashboard/views.py:104
+msgid "Saudi Arabia"
+msgstr ""
+
+#: dashboard/views.py:104
+msgid "Turkey"
+msgstr ""
+
+#: dashboard/views.py:104
+msgid "Israel"
+msgstr ""
+
+#: dashboard/views.py:104
+msgid "Iran"
+msgstr ""
+
+#: dashboard/views.py:104
+msgid "Rwanda"
+msgstr ""
+
+#: dashboard/views.py:105
+msgid "NonState"
+msgstr ""
+
+#: dashboard/views.py:110
+msgid "Economic"
+msgstr ""
+
+#: dashboard/views.py:111
+msgid "Sovereignty"
+msgstr ""
+
+#: dashboard/views.py:112
+msgid "LGBTQ"
+msgstr ""
+
+#: dashboard/views.py:113
+msgid "Religious"
+msgstr ""
+
+#: dashboard/views.py:114
+msgid "Military presence"
+msgstr ""
+
+#: dashboard/views.py:115
+msgid "Resource Dependency"
+msgstr ""
+
+#: dashboard/views.py:116
+msgid "Social Fragility"
+msgstr ""
+
+#: dashboard/views.py:117
+msgid "Election Influence"
+msgstr ""
