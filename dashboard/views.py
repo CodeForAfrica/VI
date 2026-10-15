@@ -66,6 +66,8 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext as _g
 
 
 
@@ -86,28 +88,33 @@ def clear_cache_view(request):
     return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
 
 
-# =========================
-# CONSTANTS
-# =========================
+=========================
+CONSTANTS 
+=========================
+# DB-safe raw values (used for filtering)
+COUNTRIES_DB = ["Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"]
+FOREIGN_ACTORS_DB = ["US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda", "NonState"]
 
+# Translated display values (used for dropdowns & templates)
 COUNTRIES = [
-    "Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"
+    _("Senegal"), _("Ethiopia"), _("Côte d'Ivoire"), _("DRC"), _("South Africa")
 ]
 FOREIGN_ACTORS = [
-    "US", "China", "France", "Russia", "UAE",
-    "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda",
-    "NonState" 
+    _("US"), _("China"), _("France"), _("Russia"), _("UAE"),
+    _("Saudi Arabia"), _("Turkey"), _("Israel"), _("Iran"), _("Rwanda"),
+    _("NonState")
 ]
-# Each item must be a (Value, Label) pair
+
+# Dropdown pairs: (Raw DB Value, Translated Label)
 INTENT_CHOICES = [
-    ('Economic', 'Economic'),
-    ('Sovereignty', 'Sovereignty'),
-    ('LGBTQ', 'LGBTQ'),
-    ('Religious', 'Religious'),
-    ('MilitaryPresence', 'Military presence'),
-    ('ResourceDependency', 'Resource Dependency'),
-    ('SocialFragility', 'Social Fragility'),
-    ('ElectionInfluence', 'Election Influence'),
+    ('Economic', _('Economic')),
+    ('Sovereignty', _('Sovereignty')),
+    ('LGBTQ', _('LGBTQ')),
+    ('Religious', _('Religious')),
+    ('MilitaryPresence', _('Military presence')),
+    ('ResourceDependency', _('Resource Dependency')),
+    ('SocialFragility', _('Social Fragility')),
+    ('ElectionInfluence', _('Election Influence')),
 ]
 
 intent_mapping = {
@@ -1151,18 +1158,11 @@ def overview(request):
     # 10. Methodology / Description
     actor_label = calc_foreign_actor if calc_foreign_actor else "[Foreign Actor]"
     target_label = calc_target_country if calc_target_country else "[Target Country]"
-
-    vulnerability_methodology = (
-        f"1. Content Signal: Measures the intensity of strategic narratives pushed by {actor_label} "
-        f"toward {target_label} on a specific factor (e.g., economic, elections, sovereignty, etc.). "
-        "It is estimated using advanced ML models and statistically corrected using human labels via "
-        "Prediction-powered Inference (PPI) to ensure reliable measurement. \n\n"
-        
-        f"2. Contextual Signal: Captures the structural susceptibility of {target_label} to influence "
-        f"from {actor_label} on that specific factor. It incorporates measurable actor×country conditions "
-        "such as debt exposure, military presence, resource dependencies, election timing, or policy "
-        "environment that may increase vulnerability."
-    )
+    
+    vulnerability_methodology = _g(
+        "1. Content Signal: Measures the intensity of strategic narratives pushed by %(actor)s toward %(country)s on a specific factor (e.g., economic, elections, sovereignty, etc.). It is estimated using advanced ML models and statistically corrected using human labels via Prediction-powered Inference (PPI) to ensure reliable measurement.\n\n"
+        "2. Contextual Signal: Captures the structural susceptibility of %(country)s to influence from %(actor)s on that specific factor. It incorporates measurable actor×country conditions such as debt exposure, military presence, resource dependencies, election timing, or policy environment that may increase vulnerability."
+    ) % {'actor': actor_label, 'country': target_label}
 
     # 11. Context Assembly
     context = {
