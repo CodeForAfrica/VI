@@ -93,14 +93,20 @@
                 <label class="fw-bold small text-muted">{% trans "Target African Country" %}</label>
                 <select name="calc_target_country" class="form-select">
                     <option value="">{% trans "Select Country" %}</option>
-                    {% for country in african_countries %}<option value="{{ country }}" {% if country == selected_country %}selected{% endif %}>{{ country }}</option>{% endfor %}
+                    <!-- FIXED: Unpacks the (key, label) tuple from views.py -->
+                    {% for key, label in african_countries %}
+                        <option value="{{ key }}" {% if key == selected_country %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
                 <label class="fw-bold small text-muted">{% trans "Foreign Inferred Actor" %}</label>
                 <select name="calc_foreign_actor" class="form-select">
                     <option value="">{% trans "Select Actor" %}</option>
-                    {% for actor in foreign_actors %}<option value="{{ actor }}" {% if actor == selected_actor %}selected{% endif %}>{{ actor }}</option>{% endfor %}
+                    <!-- FIXED: Unpacks the (key, label) tuple from views.py -->
+                    {% for key, label in foreign_actors %}
+                        <option value="{{ key }}" {% if key == selected_actor %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
@@ -108,12 +114,16 @@
                 <select name="calc_strategic_intent" class="form-select">
                     <option value="">{% trans "-- Auto-Detect Primary Factor --" %}</option>
                     {% for val, label in intent_choices %}
-                    <option value="{{ val }}" {% if val == selected_intent %}selected{% endif %}>{{ label }}</option>
+                        <option value="{{ val }}" {% if val == selected_intent %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
             <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">{% trans "Calculate & Filter" %}</button>
-            <div class="text-center border-top pt-2"><a href="." class="reset-link text-decoration-none small text-muted fw-bold"><i class="fas fa-sync-alt me-1"></i> {% trans "Reset Filters" %}</a></div>
+            <div class="text-center border-top pt-2">
+                <a href="." class="reset-link text-decoration-none small text-muted fw-bold">
+                    <i class="fas fa-sync-alt me-1"></i> {% trans "Reset Filters" %}
+                </a>
+            </div>
         </form>
     </div>
     
