@@ -23,16 +23,11 @@
             color: var(--navy-dark);
         }
 
-        /* Header Styling */
         header { background-color: white; border-bottom: 1px solid #e2e8f0; }
-
-        /* Navbar Styling */
         .navbar { background-color: white; border-bottom: 1px solid #e2e8f0; padding: 0.5rem 0; }
         .nav-link { color: var(--slate); font-weight: 500; margin: 0 10px; }
         .nav-link.active { color: var(--navy-dark); border-bottom: 2px solid var(--navy-dark); }
         .nav-link:hover { color: var(--action-blue); }
-
-        /* Footer Styling */
         .footer-navy {
             background-color: var(--navy-dark);
             color: white;
@@ -64,7 +59,6 @@
             </div>
 
             <div class="col-md-3 col-12 text-md-end text-center">
-                <!-- Minimal Language Switcher (Bootstrap styled to match your design) -->
                 <form action="{% url 'set_language' %}" method="post" style="display: inline-block; margin-bottom: 5px;">
                     {% csrf_token %}
                     <input name="next" type="hidden" value="{{ request.get_full_path }}">
