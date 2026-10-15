@@ -88,9 +88,9 @@ def clear_cache_view(request):
     return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
 
 
-=========================
-CONSTANTS 
-=========================
+#=========================
+   #CONSTANTS 
+#=========================
 # DB-safe raw values (used for filtering)
 COUNTRIES_DB = ["Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"]
 FOREIGN_ACTORS_DB = ["US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda", "NonState"]
@@ -977,7 +977,7 @@ def overview(request):
     # --- STEP 2: BUILD FILTERED QUERYSET ---
     # This is your "Source of Truth" for the rest of the function
     full_stats_qs = MediaNarrative.objects.filter(id__in=clean_ids)
-    full_stats_qs = full_stats_qs.filter(target_country__in=COUNTRIES)
+    full_stats_qs = full_stats_qs.filter(target_country__in=COUNTRIES_DB)
 
     if calc_target_country:
         full_stats_qs = full_stats_qs.filter(target_country__iexact=calc_target_country)
