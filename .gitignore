@@ -66,3 +66,5 @@ logs/
 
 # Local-only planning doc (kept out of the repo)
 docs/inference-api-plan.md
+.env.save
+.env

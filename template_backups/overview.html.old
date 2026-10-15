@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block content %}
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>{% trans "Total Articles" %}</h3>
+        <p>{{ total_articles|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>{% trans "Media Outlets" %}</h3>
+        <p>{{ unique_outlets|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>{% trans "Narratives" %}</h3>
+        <p>{{ unique_intents|default:"0" }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>{% trans "Foreign Actors" %}</h3>
+        <p>{{ unique_actors|default:"0" }}</p>
+    </div>
+</div>
+
+<!-- Calculator Section -->
+<div class="calculator-section">
+    <h2>{% trans "Vulnerability Index Calculator" %}</h2>
+    <form method="get">
+        <label>{% trans "Target African Country" %}</label>
+        <select name="calc_target_country">
+            <option value="">{% trans "Select Country" %}</option>
+            {% for country in african_countries %}
+                <option value="{{ country }}" {% if selected_country == country %}selected{% endif %}>{{ country }}</option>
+            {% endfor %}
+        </select>
+
+        <label>{% trans "Foreign Inferred Actor" %}</label>
+        <select name="calc_foreign_actor">
+            <option value="">{% trans "Select Actor" %}</option>
+            {% for actor in foreign_actors %}
+                <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
+            {% endfor %}
+        </select>
+
+        <label>{% trans "Strategic Intent (Factor Filter)" %}</label>
+        <select name="calc_strategic_intent">
+            <option value="">{% trans "-- Auto-Detect Primary Factor --" %}</option>
+            {% for val, label in intent_choices %}
+                <option value="{{ val }}" {% if selected_intent == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">{% trans "Calculate & Filter" %}</button>
+        <a href=".">{% trans "Reset Filters" %}</a>
+    </form>
+
+    {% if selected_country and selected_actor %}
+        <div class="results">
+            <h3>{{ cvi_score|floatformat:3 }} {% trans "Vulnerability Score" %}</h3>
+            <h4>{% trans "Methodology Breakdown" %}</h4>
+            
+            <!-- DYNAMIC METHODOLOGY: Pulls translated text directly from views.py -->
+            <p>{{ vulnerability_description|linebreaks }}</p>
+            
+            <p><strong>{% trans "Formula:" %} ({% trans "Content Signal" %} + {% trans "Contextual Signal" %}) = {% trans "Vulnerability Index" %}</strong></p>
+            <p><em>
+                {% blocktrans with intent=selected_intent|default:"Social Fragility" country=selected_country actor=selected_actor %}
+                Interpretation: Higher values indicate greater potential influence risk. Current focus: {{ intent }}. Analysis for {{ country }} - Actor: {{ actor }}.
+                {% endblocktrans %}
+            </em></p>
+        </div>
+    {% else %}
+        <p>{% trans "Select parameters to view calculations" %}</p>
+    {% endif %}
+</div>
+
+<!-- Charts -->
+<div class="charts-section">
+    <h3>{% trans "Narrative Volume Over Time" %}</h3>
+    {% if chart %}
+        {{ chart|safe }}
+    {% else %}
+        <p>{% trans "No chart data available." %}</p>
+    {% endif %}
+</div>
+
+<!-- Top Subjects -->
+<div class="subjects-section">
+    <h3>{% trans "Top Strategic Intents" %}</h3>
+    <ul>
+        {% for sub in top_subjects %}
+            <li>
+                {{ sub.canonical_intent|default:"Social Fragility"|title }} 
+                ({{ sub.inferred_actor }} → {{ sub.target_country }})
+                <strong>{{ sub.total }}</strong>
+            </li>
+        {% empty %}
+            <li>{% trans "No strategic intent data found." %}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- Articles & Pagination -->
+<div class="articles-section">
+    <h3>{% trans "Recent Articles" %}</h3>
+    {% for article in page_obj %}
+        <div class="article-card">
+            <h4>
+                <a href="{{ article.url }}">
+                    {% if article.display_title %}
+                        {{ article.display_title }}
+                    {% elif article.title %}
+                        {{ article.title }}
+                    {% elif article.article_text %}
+                        {{ article.article_text|truncatewords:12 }}
+                    {% else %}
+                        {% trans "Narrative Entry" %} #{{ article.id }}
+                    {% endif %}
+                </a>
+            </h4>
+            <p>
+                {% trans "Tone:" %} {{ article.tone|default:"Neutral"|title }} | 
+                {% trans "Intent:" %} {{ article.canonical_strategic_intent|default:"Social Fragility"|title }}
+            </p>
+            <p>{{ article.display_summary|default:article.article_text|truncatewords:45 }}</p>
+            <small>{{ article.media_outlet }} • {{ article.posting_time|date:"M d, Y" }}</small>
+            <br>
+            <a href="{{ article.url }}">{% trans "Read Full Article →" %}</a>
+        </div>
+    {% endfor %}
+
+    {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                    {% trans "← Previous" %}
+                </a>
+            {% endif %}
+
+            {% if page_obj.paginator.num_pages > 7 %}
+                {% if page_obj.number > 4 %}
+                    <a href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a>
+                    {% if page_obj.number > 5 %}…{% endif %}
+                {% endif %}
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if num == page_obj.number %}
+                    <span class="current">{{ num }}</span>
+                {% elif num < page_obj.number|add:3 and num > page_obj.number|add:-3 %}
+                    <a href="?page={{ num }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                        {{ num }}
+                    </a>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.paginator.num_pages > 7 %}
+                {% if page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+                    {% if page_obj.number < page_obj.paginator.num_pages|add:-4 %}…{% endif %}
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                        {{ page_obj.paginator.num_pages }}
+                    </a>
+                {% endif %}
+            {% endif %}
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                    {% trans "Next →" %}
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Chatbot Section -->
+<div class="chatbot-section">
+    <h3>💬 {% trans "AI Narrative Analyst" %}</h3>
+    <p>{% trans "Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores." %}</p>
+    <!-- Your existing chatbot iframe/form goes here -->
+    <button>{% trans "Send" %}</button>
+</div>
+
+{% endblock %}
