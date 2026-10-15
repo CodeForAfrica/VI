@@ -88,33 +88,35 @@ def clear_cache_view(request):
     return HttpResponse("Cache cleared successfully! Refresh your dashboard now.")
 
 
-#=========================
-   #CONSTANTS 
-#=========================
+# =========================
+# CONSTANTS 
+# =========================
 # DB-safe raw values (used for filtering)
 COUNTRIES_DB = ["Senegal", "Ethiopia", "Côte d'Ivoire", "DRC", "South Africa"]
 FOREIGN_ACTORS_DB = ["US", "China", "France", "Russia", "UAE", "Saudi Arabia", "Turkey", "Israel", "Iran", "Rwanda", "NonState"]
 
-# Translated display values (used for dropdowns & templates)
+# Dropdown pairs: (Raw DB Value, Translated Label)
+# We use the raw English string for short codes like "US" to prevent Django 
 COUNTRIES = [
-    _("Senegal"), _("Ethiopia"), _("Côte d'Ivoire"), _("DRC"), _("South Africa")
-]
-FOREIGN_ACTORS = [
-    _("US"), _("China"), _("France"), _("Russia"), _("UAE"),
-    _("Saudi Arabia"), _("Turkey"), _("Israel"), _("Iran"), _("Rwanda"),
-    _("NonState")
+    ("Senegal", _("Senegal")),
+    ("Ethiopia", _("Ethiopia")),
+    ("Côte d'Ivoire", _("Côte d'Ivoire")),
+    ("DRC", _("DRC")),
+    ("South Africa", _("South Africa")),
 ]
 
-# Dropdown pairs: (Raw DB Value, Translated Label)
-INTENT_CHOICES = [
-    ('Economic', _('Economic')),
-    ('Sovereignty', _('Sovereignty')),
-    ('LGBTQ', _('LGBTQ')),
-    ('Religious', _('Religious')),
-    ('MilitaryPresence', _('Military presence')),
-    ('ResourceDependency', _('Resource Dependency')),
-    ('SocialFragility', _('Social Fragility')),
-    ('ElectionInfluence', _('Election Influence')),
+FOREIGN_ACTORS = [
+    ("US", "US"),  # Hardcoded to prevent Django from changing it to "United States"
+    ("China", _("China")),
+    ("France", _("France")),
+    ("Russia", _("Russia")),
+    ("UAE", "UAE"),
+    ("Saudi Arabia", _("Saudi Arabia")),
+    ("Turkey", _("Turkey")),
+    ("Israel", _("Israel")),
+    ("Iran", _("Iran")),
+    ("Rwanda", _("Rwanda")),
+    ("NonState", _("NonState")),
 ]
 
 intent_mapping = {
@@ -950,6 +952,34 @@ def overview(request):
     calc_target_country = request.GET.get('calc_target_country', '').strip()
     calc_foreign_actor = request.GET.get('calc_foreign_actor', '').strip()
     calc_strategic_intent = request.GET.get('calc_strategic_intent', '').strip()
+
+    # Map translated form submissions back to English DB keys to prevent "0 results"
+    COUNTRY_NAME_MAP = {
+        "Sénégal": "Senegal",
+        "Éthiopie": "Ethiopia",
+        "Côte d'Ivoire": "Côte d'Ivoire",
+        "RDC": "DRC",
+        "Afrique du Sud": "South Africa",
+    }
+    ACTOR_NAME_MAP = {
+        "États-Unis": "US",
+        "Chine": "China",
+        "France": "France",
+        "Russie": "Russia",
+        "Émirats Arabes Unis": "UAE",
+        "Arabie Saoudite": "Saudi Arabia",
+        "Turquie": "Turkey",
+        "Israël": "Israel",
+        "Iran": "Iran",
+        "Rwanda": "Rwanda",
+        "Non-État": "NonState",
+    }
+
+    # If the submitted value is a French label, convert it to the English DB key
+    if calc_target_country in COUNTRY_NAME_MAP:
+        calc_target_country = COUNTRY_NAME_MAP[calc_target_country]
+    if calc_foreign_actor in ACTOR_NAME_MAP:
+        calc_foreign_actor = ACTOR_NAME_MAP[calc_foreign_actor]
 
     # Base queryset without sports (potentially expensive to build)
     # --- STEP 1: GET CLEAN ARTICLE IDS (No Sports) ---
