@@ -10,20 +10,49 @@
         --action-blue: #2563eb; 
         --soft-bg: #f8fafc;
     }
+    
+    /* Stats Styling */
     .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; text-align: center; }
     .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--action-blue); }
+    
+    /* Badge Styling */
     .badge-tone { background-color: #10b981 !important; color: white !important; padding: 5px 10px; }
     .badge-intent { background-color: #f59e0b !important; color: white !important; padding: 5px 10px; }
+    
+    /* CVI Calculator Panel */
     .cvi-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; overflow: hidden; min-height: 250px; }
     .cvi-left { flex: 0 0 40%; padding: 30px; border-right: 1px solid #e2e8f0; background: #fff; }
     .cvi-right { flex: 0 0 60%; padding: 30px; background: #fcfcfc; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-    .methodology-container { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 20px; width: 100%; max-width: 95%; }
+    
+    /* Methodology Styles */
+    .methodology-container {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+        width: 100%;
+        max-width: 95%;
+    }
     .signal-box { font-size: 0.82rem; line-height: 1.4; color: #475569; }
     .signal-header { font-weight: 800; font-size: 0.72rem; text-transform: uppercase; margin-bottom: 8px; display: block; }
     .signal-blue { color: #2563eb; background: #eff6ff; padding: 2px 6px; border-radius: 4px; }
     .signal-yellow { color: #92400e; background: #fefce8; padding: 2px 6px; border-radius: 4px; }
-    .formula-box { background: #f1f5f9; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.85rem; margin-top: 15px; color: #334155; }
-    #chat-window { display: none; width: 350px; height: 450px; position: fixed; bottom: 90px; right: 20px; background: white; z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; }
+    .formula-box {
+        background: #f1f5f9;
+        border-radius: 6px;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 0.85rem;
+        margin-top: 15px;
+        color: #334155;
+    }
+
+    #chat-window { 
+        display: none; width: 350px; height: 450px; position: fixed; 
+        bottom: 90px; right: 20px; background: white; z-index: 1000; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 10px; flex-direction: column; 
+    }
     #chatbot-bubble { position: fixed; bottom: 20px; right: 20px; z-index: 1001; }
     #chat-box { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
     .typing { font-style: italic; color: #888; font-size: 0.8rem; }
@@ -34,7 +63,6 @@
         <div class="stat-card" style="border-bottom: 4px solid var(--action-blue);">
             <div class="stat-label fw-bold text-muted small text-uppercase">{% trans "Total Articles" %}</div>
             <div class="stat-value">{{ total_articles|default:"0" }}</div>
-.
         </div>
     </div>
     <div class="col-md-3">
@@ -85,11 +113,7 @@
                 </select>
             </div>
             <button type="submit" class="btn w-100 fw-bold text-white mb-3" style="background-color: var(--action-blue);">{% trans "Calculate & Filter" %}</button>
-            <div class="text-center border-top pt-2">
-                <a href="." class="reset-link text-decoration-none small text-muted fw-bold">
-                    <i class="fas fa-sync-alt me-1"></i> {% trans "Reset Filters" %}
-                </a>
-            </div>
+            <div class="text-center border-top pt-2"><a href="." class="reset-link text-decoration-none small text-muted fw-bold"><i class="fas fa-sync-alt me-1"></i> {% trans "Reset Filters" %}</a></div>
         </form>
     </div>
     
@@ -119,7 +143,6 @@
                             {% blocktrans with country=selected_country actor=selected_actor %}
                             Captures the structural susceptibility of <strong>{{ country }}</strong> to influence from <strong>{{ actor }}</strong> on that specific factor. It incorporates measurable actor×country conditions such as debt exposure, military presence, resource dependencies, election timing, or policy environment that may increase vulnerability.
                             {% endblocktrans %}
-.
                         </p>
                     </div>
                 </div>
@@ -218,27 +241,59 @@
                 <ul class="pagination justify-content-center flex-wrap">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}
+                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
                                 {% trans "← Previous" %}
                             </a>
                         </li>
                     {% endif %}
 
+                    {% if page_obj.paginator.num_pages > 7 %}
+                        {% if page_obj.number > 4 %}
+                            <li class="page-item"><a class="page-link" href="?page=1{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">1</a></li>
+                            {% if page_obj.number > 5 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                        {% endif %}
+                    {% endif %}
+
                     {% for num in page_obj.paginator.page_range %}
                         {% if num == page_obj.number %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
                         {% elif num < page_obj.number|add:3 and num > page_obj.number|add:-3 %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                <a class="page-link" href="?page={{ num }}
+                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
                                     {{ num }}
                                 </a>
                             </li>
                         {% endif %}
                     {% endfor %}
 
+                    {% if page_obj.paginator.num_pages > 7 %}
+                        {% if page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+                            {% if page_obj.number < page_obj.paginator.num_pages|add:-4 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}
+                                    {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                    {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                    {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                                    {{ page_obj.paginator.num_pages }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endif %}
+
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}{% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}{% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}
+                                {% if selected_country %}&calc_target_country={{ selected_country|urlencode }}{% endif %}
+                                {% if selected_actor %}&calc_foreign_actor={{ selected_actor|urlencode }}{% endif %}
+                                {% if selected_intent %}&calc_strategic_intent={{ selected_intent|urlencode }}{% endif %}">
                                 {% trans "Next →" %}
                             </a>
                         </li>
