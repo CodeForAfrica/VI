@@ -40,6 +40,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -56,6 +57,21 @@ if os.getenv('VI_INFERENCE_SERVER') == '1':
 # urlconf (config.inference_wsgi sets ROOT_URLCONF=inference_api.urls) instead
 # of the dashboard's full url/view module. Defaults to the dashboard app.
 ROOT_URLCONF = os.getenv('ROOT_URLCONF', 'config.urls')
+
+#  Enable internationalization
+USE_I18N = True
+LANGUAGE_CODE = 'en'  # Default language
+
+# Define supported languages
+LANGUAGES = [
+    ('en', 'English'),
+    ('fr', 'Français'),
+]
+
+# Set up locale paths (where translation files will be stored)
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, 'locale'),
+]
 
 TEMPLATES = [
     {
