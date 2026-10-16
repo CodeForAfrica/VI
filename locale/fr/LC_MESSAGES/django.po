@@ -6,17 +6,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: VI 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-feature/VI-123-bilingual-support
-"POT-Creation-Date: 2026-10-15 14:02+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-
 "POT-Creation-Date: 2026-10-15 22:43+0000\n"
 "PO-Revision-Date: 2026-10-16 00:00+0000\n"
 "Last-Translator: Code for Africa\n"
 "Language-Team: French\n"
-
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
@@ -127,27 +120,6 @@ msgstr "Suivant"
 msgid "Vulnerability Index Tool - Code for Africa"
 msgstr "Outil d’indice de vulnérabilité - Code for Africa"
 
-feature/VI-123-bilingual-support
-#: dashboard/templates/base.html:7
-#, fuzzy
-#| msgid "Vulnerability Index Tool"
-msgid "Vulnerability Index Tool - Code for Africa"
-msgstr "Outil d'Indice de Vulnérabilité"
-
-#: dashboard/templates/base.html:59 dashboard/templates/base.html:101
-msgid "Vulnerability Index Tool"
-msgstr "Outil d'Indice de Vulnérabilité"
-
-#: dashboard/templates/base.html:62
-msgid "Monitoring Media Narratives Across Africa"
-msgstr "Surveillance des Narratifs Médiatiques en Afrique"
-
-#: dashboard/templates/base.html:77
-msgid "Last updated"
-msgstr "Dernière mise à jour"
-
-#: dashboard/templates/base.html:86
-
 msgid "Vulnerability Index Tool"
 msgstr "Outil d'Indice de Vulnérabilité"
 
@@ -156,7 +128,6 @@ msgstr "Surveillance des Narratifs Médiatiques en Afrique"
 
 msgid "Last updated"
 msgstr "Dernière mise à jour"
-
 
 msgid "Home"
 msgstr "Accueil"
@@ -172,233 +143,6 @@ msgstr "Médias"
 
 msgid "Report"
 msgstr "Rapport"
-
-feature/VI-123-bilingual-support
-#: dashboard/templates/overview.html:64
-msgid "Total Articles"
-msgstr "Total des Articles"
-
-#: dashboard/templates/overview.html:70
-msgid "Media Outlets"
-msgstr "Médias / Presse"
-
-#: dashboard/templates/overview.html:76
-msgid "Narratives"
-msgstr "Narratifs"
-
-#: dashboard/templates/overview.html:82
-msgid "Foreign Actors"
-msgstr "Acteurs Étrangers"
-
-#: dashboard/templates/overview.html:88
-msgid "Vulnerability Index Calculator"
-msgstr "Calculateur d'Indice de Vulnérabilité"
-
-#: dashboard/templates/overview.html:93
-msgid "Target African Country"
-msgstr "Pays Africain Ciblé"
-
-#: dashboard/templates/overview.html:95
-msgid "Select Country"
-msgstr "Sélectionner un Pays"
-
-#: dashboard/templates/overview.html:103
-msgid "Foreign Inferred Actor"
-msgstr "Acteur Étranger Inféré"
-
-#: dashboard/templates/overview.html:105
-msgid "Select Actor"
-msgstr "Sélectionner un Acteur"
-
-#: dashboard/templates/overview.html:113
-msgid "Strategic Intent (Factor Filter)"
-msgstr "Intent Stratégique (Filtre de Facteur)"
-
-#: dashboard/templates/overview.html:115
-msgid "-- Auto-Detect Primary Factor --"
-msgstr "-- Détection Automatique du Facteur Principal --"
-
-#: dashboard/templates/overview.html:121
-msgid "Calculate & Filter"
-msgstr "Calculer & Filtrer"
-
-#: dashboard/templates/overview.html:124
-msgid "Reset Filters"
-msgstr "Réinitialiser les Filtres"
-
-#: dashboard/templates/overview.html:133
-msgid "Vulnerability Score"
-msgstr "Score de Vulnérabilité"
-
-#: dashboard/templates/overview.html:138
-msgid "Methodology Breakdown"
-msgstr "Détail de la Méthodologie"
-
-#: dashboard/templates/overview.html:143
-#, fuzzy
-#| msgid "Content Signal"
-msgid "1. Content Signal"
-msgstr "Signal de Contenu"
-
-#: dashboard/templates/overview.html:145
-#, fuzzy, python-format
-#| msgid ""
-#| "1. Content Signal: Measures the intensity of strategic narratives pushed "
-#| "by %(actor)s toward %(country)s on a specific factor (e.g., economic, "
-#| "elections, sovereignty, etc.). It is estimated using advanced ML models "
-#| "and statistically corrected using human labels via Prediction-powered "
-#| "Inference (PPI) to ensure reliable measurement.\n"
-#| "\n"
-#| "2. Contextual Signal: Captures the structural susceptibility of "
-#| "%(country)s to influence from %(actor)s on that specific factor. It "
-#| "incorporates measurable actor×country conditions such as debt exposure, "
-#| "military presence, resource dependencies, election timing, or policy "
-#| "environment that may increase vulnerability."
-msgid ""
-"\n"
-"                            Measures the intensity of strategic narratives "
-"pushed by <strong>%(actor)s</strong> toward <strong>%(country)s</strong> on "
-"a specific factor (e.g., economic, elections, sovereignty, etc.). It is "
-"estimated using advanced ML models and statistically corrected using human "
-"labels via Prediction-powered Inference (PPI) to ensure reliable "
-"measurement.\n"
-"                            "
-msgstr ""
-"1. Signal de Contenu : Mesure l'intensité des narratifs stratégiques poussés "
-"par %(actor)s vers %(country)s sur un facteur spécifique (ex : économie, "
-"élections, souveraineté, etc.). Il est estimé via des modèles ML avancés et "
-"corrigé statistiquement par des annotations humaines via l'Inférence Puissée "
-"par la Prédiction (PPI) pour garantir une mesure fiable.\n"
-"\n"
-"2. Signal Contextuel : Capture la susceptibilité structurelle de %(country)s "
-"à l'influence de %(actor)s sur ce facteur spécifique. Il intègre des "
-"conditions mesurables acteur×pays telles que l'exposition à la dette, la "
-"présence militaire, les dépendances aux ressources, le calendrier électoral "
-"ou l'environnement politique qui peuvent augmenter la vulnérabilité."
-
-#: dashboard/templates/overview.html:151
-#, fuzzy
-#| msgid "Contextual Signal"
-msgid "2. Contextual Signal"
-msgstr "Signal Contextuel"
-
-#: dashboard/templates/overview.html:153
-#, fuzzy, python-format
-#| msgid ""
-#| "1. Content Signal: Measures the intensity of strategic narratives pushed "
-#| "by %(actor)s toward %(country)s on a specific factor (e.g., economic, "
-#| "elections, sovereignty, etc.). It is estimated using advanced ML models "
-#| "and statistically corrected using human labels via Prediction-powered "
-#| "Inference (PPI) to ensure reliable measurement.\n"
-#| "\n"
-#| "2. Contextual Signal: Captures the structural susceptibility of "
-#| "%(country)s to influence from %(actor)s on that specific factor. It "
-#| "incorporates measurable actor×country conditions such as debt exposure, "
-#| "military presence, resource dependencies, election timing, or policy "
-#| "environment that may increase vulnerability."
-msgid ""
-"\n"
-"                            Captures the structural susceptibility of "
-"<strong>%(country)s</strong> to influence from <strong>%(actor)s</strong> on "
-"that specific factor. It incorporates measurable actor×country conditions "
-"such as debt exposure, military presence, resource dependencies, election "
-"timing, or policy environment that may increase vulnerability.\n"
-"                            "
-msgstr ""
-"1. Signal de Contenu : Mesure l'intensité des narratifs stratégiques poussés "
-"par %(actor)s vers %(country)s sur un facteur spécifique (ex : économie, "
-"élections, souveraineté, etc.). Il est estimé via des modèles ML avancés et "
-"corrigé statistiquement par des annotations humaines via l'Inférence Puissée "
-"par la Prédiction (PPI) pour garantir une mesure fiable.\n"
-"\n"
-"2. Signal Contextuel : Capture la susceptibilité structurelle de %(country)s "
-"à l'influence de %(actor)s sur ce facteur spécifique. Il intègre des "
-"conditions mesurables acteur×pays telles que l'exposition à la dette, la "
-"présence militaire, les dépendances aux ressources, le calendrier électoral "
-"ou l'environnement politique qui peuvent augmenter la vulnérabilité."
-
-#: dashboard/templates/overview.html:161
-msgid "Content Signal"
-msgstr "Signal de Contenu"
-
-#: dashboard/templates/overview.html:161
-msgid "Contextual Signal"
-msgstr "Signal Contextuel"
-
-#: dashboard/templates/overview.html:161
-msgid "Vulnerability Index"
-msgstr "Indice de Vulnérabilité"
-
-#: dashboard/templates/overview.html:164
-msgid "Interpretation:"
-msgstr ""
-
-#: dashboard/templates/overview.html:164
-msgid "Higher values indicate greater potential influence risk."
-msgstr ""
-
-#: dashboard/templates/overview.html:165
-msgid "Current focus:"
-msgstr ""
-
-#: dashboard/templates/overview.html:169
-#, python-format
-msgid "Analysis for %(country)s - Actor: %(actor)s"
-msgstr ""
-
-#: dashboard/templates/overview.html:174
-msgid "Select parameters to view calculations"
-msgstr "Sélectionnez des paramètres pour voir les calculs"
-
-#: dashboard/templates/overview.html:184
-msgid "Narrative Volume Over Time"
-msgstr "Volume des Narratifs dans le Temps"
-
-#: dashboard/templates/overview.html:187
-msgid "No chart data available."
-msgstr "Aucun graphique disponible."
-
-#: dashboard/templates/overview.html:194
-msgid "Top Strategic Intents"
-msgstr "Principaux Intents Stratégiques"
-
-#: dashboard/templates/overview.html:204
-msgid "No strategic intent data found."
-msgstr "Aucune donnée d'intent stratégique trouvée."
-
-#: dashboard/templates/overview.html:212
-msgid "Recent Articles"
-msgstr "Articles Récents"
-
-#: dashboard/templates/overview.html:227
-msgid "Narrative Entry"
-msgstr "Entrée de Narratif"
-
-#: dashboard/templates/overview.html:232
-msgid "Tone:"
-msgstr "Ton :"
-
-#: dashboard/templates/overview.html:233
-msgid "Intent:"
-msgstr "Intent :"
-
-#: dashboard/templates/overview.html:238
-msgid "Read Full Article →"
-msgstr "Lire l'Article Complet →"
-
-#: dashboard/templates/overview.html:258
-msgid "← Previous"
-msgstr "← Précédent"
-
-#: dashboard/templates/overview.html:307
-msgid "Next →"
-msgstr "Suivant →"
-
-#: dashboard/templates/overview.html:326
-msgid "AI Narrative Analyst"
-msgstr "Analyste de Narratifs IA"
-
-#: dashboard/templates/overview.html:330
 
 msgid "Hello! I am your Analysis Assistant. How can I help you today?"
 msgstr "Bonjour ! Je suis votre assistant d’analyse. Comment puis-je vous aider aujourd’hui ?"
@@ -651,146 +395,12 @@ msgstr "Analyse en cours…"
 msgid "Generate CVI Report"
 msgstr "Générer un rapport CVI"
 
-
 msgid ""
 "Select an African country and one or more foreign actors to generate a comprehensive Contextual "
 "Vulnerability Index (CVI) report in PDF format."
 msgstr ""
 "Sélectionnez un pays africain et un ou plusieurs acteurs étrangers pour générer un rapport "
 "complet sur l’indice de vulnérabilité contextuelle (CVI) au format PDF."
-
-feature/VI-123-bilingual-support
-#: dashboard/templates/overview.html:334
-msgid "Ask a question..."
-msgstr ""
-
-#: dashboard/templates/overview.html:335
-msgid "Send"
-msgstr "Envoyer"
-
-#: dashboard/templates/overview.html:358
-msgid "Analysing..."
-msgstr ""
-
-#: dashboard/views.py:101
-msgid "Senegal"
-msgstr "Sénégal"
-
-#: dashboard/views.py:102
-msgid "Ethiopia"
-msgstr "Éthiopie"
-
-#: dashboard/views.py:103
-msgid "Côte d'Ivoire"
-msgstr "Côte d'Ivoire"
-
-#: dashboard/views.py:104
-msgid "DRC"
-msgstr "RDC"
-
-#: dashboard/views.py:105
-msgid "South Africa"
-msgstr "Afrique du Sud"
-
-#: dashboard/views.py:110
-msgid "China"
-msgstr "Chine"
-
-#: dashboard/views.py:111
-msgid "France"
-msgstr "France"
-
-#: dashboard/views.py:112
-msgid "Russia"
-msgstr "Russie"
-
-#: dashboard/views.py:114
-msgid "Saudi Arabia"
-msgstr "Arabie Saoudite"
-
-#: dashboard/views.py:115
-msgid "Turkey"
-msgstr "Turquie"
-
-#: dashboard/views.py:116
-msgid "Israel"
-msgstr "Israël"
-
-#: dashboard/views.py:117
-msgid "Iran"
-msgstr "Iran"
-
-#: dashboard/views.py:118
-msgid "Rwanda"
-msgstr "Rwanda"
-
-#: dashboard/views.py:119
-msgid "NonState"
-msgstr "Non-État"
-
-#, fuzzy
-#~| msgid "Rwanda"
-#~ msgid "and"
-#~ msgstr "Rwanda"
-
-#, fuzzy
-#~| msgid "Turkey"
-#~ msgid "Tue"
-#~ msgstr "Turquie"
-
-#~ msgid "Formula:"
-#~ msgstr "Formule :"
-
-#, fuzzy, python-format
-#~| msgid ""
-#~| "Interpretation: Higher values indicate greater potential influence risk. "
-#~| "Current focus: %(intent)s. Analysis for %(country)s - Actor: %(actor)s."
-#~ msgid ""
-#~ "\n"
-#~ "                Interpretation: Higher values indicate greater potential "
-#~ "influence risk. Current focus: %(intent)s. Analysis for %(country)s - "
-#~ "Actor: %(actor)s.\n"
-#~ "                "
-#~ msgstr ""
-#~ "Interprétation : Les valeurs plus élevées indiquent un risque d'influence "
-#~ "potentiel plus grand. Focus actuel : %(intent)s. Analyse pour %(country)s "
-#~ "- Acteur : %(actor)s."
-
-#~ msgid "US"
-#~ msgstr "États-Unis"
-
-#~ msgid "UAE"
-#~ msgstr "Émirats Arabes Unis"
-
-#~ msgid "Economic"
-#~ msgstr "Économique"
-
-#~ msgid "Sovereignty"
-#~ msgstr "Souveraineté"
-
-#~ msgid "LGBTQ"
-#~ msgstr "LGBTQ"
-
-#~ msgid "Religious"
-#~ msgstr "Religieux"
-
-#~ msgid "Military presence"
-#~ msgstr "Présence militaire"
-
-#~ msgid "Resource Dependency"
-#~ msgstr "Dépendance aux Ressources"
-
-#~ msgid "Social Fragility"
-#~ msgstr "Fragilité Sociale"
-
-#~ msgid "Election Influence"
-#~ msgstr "Influence Électorale"
-
-#~ msgid "[Foreign Actor]"
-#~ msgstr "[Acteur Étranger]"
-
-#~ msgid "[Target Country]"
-#~ msgstr "[Pays Ciblé]"
 
 msgid "Report Parameters"
 msgstr "Paramètres du rapport"
@@ -983,4 +593,3 @@ msgstr "Fragilité Sociale"
 
 msgid "Election Influence"
 msgstr "Influence Électorale"
-

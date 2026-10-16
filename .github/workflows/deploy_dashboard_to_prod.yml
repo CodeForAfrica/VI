@@ -1,6 +1,6 @@
 name: deploy_dashboard_to_prod
 
-# Automatic main deployments retain the ARM build and GitHub cache cost on CFA runners.
+# High-cost: one ARM64 build + scan/tests on CFA runners per main push/manual run.
 on:
   push:
     branches: [main]
@@ -43,7 +43,7 @@ jobs:
           fi
           for name in APP_NAME DOKKU_HOST DOKKU_SSH_PRIVATE_KEY DOKKU_SSH_HOST_KEY DOCKER_HUB_USERNAME DOCKER_HUB_ACCESS_TOKEN; do
             if [[ -z "${!name}" ]]; then
-              echo "::error::Missing $name. Check repository/prod environment secrets. No deployment was attempted."
+              echo "::error::Missing $name. Check repository/prod deployment secrets. No deployment was attempted."
               exit 1
             fi
           done
@@ -54,7 +54,7 @@ jobs:
           echo '[dashboard] OK - main branch and required configuration validated.'
 
   build:
-    name: Build
+    name: Build and validate exact release image
     needs: validate
     runs-on: ${{ fromJSON(vars.CFA_RUNNER_LABELS) }}
     environment: prod
@@ -82,6 +82,16 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
+        with:
+          # Checks must run the build output locally before any registry push.
+          driver-opts: default-load=true
+
+      - name: Run the same local release checks before publishing
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Running dependency, production startup, vulnerability, full-suite and browser checks with controlled external providers; no AWS/Groq credentials required.'
+          make run-local-dashboard AWS_PROFILE= GROQ_API_KEY=
+          echo '[dashboard] OK - all shared local release checks passed.'
 
       - name: Authenticate to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
@@ -89,33 +99,42 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build and publish the dashboard image
-        id: image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: |
-            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-            ${{ env.IMAGE_NAME }}:main
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-
-      - name: Select the immutable image digest
+      - name: Publish only the checked image and verify registry digest
         id: published
-        env:
-          BUILT_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
-          echo '[dashboard] Selecting the image built by this run, not the cached main tag.'
-          [[ "$BUILT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Build did not return a valid image digest. Deployment was not attempted.'; exit 1; }
-          echo "digest=$BUILT_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "[dashboard] OK - deploying commit $GITHUB_SHA as $IMAGE_NAME@$BUILT_DIGEST."
+          echo '[dashboard] Verifying receipt, source and image identity; never rebuilding after checks.'
+          python3 scripts/dashboard_release.py publish --repository "$IMAGE_NAME"
+
+      - name: Summarize security report and release receipt
+        if: always()
+        run: |
+          set -euo pipefail
+          echo '[dashboard] Security policy/results (all severities); receipt identifies the exact checked image.'
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### Dashboard release gate\n\nPolicy: block all critical vulnerabilities, including unfixed; report other severities.\n\n')
+              receipt = Path('.dashboard-check/passed.json')
+              if receipt.exists():
+                  data = json.loads(receipt.read_text())
+                  summary.write(f"Checked image: `{data['image_id']}`\n\nCommit: `{data['commit']}`\n\nLive AWS/Groq: {data['aws_live']}/{data['groq_live']}\n\nVulnerabilities: `{data['vulnerabilities']}`\n")
+              else:
+                  summary.write('No passing receipt: checks failed or did not finish; deployment blocked.\n')
+          PY
+
+      - name: Retain all-severity scan and image receipt for review
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: dashboard-release-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .dashboard-check/security.json
+            .dashboard-check/passed.json
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: warn
 
   deploy:
     name: Deploy

@@ -15,3 +15,4 @@ tools
 scripts/lambda-production-db.py
 scripts/deploy-lambda-locally.sh
 **/vi-local-provider-credentials.*
+.dashboard-check

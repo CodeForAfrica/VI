@@ -76,6 +76,9 @@ echo "Unexpected Docker command: $*" >&2
 exit 99
 ''')
             docker.chmod(0o700)
+            git = Path(directory) / "git"
+            git.write_text('#!/bin/sh\nprintf "%040d\\n" 0\n')
+            git.chmod(0o700)
             environment = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}", AWS_PROFILE="", GROQ_API_KEY="")
             result = subprocess.run(["bash", "scripts/test-local.sh"], env=environment,
                                     capture_output=True, text=True, timeout=10, cwd=Path(__file__).parent)
@@ -141,6 +144,9 @@ esac
 exit 99
 ''')
                 docker.chmod(0o700)
+                git = Path(directory) / "git"
+                git.write_text('#!/bin/sh\nprintf "%040d\\n" 0\n')
+                git.chmod(0o700)
                 aws = Path(directory) / "aws"
                 aws.write_text('''#!/bin/sh
 [ "$*" = "--profile selected-test-profile configure export-credentials --format process" ] || exit 99

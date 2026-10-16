@@ -69,3 +69,4 @@ docs/inference-api-plan.md
 .env.save
 .env
 *.mo
+.dashboard-check/

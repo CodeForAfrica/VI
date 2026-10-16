@@ -98,6 +98,15 @@ async function run() {
       const afterPdf = await verifyProviders(context, 'PDF AI summaries and analysis', true);
       assert.equal(afterPdf.groq.succeeded - beforePdf.groq.succeeded, 5, 'PDF must complete four article summaries and one analysis, not fallback text');
       console.log(`[run-local-dashboard] PASS ${language}: 10 routes, language POST, preserved filters, real Plotly chart, articles, chat/CSRF, PDF (${(await pdf.body()).length} bytes).`);
+      if (language === 'en' && expectedModes.groq === 'live') {
+        // Separate each language's six real AI calls into minute-sized quota
+        // windows; never hide provider errors by retrying or accepting fallbacks.
+        for (let remaining = 75; remaining > 0; remaining -= 25) {
+          console.log(`[run-local-dashboard] Groq quota cooldown before French checks: ${remaining}s remaining.`);
+          await new Promise(resolve => setTimeout(resolve, 25000));
+        }
+        console.log('[run-local-dashboard] Groq quota cooldown finished; starting French checks.');
+      }
     }
     assert.deepEqual(errors, [], `Browser JavaScript errors: ${errors.join('; ')}`);
     const providers = await verifyProviders(context, 'final verification', true);

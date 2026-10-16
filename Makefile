@@ -33,6 +33,7 @@ help:
 	@printf '%s\n' \
 	  'make run-local-dashboard                            Dashboard build, French catalogue, full tests and browser/PDF checks; no models.' \
 	  '  Optional AWS_PROFILE=<profile> and/or exported GROQ_API_KEY enable live provider checks; AWS_REGION defaults to eu-west-1.' \
+	  '  GitHub runs this same gate with controlled providers; live provider credentials are optional, never a release requirement.' \
 	  'make run-local-dashboard-with-lambda-remote-inference Dashboard + Lambda locally; deployed HTTPS inference; requires VI_INFERENCE_API_KEY.' \
 	  'make run-local-dashboard-with-lambda-local-inference  Entire stack locally; Git LFS models (~13 GB) and >=20 GB Docker memory.' \
 	  'All three are verification runs: they exit and clean up their isolated test data. Nothing is deployed.'

@@ -34,8 +34,8 @@ return HTTP 404; the existing overview filters and `/articles/` search remain.
 make run-local-dashboard
 ```
 
-Prerequisites: Git, Make and a running Docker installation with Compose v2
-(`up --wait` support). No local Python, Node.js, gettext, AWS profile, API key,
+Prerequisites: Git, Make, Python 3 (standard library only), gzip and a running Docker installation with Compose v2
+(`up --wait` support). No Python packages/virtualenv, Node.js, gettext, AWS profile, API key,
 Git LFS pull or ML model download is needed. On Windows use WSL2 with Docker
 integration. First use downloads the application dependencies and a pinned
 Playwright/Chromium image; later runs reuse the Docker cache.
@@ -43,13 +43,23 @@ Playwright/Chromium image; later runs reuse the Docker cache.
 This is a **verification run**, not a persistent development server. It:
 
 1. Builds the production dashboard image and compiles EN/FR catalogues.
+   All subsequent runtime checks use its immutable image ID, without rebuilding.
+   Compares every installed runtime version with `requirements.txt`, runs
+   `pip check` and a pinned Trivy scan of that image's OS and installed
+   Python packages. Database/scanner/network failures stop the run. Any critical
+   vulnerability blocks, including unfixed ones; high/medium/low/unknown findings
+   remain visible in `.dashboard-check/security.json` (not silently ignored).
 2. Extracts current marked UI strings and fails on missing, empty, fuzzy or
    placeholder-invalid French translations. Catalogue checks cover marked
    messages, not arbitrary article text or unmarked future strings.
 3. Starts the isolated database/cache and runs the full automated suite,
    including the PostgreSQL locking tests that otherwise skip without a DB.
 4. Migrates an isolated local Postgres and loads 25 synthetic saved article
-   results; starts Redis and the actual Gunicorn dashboard.
+   results; starts Redis and the actual Gunicorn dashboard. First boots the
+   uninstrumented production `config.wsgi:application` and requests `/chat/`
+   to exercise production imports, URL loading and template rendering. A dummy
+   non-secret key permits Groq SDK construction; no provider calls are made by
+   that startup smoke. Then starts the instrumented browser-test server.
 5. Uses Chromium to exercise ten routes in both languages, language switching,
    filters, real Plotly charts, article rendering, CSRF-protected chat and PDF
    responses. Third-party CDN styling is excluded from these functional checks;
@@ -59,6 +69,53 @@ By default the stack has no published ports, production data, mounted
 credentials or external runtime network access. Test-only WSGI wiring supplies
 controlled Amazon Translate/Groq responses. Provider contract/failure tests are
 included. Ordinary production WSGI is unchanged.
+
+#### Same release gate locally and on GitHub
+
+```bash
+make run-local-dashboard
+```
+
+No live AWS/Groq calls or credentials are required for release checks. Both
+locally and in GitHub, the required gate checks installed dependency pins,
+dependency consistency, vulnerabilities, catalogue validation, the full suite,
+production WSGI startup and EN/FR browser/PDF functionality using controlled
+external-provider responses. Optional live checks remain available below; they
+are never a publishing requirement. These checks do not certify live provider
+availability/credentials, ML inference accuracy, production data, host capacity
+or third-party CDN styling.
+
+A passing run writes `.dashboard-check/passed.json`, binding checks to the
+image configuration/layers, commit, provider modes, security report and workflow
+run. A new run removes old receipts before starting. Failed checks/cleanup cannot
+leave a passing receipt. Local uncommitted changes can be tested, but **cannot be
+published**; checks must run again from the final clean commit on GitHub.
+
+`deploy_dashboard_to_prod` runs this exact command with `AWS_PROFILE=` and
+`GROQ_API_KEY=` before registry login, preventing inherited runner credentials
+from opting into live tests. It tags/pushes the checked image ID, never rebuilds it, then pulls the
+registry digest and verifies identical runtime configuration/filesystem layers
+before passing that digest to Dokku. The compatibility `main` image tag is updated
+to the same checked image, but deployments never select it. Invalid, stale (over two hours), altered or
+other-run receipts block promotion. Receipt/scan evidence is retained for three
+days; it contains package metadata, not provider credentials.
+
+Existing `CFA_RUNNER_LABELS` and Dokku/Docker Hub deployment secrets remain
+required. No extra AWS role, OIDC permission, Groq secret variable or AWS CLI is
+required by the workflow. Runner requires Make, Git, Python 3, gzip and Docker
+Compose v2. Runtime provider credentials on production remain unchanged; this
+gate does not create, read or alter them.
+
+**High-cost workflow risk:** existing automatic main-push and manual triggers are
+retained: one ARM64 build (QEMU on x64 CFA runners), no matrix, bounded 60-minute
+build/check job. Scan database and Docker layer caches consume runner disk; the
+temporary compressed image archive is removed after a successful scan. GitHub
+cache exports are no longer used; cache reuse depends on the selected runner and
+builder (a new ephemeral builder may need a cold build).
+The required gate incurs no AWS/Groq call charges or rate-limit cooldown. Concurrency stays
+serialized with `cancel-in-progress: false` to avoid interrupting a Dokku release.
+Disable the main `push` trigger to make releases manual-only. No production change
+is made by the local command; deployment/rollback remain the existing Dokku path.
 
 #### Optional live Amazon Translate and Groq checks
 
@@ -103,6 +160,12 @@ live/controlled mode and success/failure counts, never credentials. Groq calls
 use the application's existing models, with bounded timeouts and no SDK retries.
 Model accuracy, semantic translation quality and ML inference are not assessed
 by this dashboard-only command.
+
+With live Groq enabled, the browser run waits 75 seconds between the English
+and French flows, logging progress every 25 seconds. This avoids bursting both
+languages' AI requests into one minute's quota. It does not retry failed calls:
+shared-account traffic or exhausted quotas can still return HTTP 429 and fail
+the run. Controlled-provider runs do not wait.
 
 To force the credential-free run when your terminal already exports provider
 credentials:

@@ -21,8 +21,12 @@ services:
       timeout: 3s
       retries: 20
   dashboard:
-    image: vi-dashboard:local-test
-    build: .
+    image: ${VI_DASHBOARD_IMAGE:-vi-dashboard:local-test}
+    platform: linux/arm64
+    build:
+      context: .
+      labels:
+        org.opencontainers.image.revision: ${VI_SOURCE_REVISION:-local}
     networks: [local]
     environment:
       DJANGO_SETTINGS_MODULE: config.local_test_settings
