@@ -96,10 +96,12 @@ class ReleasePolicyTests(unittest.TestCase):
 
     def test_workflow_checks_before_login_and_promotes_without_rebuild(self):
         workflow = Path('.github/workflows/deploy_dashboard_to_prod.yml').read_text()
-        self.assertIn('make run-local-dashboard AWS_PROFILE= GROQ_API_KEY=', workflow)
+        self.assertIn("AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh", workflow)
         self.assertLess(workflow.index('Run the same local release checks'), workflow.index('Authenticate to Docker Hub'))
         self.assertNotIn('docker/build-push-action', workflow)
         self.assertIn('driver-opts: default-load=true', workflow)
+        self.assertIn('docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a', workflow)
+        self.assertIn('version: v5.1.4', workflow)
         self.assertIn('dashboard_release.py publish', workflow)
         self.assertIn('IMAGE_NAME@$BUILT_DIGEST', workflow)
         for unwanted in ('VI_DASHBOARD_TEST_ROLE_ARN', 'VI_DASHBOARD_TEST_GROQ_SECRET_ID',

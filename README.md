@@ -91,8 +91,10 @@ run. A new run removes old receipts before starting. Failed checks/cleanup canno
 leave a passing receipt. Local uncommitted changes can be tested, but **cannot be
 published**; checks must run again from the final clean commit on GitHub.
 
-`deploy_dashboard_to_prod` runs this exact command with `AWS_PROFILE=` and
-`GROQ_API_KEY=` before registry login, preventing inherited runner credentials
+`deploy_dashboard_to_prod` invokes `scripts/test-local.sh`, the same script that
+`make run-local-dashboard` invokes, with `AWS_PROFILE=` and `GROQ_API_KEY=` before
+registry login. Invoking the script directly avoids requiring Make on CFA runners
+while running identical checks. Empty provider variables prevent inherited runner credentials
 from opting into live tests. It tags/pushes the checked image ID, never rebuilds it, then pulls the
 registry digest and verifies identical runtime configuration/filesystem layers
 before passing that digest to Dokku. The compatibility `main` image tag is updated
@@ -102,8 +104,11 @@ days; it contains package metadata, not provider credentials.
 
 Existing `CFA_RUNNER_LABELS` and Dokku/Docker Hub deployment secrets remain
 required. No extra AWS role, OIDC permission, Groq secret variable or AWS CLI is
-required by the workflow. Runner requires Make, Git, Python 3, gzip and Docker
-Compose v2. Runtime provider credentials on production remain unchanged; this
+required by the workflow. Runner requires Bash, Git, Python 3, gzip and Docker
+Compose v2. The workflow explicitly sets up Compose v5.1.4 (the locally tested
+version) inside the job's isolated Docker configuration, with binary caching
+disabled; it does not depend on a Compose plugin preinstalled on the shared
+runner. Runtime provider credentials on production remain unchanged; this
 gate does not create, read or alter them.
 
 **High-cost workflow risk:** existing automatic main-push and manual triggers are

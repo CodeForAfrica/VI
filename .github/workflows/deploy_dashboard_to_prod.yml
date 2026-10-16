@@ -86,11 +86,17 @@ jobs:
           # Checks must run the build output locally before any registry push.
           driver-opts: default-load=true
 
+      - name: Set up the locally tested Docker Compose version
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a  # v2
+        with:
+          version: v5.1.4
+          cache-binary: false
+
       - name: Run the same local release checks before publishing
         run: |
           set -euo pipefail
           echo '[dashboard] Running dependency, production startup, vulnerability, full-suite and browser checks with controlled external providers; no AWS/Groq credentials required.'
-          make run-local-dashboard AWS_PROFILE= GROQ_API_KEY=
+          AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh
           echo '[dashboard] OK - all shared local release checks passed.'
 
       - name: Authenticate to Docker Hub
