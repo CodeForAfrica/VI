@@ -36,7 +36,19 @@ RUN echo '[build] Compiling English and French translation catalogues.' \
     && python -m django compilemessages --locale en --locale fr --ignore=venv \
     && echo '[build] OK - English and French catalogues compiled.'
 
-FROM translations AS local-checks
+FROM python:3.11-slim AS catalogue-tools
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update && apt-get install -y --no-install-recommends gettext \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+# Catalogue extraction needs Django/Babel, not the dashboard's ML runtime.
+# Select their pinned dependency closure from the same runtime requirements.
+RUN grep -E '^(Django|babel|asgiref|sqlparse)==' requirements.txt > /tmp/catalogue-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/catalogue-requirements.txt && pip check
+
+FROM catalogue-tools AS local-checks
+COPY locale ./locale
 COPY dashboard ./dashboard
 COPY config ./config
 COPY scripts/check_translations.py ./scripts/check_translations.py

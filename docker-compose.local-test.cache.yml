@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    build:
+      cache_from:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY:?Cache repository is required}:buildcache-dashboard-arm64
+      cache_to:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY}:buildcache-dashboard-arm64,mode=max
+  checks:
+    build:
+      cache_from:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY}:buildcache-catalogue
+      cache_to:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY}:buildcache-catalogue,mode=max
+  browser:
+    build:
+      cache_from:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY}:buildcache-browser
+      cache_to:
+        - type=registry,ref=${VI_BUILD_CACHE_REPOSITORY}:buildcache-browser,mode=max

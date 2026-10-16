@@ -6,6 +6,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
 readonly project="vi-dashboard-local-check"
 stage="preflight"
+stage_started=$SECONDS
+run_started=$SECONDS
 live_mode=false
 credentials_directory=""
 readonly results_directory="${REPO_ROOT}/.dashboard-check"
@@ -15,6 +17,11 @@ base_compose() { docker compose --project-name "${project}" --project-directory 
 compose() { docker compose --project-name "${project}" --project-directory "${REPO_ROOT}" "${compose_files[@]}" "$@"; }
 log() { printf '[run-local-dashboard] %s\n' "$*"; }
 fail() { printf '[run-local-dashboard] ERROR: %s\n' "$*" >&2; exit 1; }
+set_stage() {
+  log "TIMING: ${stage}: $((SECONDS - stage_started))s."
+  stage="$1"
+  stage_started=$SECONDS
+}
 cleanup() {
   local status=$?
   trap - EXIT
@@ -36,6 +43,7 @@ cleanup() {
   fi
   rm -f "${results_directory}/image.tar.gz"
   rmdir "${results_directory}/running"
+  log "TIMING: total including cleanup: $((SECONDS - run_started))s (exit ${status})."
   exit "${status}"
 }
 
@@ -93,16 +101,26 @@ if [[ -n "${AWS_PROFILE:-}" || -n "${GROQ_API_KEY:-}" ]]; then
 else
   log "No provider credentials supplied: AWS Translate/Groq use controlled responses; runtime egress is disabled."
 fi
+if [[ -n "${VI_BUILD_CACHE_REPOSITORY:-}" ]]; then
+  [[ "${VI_BUILD_CACHE_REPOSITORY}" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$ ]] \
+    || fail "VI_BUILD_CACHE_REPOSITORY must be an untagged registry repository, without credentials, a URL scheme or cache options."
+  compose_files+=(-f "${REPO_ROOT}/docker-compose.local-test.cache.yml")
+  compose config --quiet || fail "The build-cache Compose configuration is invalid."
+  log "Cross-run registry caching enabled for dashboard, catalogue and browser; only build layers are reused, never test results."
+  log "Cache tags are separate from release tags. A first cache miss builds normally; cache export failures stop the run."
+else
+  log "Using this Docker builder's local cache; no registry cache will be read or written."
+fi
 log "Docker and Compose checks passed. Git LFS and ML models are not needed."
 log "First build downloads dependencies/browser images; subsequent runs reuse Docker's cache."
-stage="building the production dashboard, catalogue checker and browser images"
+set_stage "building the production dashboard, catalogue checker and browser images"
 log "STEP 1/6: ${stage} (production platform linux/arm64)."
 compose build dashboard checks browser
 export VI_DASHBOARD_IMAGE
 VI_DASHBOARD_IMAGE="$(docker image inspect vi-dashboard:local-test --format '{{.Id}}')"
 [[ "${VI_DASHBOARD_IMAGE}" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "Build did not produce an immutable local image ID."
 log "Pinned subsequent checks to ${VI_DASHBOARD_IMAGE}; no test command will rebuild it."
-stage="runtime dependency consistency and vulnerability scan"
+set_stage "runtime dependency consistency and vulnerability scan"
 log "STEP 2/6: Checking installed dependencies; scanning exact image OS/Python packages with a fresh Trivy database."
 docker run --rm --network none "${VI_DASHBOARD_IMAGE}" python -m pip check
 docker run --rm --network none "${VI_DASHBOARD_IMAGE}" python scripts/check_runtime_dependencies.py
@@ -112,26 +130,27 @@ docker run --rm -v "${results_directory}:/artifacts" -v vi-dashboard-trivy-cache
   --skip-version-check --format json --output /artifacts/security.json --timeout 10m
 python3 "${REPO_ROOT}/scripts/dashboard_release.py" security --image "${VI_DASHBOARD_IMAGE}" --directory "${results_directory}"
 rm -f "${results_directory}/image.tar.gz"
-stage="French catalogue validation"
+set_stage "French catalogue validation"
 log "STEP 3/6: Checking all extracted UI messages for missing/fuzzy French translations and placeholder errors."
 compose run --rm --no-deps --pull never checks python scripts/check_translations.py
-stage="full automated suite"
+set_stage "full automated suite"
 log "STEP 4/6: Running the full suite inside the production dashboard image; external providers use controlled test responses."
 log "Starting isolated Postgres/Redis so the three PostgreSQL locking tests run instead of being skipped."
 compose up --detach --wait --wait-timeout 90 db redis
 base_compose run --rm --no-deps --pull never dashboard python manage.py test --settings=inference_api.tests_settings --verbosity 1
-stage="isolated database migration and fixture setup"
+set_stage "isolated database migration and fixture setup"
 log "STEP 5/6: Starting isolated Postgres/Redis and loading synthetic saved article results (not model predictions)."
 base_compose run --rm --no-deps --pull never dashboard python scripts/prepare_local_dashboard.py
-stage="production WSGI startup and runtime imports"
+set_stage "production WSGI startup and runtime imports"
 log "Checking uninstrumented config.wsgi with the same Gunicorn executable and image as production; no external provider calls."
 base_compose run --rm --no-deps --pull never dashboard python scripts/check_dashboard_startup.py
 compose up --no-build --detach --wait --wait-timeout 120 dashboard
-stage="English/French browser and PDF checks"
+set_stage "English/French browser and PDF checks"
 log "STEP 6/6: Testing real browser navigation, language switching, filters, articles, chat/CSRF and PDF responses."
 compose run --rm --no-deps --pull never browser
-stage="recording verified image identity"
+set_stage "recording verified image identity"
 python3 "${REPO_ROOT}/scripts/dashboard_release.py" receipt --image "${VI_DASHBOARD_IMAGE}" --directory "${results_directory}"
+log "TIMING: ${stage}: $((SECONDS - stage_started))s."
 log "PASS: Dashboard production image build, pinned runtime dependencies, production WSGI startup and French catalogue completeness."
 log "PASS: Full automated suite; existing skips are reported above."
 log "PASS: English/French browser checks and PDF generation."

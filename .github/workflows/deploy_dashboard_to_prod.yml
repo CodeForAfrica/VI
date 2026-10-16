@@ -92,18 +92,20 @@ jobs:
           version: v5.1.4
           cache-binary: false
 
+      - name: Authenticate to Docker Hub for build-cache access
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
       - name: Run the same local release checks before publishing
+        env:
+          VI_BUILD_CACHE_REPOSITORY: ${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
           echo '[dashboard] Running dependency, production startup, vulnerability, full-suite and browser checks with controlled external providers; no AWS/Groq credentials required.'
           AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh
           echo '[dashboard] OK - all shared local release checks passed.'
-
-      - name: Authenticate to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Publish only the checked image and verify registry digest
         id: published

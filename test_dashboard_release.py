@@ -94,10 +94,12 @@ class ReleasePolicyTests(unittest.TestCase):
             self.assertEqual(run.call_args_list[0].args[0], ['docker', 'tag', self.image['Id'], 'example/dashboard:sha-commit'])
             self.assertEqual(run.call_args_list[1].args[0], ['docker', 'pull', '--platform', 'linux/arm64', 'example/dashboard@'+digest])
 
-    def test_workflow_checks_before_login_and_promotes_without_rebuild(self):
+    def test_workflow_caches_builds_but_checks_before_promoting_without_rebuild(self):
         workflow = Path('.github/workflows/deploy_dashboard_to_prod.yml').read_text()
         self.assertIn("AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh", workflow)
-        self.assertLess(workflow.index('Run the same local release checks'), workflow.index('Authenticate to Docker Hub'))
+        self.assertLess(workflow.index('Authenticate to Docker Hub for build-cache access'), workflow.index('Run the same local release checks'))
+        self.assertLess(workflow.index('Run the same local release checks'), workflow.index('Publish only the checked image'))
+        self.assertIn('VI_BUILD_CACHE_REPOSITORY: ${{ env.IMAGE_NAME }}', workflow)
         self.assertNotIn('docker/build-push-action', workflow)
         self.assertIn('driver-opts: default-load=true', workflow)
         self.assertIn('docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a', workflow)
@@ -108,9 +110,30 @@ class ReleasePolicyTests(unittest.TestCase):
                          'configure-aws-credentials', 'id-token: write', 'secretsmanager'):
             self.assertNotIn(unwanted, workflow)
 
+    def test_registry_cache_has_separate_bounded_tags_and_no_error_bypass(self):
+        cache = Path('docker-compose.local-test.cache.yml').read_text()
+        for tag in ('dashboard-arm64', 'catalogue', 'browser'):
+            self.assertEqual(cache.count(f':buildcache-{tag}'), 2)
+        self.assertEqual(cache.count('mode=max'), 3)
+        self.assertNotIn('ignore-error', cache)
+        runner = Path('scripts/test-local.sh').read_text()
+        self.assertIn('docker-compose.local-test.cache.yml', runner)
+        self.assertIn('TIMING: total including cleanup', runner)
+
+    def test_catalogue_checker_does_not_inherit_or_install_ml_dependencies(self):
+        dockerfile = Path('Dockerfile').read_text()
+        checker = dockerfile.split('AS catalogue-tools', 1)[1].split('FROM python:3.11-slim AS runtime', 1)[0]
+        self.assertIn('FROM catalogue-tools AS local-checks', checker)
+        self.assertNotIn('FROM translations AS local-checks', dockerfile)
+        self.assertNotIn('pip install -r requirements.txt', checker)
+        selection = '^(Django|babel|asgiref|sqlparse)=='
+        self.assertIn(selection, checker)
+        selected = subprocess.check_output(['grep', '-E', selection, 'requirements.txt'], text=True).splitlines()
+        self.assertEqual({line.split('==')[0] for line in selected}, {'Django', 'babel', 'asgiref', 'sqlparse'})
+
 
 class ReleaseRunnerFailureTests(unittest.TestCase):
-    def run_failure(self, root, scan_failure=False):
+    def run_failure(self, root, scan_failure=False, cache_repository=''):
         (root / 'scripts').mkdir()
         shutil.copyfile('scripts/test-local.sh', root / 'scripts/test-local.sh')
         executable = root / 'docker'
@@ -136,7 +159,7 @@ exit 99
         environment = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", TMPDIR=str(root),
                            AWS_PROFILE='', AWS_ACCESS_KEY_ID='fake-access',
                            AWS_SECRET_ACCESS_KEY='fake-private-secret', AWS_SESSION_TOKEN='fake-session',
-                           GROQ_API_KEY='')
+                           GROQ_API_KEY='', VI_BUILD_CACHE_REPOSITORY=cache_repository)
         return subprocess.run(['bash', 'scripts/test-local.sh'], env=environment, cwd=root,
                               capture_output=True, text=True, timeout=10)
 
@@ -166,6 +189,27 @@ exit 99
             self.assertNotIn('STEP 3', result.stdout)
             self.assertFalse((root / '.dashboard-check/passed.json').exists())
             self.assertFalse((root / '.dashboard-check/image.tar.gz').exists())
+
+    def test_registry_cache_build_failure_cannot_leave_a_passing_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = self.run_failure(root, cache_repository='registry.example.org/team/vi')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Cross-run registry caching enabled', result.stdout)
+            self.assertIn('deliberate build failure', result.stderr)
+            self.assertNotIn('STEP 2', result.stdout)
+            self.assertFalse((root / '.dashboard-check/passed.json').exists())
+
+    def test_cache_options_credentials_and_tags_are_rejected_before_build(self):
+        for repository in ('https://registry.example.org/team/vi', 'user:password@registry/team/vi',
+                           'team/vi:main', 'team/vi,ignore-error=true'):
+            with self.subTest(repository=repository), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                result = self.run_failure(root, cache_repository=repository)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('VI_BUILD_CACHE_REPOSITORY must be', result.stderr)
+                self.assertNotIn('deliberate build failure', result.stderr)
+                self.assertFalse((root / '.dashboard-check/passed.json').exists())
 
 
 class RuntimeValidationTests(unittest.TestCase):

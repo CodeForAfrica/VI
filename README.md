@@ -39,6 +39,10 @@ Prerequisites: Git, Make, Python 3 (standard library only), gzip and a running D
 Git LFS pull or ML model download is needed. On Windows use WSL2 with Docker
 integration. First use downloads the application dependencies and a pinned
 Playwright/Chromium image; later runs reuse the Docker cache.
+The catalogue checker installs only pinned Django/Babel and their small dependency
+closure from `requirements.txt`, not a second copy of PyTorch/Transformers or CUDA.
+The production dashboard's dependency set and all release checks are unchanged.
+Each phase and the total run report elapsed seconds with `TIMING` log lines.
 
 This is a **verification run**, not a persistent development server. It:
 
@@ -92,8 +96,9 @@ leave a passing receipt. Local uncommitted changes can be tested, but **cannot b
 published**; checks must run again from the final clean commit on GitHub.
 
 `deploy_dashboard_to_prod` invokes `scripts/test-local.sh`, the same script that
-`make run-local-dashboard` invokes, with `AWS_PROFILE=` and `GROQ_API_KEY=` before
-registry login. Invoking the script directly avoids requiring Make on CFA runners
+`make run-local-dashboard` invokes, with `AWS_PROFILE=` and `GROQ_API_KEY=`.
+Registry login happens first solely to enable build-cache access; release-image
+publishing still happens only after all checks pass. Invoking the script directly avoids requiring Make on CFA runners
 while running identical checks. Empty provider variables prevent inherited runner credentials
 from opting into live tests. It tags/pushes the checked image ID, never rebuilds it, then pulls the
 registry digest and verifies identical runtime configuration/filesystem layers
@@ -114,9 +119,29 @@ gate does not create, read or alter them.
 **High-cost workflow risk:** existing automatic main-push and manual triggers are
 retained: one ARM64 build (QEMU on x64 CFA runners), no matrix, bounded 60-minute
 build/check job. Scan database and Docker layer caches consume runner disk; the
-temporary compressed image archive is removed after a successful scan. GitHub
-cache exports are no longer used; cache reuse depends on the selected runner and
-builder (a new ephemeral builder may need a cold build).
+temporary compressed image archive is removed after a successful scan. CI exports
+and imports full multi-stage BuildKit caches in the existing Docker Hub repository,
+using three fixed, separate tags: `buildcache-dashboard-arm64`, `buildcache-catalogue`
+and `buildcache-browser`. They replace previous cache manifests rather than creating
+a tag per run (registry blob retention/garbage collection still controls storage).
+This allows a fresh runner/builder to reuse dependency layers. A missing cache is
+a normal cold build; cache export failures fail the build. Cache content is not
+release evidence: every check, including a fresh vulnerability scan, reruns, and
+only the checked image can be published/deployed. Cache tags must never be deployed.
+
+Local runs use their Docker builder's cache by default, without registry access.
+To exercise the same cross-builder registry caching explicitly, first authenticate
+to a **trusted** registry/repository you control, then run:
+
+```bash
+VI_BUILD_CACHE_REPOSITORY=registry.example.org/team/vi-build-cache make run-local-dashboard
+```
+
+This opt-in reads/writes build-cache layers (including application source) to that
+repository, not release tags. It needs Buildx's `docker-container` driver with local
+image loading (`default-load=true`); CI configures this automatically. Do not point
+it at an untrusted/public cache if your source is private. No provider credentials
+are passed to Docker builds or cache exports.
 The required gate incurs no AWS/Groq call charges or rate-limit cooldown. Concurrency stays
 serialized with `cancel-in-progress: false` to avoid interrupting a Dokku release.
 Disable the main `push` trigger to make releases manual-only. No production change
