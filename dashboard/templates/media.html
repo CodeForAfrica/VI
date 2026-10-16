@@ -1,6 +1,7 @@
 <!-- dashboard/templates/media.html -->
 
 {% extends "base.html" %}
+{% load i18n %}
 {% block content %} <!-- OPEN: content block -->
 
 <!-- Filter Controls Row -->
@@ -11,9 +12,9 @@
                 <div class="card-body">
                     <form method="get" class="row g-3 align-items-center">
                         <div class="col-md-4">
-                            <label for="outlet_filter" class="form-label fw-bold text-dark">Filter by Outlet:</label>
+                            <label for="outlet_filter" class="form-label fw-bold text-dark">{% trans "Filter by Outlet:" %}</label>
                             <select name="outlet" id="outlet_filter" class="form-select form-select-lg shadow-sm" onchange="this.form.submit();">
-                                <option value="" {% if selected_name == "All Outlets" %}selected{% endif %}>All Outlets</option>
+                                <option value="" {% if selected_name == "All Outlets" %}selected{% endif %}>{% trans "All Outlets" %}</option>
                                 {% for outlet in top_outlets %} <!-- OPEN: for outlet in top_outlets (inside form) -->
                                     <option value="{{ outlet.name }}" {% if selected_name == outlet.name %}selected{% endif %}>
                                         {{ outlet.name }}
@@ -36,13 +37,13 @@
     <!-- Main Chart (Top Outlets) -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-white py-3 text-center border-bottom">
-            <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">Most Frequent Media Outlets</h4>
+            <h4 class="mb-0 fw-bold" style="color: var(--navy-dark);">{% trans "Most Frequent Media Outlets" %}</h4>
         </div>
         <div class="card-body p-4">
             {% if media_chart %} <!-- OPEN: if media_chart -->
                 {{ media_chart|safe }}
             {% else %} <!-- ELSE: if media_chart -->
-                <p class="text-muted text-center">No data available for the chart.</p>
+                <p class="text-muted text-center">{% trans "No data available for the chart." %}</p>
             {% endif %} <!-- CLOSE: if media_chart -->
         </div>
     </div>
@@ -53,13 +54,13 @@
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
                 <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Strategic Intent Distribution ({{ selected_name }})</h4>
+                    <h4 class="fw-bold">{% blocktrans with value0=selected_name %}Strategic Intent Distribution ({{ value0 }}){% endblocktrans %}</h4>
                 </div>
                 <div class="card-body">
                     {% if outlet_intent_chart %} <!-- OPEN: if outlet_intent_chart -->
                         {{ outlet_intent_chart|safe }}
                     {% else %} <!-- ELSE: if outlet_intent_chart -->
-                        <p class="text-muted text-center">No intent data available for {{ selected_name }}.</p>
+                        <p class="text-muted text-center">{% blocktrans with value0=selected_name %}No intent data available for {{ value0 }}.{% endblocktrans %}</p>
                     {% endif %} <!-- CLOSE: if outlet_intent_chart -->
                 </div>
             </div>
@@ -67,13 +68,13 @@
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
                 <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Tone Distribution ({{ selected_name }})</h4>
+                    <h4 class="fw-bold">{% blocktrans with value0=selected_name %}Tone Distribution ({{ value0 }}){% endblocktrans %}</h4>
                 </div>
                 <div class="card-body">
                     {% if outlet_tone_chart %} <!-- OPEN: if outlet_tone_chart -->
                         {{ outlet_tone_chart|safe }}
                     {% else %} <!-- ELSE: if outlet_tone_chart -->
-                        <p class="text-muted text-center">No tone data available for {{ selected_name }}.</p>
+                        <p class="text-muted text-center">{% blocktrans with value0=selected_name %}No tone data available for {{ value0 }}.{% endblocktrans %}</p>
                     {% endif %} <!-- CLOSE: if outlet_tone_chart -->
                 </div>
             </div>
@@ -84,13 +85,13 @@
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
                 <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Top Foreign Actors Mentioned ({{ selected_name }})</h4>
+                    <h4 class="fw-bold">{% blocktrans with value0=selected_name %}Top Foreign Actors Mentioned ({{ value0 }}){% endblocktrans %}</h4>
                 </div>
                 <div class="card-body">
                     {% if outlet_actor_chart %} <!-- OPEN: if outlet_actor_chart -->
                         {{ outlet_actor_chart|safe }}
                     {% else %} <!-- ELSE: if outlet_actor_chart -->
-                        <p class="text-muted text-center">No actor data available for {{ selected_name }}.</p>
+                        <p class="text-muted text-center">{% blocktrans with value0=selected_name %}No actor data available for {{ value0 }}.{% endblocktrans %}</p>
                     {% endif %} <!-- CLOSE: if outlet_actor_chart -->
                 </div>
             </div>
@@ -98,13 +99,13 @@
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 border-0">
                 <div class="card-header bg-white text-center border-bottom-0 pt-3">
-                    <h4 class="fw-bold">Top Countries Covered ({{ selected_name }})</h4>
+                    <h4 class="fw-bold">{% blocktrans with value0=selected_name %}Top Countries Covered ({{ value0 }}){% endblocktrans %}</h4>
                 </div>
                 <div class="card-body">
                     {% if outlet_country_chart %} <!-- OPEN: if outlet_country_chart -->
                         {{ outlet_country_chart|safe }}
                     {% else %} <!-- ELSE: if outlet_country_chart -->
-                        <p class="text-muted text-center">No country data available for {{ selected_name }}.</p>
+                        <p class="text-muted text-center">{% blocktrans with value0=selected_name %}No country data available for {{ value0 }}.{% endblocktrans %}</p>
                     {% endif %} <!-- CLOSE: if outlet_country_chart -->
                 </div>
             </div>
@@ -117,10 +118,10 @@
         <div class="col-12">
             <div class="card shadow-sm border-0">
                 <div class="card-body text-center">
-                    <h5 class="card-title">Summary for {{ selected_name }}</h5>
+                    <h5 class="card-title">{% blocktrans with value0=selected_name %}Summary for {{ value0 }}{% endblocktrans %}</h5>
                     <p class="card-text">
-                        <strong>Total Articles:</strong> {{ outlet_stats.total_articles }} |
-                        <strong>Avg. Prediction Confidence:</strong> {{ outlet_stats.avg_confidence|floatformat:2 }}
+                        <strong>{% trans "Total Articles:" %}</strong> {{ outlet_stats.total_articles }} |
+                        <strong>{% trans "Avg. Prediction Confidence:" %}</strong> {{ outlet_stats.avg_confidence|floatformat:2 }}
                     </p>
                 </div>
             </div>
@@ -133,7 +134,7 @@
     <!-- Sidebar: Outlet List -->
     <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center mb-3">
-            <h5 class="fw-bold">Filter by Outlet: <span class="text-primary">{{ selected_name }}</span></h5>
+            <h5 class="fw-bold">{% trans "Filter by Outlet:" %} <span class="text-primary">{{ selected_name }}</span></h5>
             {% if selected_name != "All Outlets" %} <!-- OPEN: if selected_name != "All Outlets" (Clear                <a href="{% url 'media' %}" class="btn btn-sm btn-outline-secondary mt-2">Clear Filter</a>
             {% endif %} <!-- CLOSE: if selected_name != "All Outlets" (Clear Filter Link) -->
         </div>
@@ -153,17 +154,17 @@
     <!-- Recent Narratives Card -->
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-header bg-white py-3 border-bottom">
-            <h5 class="mb-0 fw-bold">Recent Narratives: {{ selected_name }}</h5>
+            <h5 class="mb-0 fw-bold">{% blocktrans with value0=selected_name %}Recent Narratives: {{ value0 }}{% endblocktrans %}</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Date</th>
-                            <th>Outlet</th>
+                            <th>{% trans "Date" %}</th>
+                            <th>{% trans "Outlet" %}</th>
                             <!-- Changed header text -->
-                            <th>Article Summary/Headline</th>
+                            <th>{% trans "Article Summary/Headline" %}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -183,7 +184,7 @@
                         </tr>
                         {% empty %} 
                         <tr>
-                            <td colspan="3" class="text-center py-4 text-muted">No articles found for this selection.</td>
+                            <td colspan="3" class="text-center py-4 text-muted">{% trans "No articles found for this selection." %}</td>
                         </tr>
                         {% endfor %} 
                     </tbody>
@@ -196,11 +197,11 @@
             <nav>
                 <ul class="pagination justify-content-center mb-0">
                     {% if page_obj.has_previous %} <!-- OPEN: if page_obj.has_previous -->
-                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">{% trans "Previous" %}</a></li>
                     {% endif %} <!-- CLOSE: if page_obj.has_previous -->
-                    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+                    <li class="page-item disabled"><span class="page-link">{% blocktrans with value0=page_obj.number value1=page_obj.paginator.num_pages %}Page {{ value0 }} of {{ value1 }}{% endblocktrans %}</span></li>
                     {% if page_obj.has_next %} <!-- OPEN: if page_obj.has_next -->
-                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?outlet={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">{% trans "Next" %}</a></li>
                     {% endif %} 
                 </ul>
             </nav>

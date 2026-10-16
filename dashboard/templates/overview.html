@@ -142,7 +142,7 @@
                     <div class="col-md-6 border-end">
                         <span class="signal-header"><span class="signal-blue">{% trans "1. Content Signal" %}</span></span>
                         <p class="signal-box mb-0">
-                            {% blocktrans with actor=selected_actor country=selected_country %}
+                            {% blocktrans trimmed with actor=selected_actor country=selected_country %}
                             Measures the intensity of strategic narratives pushed by <strong>{{ actor }}</strong> toward <strong>{{ country }}</strong> on a specific factor (e.g., economic, elections, sovereignty, etc.). It is estimated using advanced ML models and statistically corrected using human labels via Prediction-powered Inference (PPI) to ensure reliable measurement.
                             {% endblocktrans %}
                         </p>
@@ -150,7 +150,7 @@
                     <div class="col-md-6">
                         <span class="signal-header"><span class="signal-yellow">{% trans "2. Contextual Signal" %}</span></span>
                         <p class="signal-box mb-0">
-                            {% blocktrans with country=selected_country actor=selected_actor %}
+                            {% blocktrans trimmed with country=selected_country actor=selected_actor %}
                             Captures the structural susceptibility of <strong>{{ country }}</strong> to influence from <strong>{{ actor }}</strong> on that specific factor. It incorporates measurable actor×country conditions such as debt exposure, military presence, resource dependencies, election timing, or policy environment that may increase vulnerability.
                             {% endblocktrans %}
                         </p>

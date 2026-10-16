@@ -1,23 +1,133 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# French interface translations for VI.
+# Copyright (C) 2026 Code for Africa
+# Distributed under the same license as VI.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: VI 1.0\n"
 "Report-Msgid-Bugs-To: \n"
+feature/VI-123-bilingual-support
 "POT-Creation-Date: 2026-10-15 14:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
+
+"POT-Creation-Date: 2026-10-15 22:43+0000\n"
+"PO-Revision-Date: 2026-10-16 00:00+0000\n"
+"Last-Translator: Code for Africa\n"
+"Language-Team: French\n"
+
 "Language: fr\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Generated-By: Babel 2.18.0\n"
 
+#, python-format
+msgid "Tone: %(value0)s"
+msgstr "Ton : %(value0)s"
+
+#, python-format
+msgid "Intent: %(value0)s"
+msgstr "Intention : %(value0)s"
+
+msgid "Read full article →"
+msgstr "Lire l’article complet →"
+
+msgid "Top Journalists by Articles Published"
+msgstr "Journalistes ayant publié le plus d’articles"
+
+msgid "Visualizing the most active contributors in the dataset"
+msgstr "Visualisation des contributeurs les plus actifs du jeu de données"
+
+msgid "Chart data is currently being processed..."
+msgstr "Les données du graphique sont en cours de traitement…"
+
+msgid "Journalist Directory"
+msgstr "Annuaire des journalistes"
+
+msgid "Search journalists..."
+msgstr "Rechercher des journalistes…"
+
+msgid "Clear"
+msgstr "Effacer"
+
+#, python-format
+msgid "Page %(value0)s of %(value1)s"
+msgstr "Page %(value0)s sur %(value1)s"
+
+#, python-format
+msgid "(%(value0)s total)"
+msgstr "(%(value0)s au total)"
+
+msgid "View All Journalists"
+msgstr "Voir tous les journalistes"
+
+msgid "No journalists found."
+msgstr "Aucun journaliste trouvé."
+
+msgid "Nationality:"
+msgstr "Nationalité :"
+
+msgid "Data Source:"
+msgstr "Source des données :"
+
+msgid "Verified Media Record"
+msgstr "Fiche média vérifiée"
+
+msgid "Total Articles"
+msgstr "Total des Articles"
+
+msgid "Avg. Confidence"
+msgstr "Confiance moyenne"
+
+msgid "Focus Areas Distribution"
+msgstr "Répartition des domaines d’intérêt"
+
+msgid "Common Intents"
+msgstr "Intentions fréquentes"
+
+msgid "No common intents found."
+msgstr "Aucune intention fréquente trouvée."
+
+msgid "Covered Countries"
+msgstr "Pays couverts"
+
+msgid "No common countries found."
+msgstr "Aucun pays fréquent trouvé."
+
+msgid "Mentioned Actors"
+msgstr "Acteurs mentionnés"
+
+msgid "No common actors found."
+msgstr "Aucun acteur fréquent trouvé."
+
+#, python-format
+msgid "Total: %(value0)s articles"
+msgstr "Total : %(value0)s articles"
+
+#, python-format
+msgid "Actor: %(value0)s"
+msgstr "Acteur : %(value0)s"
+
+#, python-format
+msgid "Country: %(value0)s"
+msgstr "Pays : %(value0)s"
+
+msgid "No articles found for this selection."
+msgstr "Aucun article trouvé pour cette sélection."
+
+msgid "Previous"
+msgstr "Précédent"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Vulnerability Index Tool - Code for Africa"
+msgstr "Outil d’indice de vulnérabilité - Code for Africa"
+
+feature/VI-123-bilingual-support
 #: dashboard/templates/base.html:7
 #, fuzzy
 #| msgid "Vulnerability Index Tool"
@@ -37,25 +147,33 @@ msgid "Last updated"
 msgstr "Dernière mise à jour"
 
 #: dashboard/templates/base.html:86
+
+msgid "Vulnerability Index Tool"
+msgstr "Outil d'Indice de Vulnérabilité"
+
+msgid "Monitoring Media Narratives Across Africa"
+msgstr "Surveillance des Narratifs Médiatiques en Afrique"
+
+msgid "Last updated"
+msgstr "Dernière mise à jour"
+
+
 msgid "Home"
 msgstr "Accueil"
 
-#: dashboard/templates/base.html:87
 msgid "Authors"
 msgstr "Auteurs"
 
-#: dashboard/templates/base.html:88
 msgid "Countries"
 msgstr "Pays"
 
-#: dashboard/templates/base.html:89
 msgid "Media"
 msgstr "Médias"
 
-#: dashboard/templates/base.html:90
 msgid "Report"
 msgstr "Rapport"
 
+feature/VI-123-bilingual-support
 #: dashboard/templates/overview.html:64
 msgid "Total Articles"
 msgstr "Total des Articles"
@@ -281,13 +399,267 @@ msgid "AI Narrative Analyst"
 msgstr "Analyste de Narratifs IA"
 
 #: dashboard/templates/overview.html:330
-msgid ""
-"Hello! I am your AI analyst. Ask me anything about media narratives or "
-"vulnerability scores."
-msgstr ""
-"Bonjour ! Je suis votre analyste IA. Posez-moi vos questions sur les "
-"narratifs médiatiques ou les scores de vulnérabilité."
 
+msgid "Hello! I am your Analysis Assistant. How can I help you today?"
+msgstr "Bonjour ! Je suis votre assistant d’analyse. Comment puis-je vous aider aujourd’hui ?"
+
+msgid "Type your message..."
+msgstr "Saisissez votre message…"
+
+msgid "Send"
+msgstr "Envoyer"
+
+msgid "Error connecting to server."
+msgstr "Erreur de connexion au serveur."
+
+msgid "Select Country:"
+msgstr "Sélectionner un pays :"
+
+msgid "All Countries"
+msgstr "Tous les pays"
+
+msgid "Top African Countries by Articles Published"
+msgstr "Pays africains comptant le plus d’articles publiés"
+
+msgid "Top Actor-Country Pairings"
+msgstr "Principaux couples acteur-pays"
+
+#, python-format
+msgid "Calculated Risk by Actor (%(value0)s)"
+msgstr "Risque calculé par acteur (%(value0)s)"
+
+#, python-format
+msgid "Strategic Intent Distribution (%(value0)s)"
+msgstr "Répartition des intentions stratégiques (%(value0)s)"
+
+#, python-format
+msgid "Daily Article Volume Trend (%(value0)s)"
+msgstr "Évolution du nombre quotidien d’articles (%(value0)s)"
+
+#, python-format
+msgid "Summary for %(value0)s"
+msgstr "Synthèse pour %(value0)s"
+
+msgid "Total Articles:"
+msgstr "Nombre total d’articles :"
+
+msgid "Avg. Prediction Confidence:"
+msgstr "Confiance moyenne des prédictions :"
+
+msgid "Average Calculated Risk by Country"
+msgstr "Risque moyen calculé par pays"
+
+msgid "Filter by Outlet:"
+msgstr "Filtrer par média :"
+
+msgid "All Outlets"
+msgstr "Tous les médias"
+
+msgid "Most Frequent Media Outlets"
+msgstr "Médias les plus fréquents"
+
+msgid "No data available for the chart."
+msgstr "Aucune donnée disponible pour le graphique."
+
+#, python-format
+msgid "No intent data available for %(value0)s."
+msgstr "Aucune donnée d’intention disponible pour %(value0)s."
+
+#, python-format
+msgid "Tone Distribution (%(value0)s)"
+msgstr "Répartition des tons (%(value0)s)"
+
+#, python-format
+msgid "No tone data available for %(value0)s."
+msgstr "Aucune donnée de ton disponible pour %(value0)s."
+
+#, python-format
+msgid "Top Foreign Actors Mentioned (%(value0)s)"
+msgstr "Principaux acteurs étrangers mentionnés (%(value0)s)"
+
+#, python-format
+msgid "No actor data available for %(value0)s."
+msgstr "Aucune donnée d’acteur disponible pour %(value0)s."
+
+#, python-format
+msgid "Top Countries Covered (%(value0)s)"
+msgstr "Principaux pays couverts (%(value0)s)"
+
+#, python-format
+msgid "No country data available for %(value0)s."
+msgstr "Aucune donnée de pays disponible pour %(value0)s."
+
+#, python-format
+msgid "Recent Narratives: %(value0)s"
+msgstr "Récits récents : %(value0)s"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Outlet"
+msgstr "Média"
+
+msgid "Article Summary/Headline"
+msgstr "Résumé ou titre de l’article"
+
+msgid "Media Outlets"
+msgstr "Médias / Presse"
+
+msgid "Narratives"
+msgstr "Narratifs"
+
+msgid "Foreign Actors"
+msgstr "Acteurs Étrangers"
+
+msgid "Vulnerability Index Calculator"
+msgstr "Calculateur d'Indice de Vulnérabilité"
+
+msgid "Target African Country"
+msgstr "Pays Africain Ciblé"
+
+msgid "Select Country"
+msgstr "Sélectionner un Pays"
+
+msgid "Foreign Inferred Actor"
+msgstr "Acteur Étranger Inféré"
+
+msgid "Select Actor"
+msgstr "Sélectionner un Acteur"
+
+msgid "Strategic Intent (Factor Filter)"
+msgstr "Intent Stratégique (Filtre de Facteur)"
+
+msgid "-- Auto-Detect Primary Factor --"
+msgstr "-- Détection Automatique du Facteur Principal --"
+
+msgid "Calculate & Filter"
+msgstr "Calculer & Filtrer"
+
+msgid "Reset Filters"
+msgstr "Réinitialiser les Filtres"
+
+msgid "Vulnerability Score"
+msgstr "Score de Vulnérabilité"
+
+msgid "Methodology Breakdown"
+msgstr "Détail de la Méthodologie"
+
+msgid "1. Content Signal"
+msgstr "1. Signal de contenu"
+
+#, python-format
+msgid ""
+"Measures the intensity of strategic narratives pushed by <strong>%(actor)s</strong> toward "
+"<strong>%(country)s</strong> on a specific factor (e.g., economic, elections, sovereignty, etc.)."
+" It is estimated using advanced ML models and statistically corrected using human labels via "
+"Prediction-powered Inference (PPI) to ensure reliable measurement."
+msgstr ""
+"Mesure l’intensité des récits stratégiques diffusés par <strong>%(actor)s</strong> à destination "
+"de <strong>%(country)s</strong> sur un facteur précis (économie, élections, souveraineté, etc.). "
+"Cette mesure est estimée à l’aide de modèles avancés d’apprentissage automatique, puis corrigée "
+"statistiquement à partir d’annotations humaines au moyen de l’inférence assistée par les "
+"prédictions (PPI), afin de garantir sa fiabilité."
+
+msgid "2. Contextual Signal"
+msgstr "2. Signal contextuel"
+
+#, python-format
+msgid ""
+"Captures the structural susceptibility of <strong>%(country)s</strong> to influence from "
+"<strong>%(actor)s</strong> on that specific factor. It incorporates measurable actor×country "
+"conditions such as debt exposure, military presence, resource dependencies, election timing, or "
+"policy environment that may increase vulnerability."
+msgstr ""
+"Représente la sensibilité structurelle de <strong>%(country)s</strong> à l’influence de "
+"<strong>%(actor)s</strong> concernant ce facteur précis. Ce signal intègre des conditions "
+"mesurables propres au couple acteur-pays, telles que l’exposition à la dette, la présence "
+"militaire, la dépendance aux ressources, le calendrier électoral ou le contexte politique, qui "
+"peuvent accroître la vulnérabilité."
+
+msgid "Content Signal"
+msgstr "Signal de Contenu"
+
+msgid "Contextual Signal"
+msgstr "Signal Contextuel"
+
+msgid "Vulnerability Index"
+msgstr "Indice de Vulnérabilité"
+
+msgid "Interpretation:"
+msgstr "Interprétation :"
+
+msgid "Higher values indicate greater potential influence risk."
+msgstr "Des valeurs plus élevées indiquent un risque potentiel d’influence plus important."
+
+msgid "Current focus:"
+msgstr "Facteur étudié :"
+
+#, python-format
+msgid "Analysis for %(country)s - Actor: %(actor)s"
+msgstr "Analyse pour %(country)s - Acteur : %(actor)s"
+
+msgid "Select parameters to view calculations"
+msgstr "Sélectionnez des paramètres pour voir les calculs"
+
+msgid "Narrative Volume Over Time"
+msgstr "Volume des Narratifs dans le Temps"
+
+msgid "No chart data available."
+msgstr "Aucun graphique disponible."
+
+msgid "Top Strategic Intents"
+msgstr "Principaux Intents Stratégiques"
+
+msgid "No strategic intent data found."
+msgstr "Aucune donnée d'intent stratégique trouvée."
+
+msgid "Recent Articles"
+msgstr "Articles Récents"
+
+msgid "Narrative Entry"
+msgstr "Entrée de Narratif"
+
+msgid "Tone:"
+msgstr "Ton :"
+
+msgid "Intent:"
+msgstr "Intent :"
+
+msgid "Read Full Article →"
+msgstr "Lire l'Article Complet →"
+
+msgid "← Previous"
+msgstr "← Précédent"
+
+msgid "Next →"
+msgstr "Suivant →"
+
+msgid "AI Narrative Analyst"
+msgstr "Analyste de Narratifs IA"
+
+msgid "Hello! I am your AI analyst. Ask me anything about media narratives or vulnerability scores."
+msgstr ""
+"Bonjour ! Je suis votre analyste IA. Posez-moi vos questions sur les narratifs médiatiques ou les"
+" scores de vulnérabilité."
+
+msgid "Ask a question..."
+msgstr "Posez une question…"
+
+msgid "Analysing..."
+msgstr "Analyse en cours…"
+
+msgid "Generate CVI Report"
+msgstr "Générer un rapport CVI"
+
+
+msgid ""
+"Select an African country and one or more foreign actors to generate a comprehensive Contextual "
+"Vulnerability Index (CVI) report in PDF format."
+msgstr ""
+"Sélectionnez un pays africain et un ou plusieurs acteurs étrangers pour générer un rapport "
+"complet sur l’indice de vulnérabilité contextuelle (CVI) au format PDF."
+
+feature/VI-123-bilingual-support
 #: dashboard/templates/overview.html:334
 msgid "Ask a question..."
 msgstr ""
@@ -419,3 +791,196 @@ msgstr "Non-État"
 
 #~ msgid "[Target Country]"
 #~ msgstr "[Pays Ciblé]"
+
+msgid "Report Parameters"
+msgstr "Paramètres du rapport"
+
+msgid "African Country"
+msgstr "Pays africain"
+
+msgid "-- Select a Country --"
+msgstr "-- Sélectionner un pays --"
+
+msgid "The target country for vulnerability analysis"
+msgstr "Le pays ciblé par l’analyse de vulnérabilité"
+
+msgid "Hold <kbd>Ctrl</kbd> (Windows) or <kbd>Cmd</kbd> (Mac) to select multiple actors"
+msgstr "Maintenez <kbd>Ctrl</kbd> (Windows) ou <kbd>Cmd</kbd> (Mac) pour sélectionner plusieurs acteurs"
+
+msgid "Select one or more foreign powers to compare their influence"
+msgstr "Sélectionnez une ou plusieurs puissances étrangères pour comparer leur influence"
+
+msgid "Generate & Download PDF Report"
+msgstr "Générer et télécharger le rapport PDF"
+
+msgid "The report includes CVI scores, narrative volume trends, and key insights."
+msgstr ""
+"Le rapport comprend les scores CVI, l’évolution du nombre de récits et les principaux "
+"enseignements."
+
+#, python-format
+msgid "CVI Report - %(value0)s"
+msgstr "Rapport CVI - %(value0)s"
+
+msgid "Media Vulnerability Dashboard"
+msgstr "Tableau de bord de la vulnérabilité médiatique"
+
+msgid "Contextual Vulnerability Index (CVI) Report"
+msgstr "Rapport sur l’indice de vulnérabilité contextuelle (CVI)"
+
+#, python-format
+msgid "Target Country: %(value0)s"
+msgstr "Pays cible : %(value0)s"
+
+#, python-format
+msgid "Generated on: %(value0)s"
+msgstr "Généré le : %(value0)s"
+
+msgid "Executive Summary"
+msgstr "Synthèse"
+
+msgid "Total Articles Analyzed:"
+msgstr "Nombre total d’articles analysés :"
+
+#, python-format
+msgid ""
+"This report provides an assessment of foreign influence vulnerability in %(value0)s based on "
+"comprehensive analysis of media narratives and geopolitical risk factors."
+msgstr ""
+"Ce rapport évalue la vulnérabilité de %(value0)s à l’influence étrangère à partir d’une analyse "
+"approfondie des récits médiatiques et des facteurs de risque géopolitique."
+
+msgid "CVI Scores by Foreign Actor"
+msgstr "Scores CVI par acteur étranger"
+
+msgid "Foreign Actor"
+msgstr "Acteur étranger"
+
+msgid "CVI Score"
+msgstr "Score CVI"
+
+msgid "Risk Level"
+msgstr "Niveau de risque"
+
+msgid "Primary Threat Type"
+msgstr "Type de menace principal"
+
+msgid "No assessment data found."
+msgstr "Aucune donnée d’évaluation trouvée."
+
+msgid "Key Narratives and Articles"
+msgstr "Principaux récits et articles"
+
+#, python-format
+msgid "Source: %(value0)s | Date: %(value1)s"
+msgstr "Source : %(value0)s | Date : %(value1)s"
+
+msgid "Summary:"
+msgstr "Résumé :"
+
+msgid "Read Full Article"
+msgstr "Lire l’article complet"
+
+msgid "Insights & Analysis"
+msgstr "Enseignements et analyse"
+
+msgid "No volume chart data available."
+msgstr "Aucune donnée disponible pour le graphique des volumes."
+
+msgid "Factor Chart"
+msgstr "Graphique des facteurs"
+
+msgid "No factor chart data available."
+msgstr "Aucune donnée disponible pour le graphique des facteurs."
+
+msgid "Key Insights & Recommendations"
+msgstr "Principaux enseignements et recommandations"
+
+msgid "Highest Risk Actor:"
+msgstr "Acteur présentant le risque le plus élevé :"
+
+msgid "Primary Vulnerability Areas:"
+msgstr "Principaux domaines de vulnérabilité :"
+
+msgid "Identified via narrative analysis."
+msgstr "Identifiés par l’analyse des récits."
+
+msgid "Recommendation:"
+msgstr "Recommandation :"
+
+msgid "Proactive narrative monitoring recommended for high-risk actors."
+msgstr "Une surveillance proactive des récits est recommandée pour les acteurs à haut risque."
+
+msgid "Code for Africa"
+msgstr "Code for Africa"
+
+#, python-format
+msgid "Data as of %(value0)s"
+msgstr "Données au %(value0)s"
+
+msgid "Senegal"
+msgstr "Sénégal"
+
+msgid "Ethiopia"
+msgstr "Éthiopie"
+
+msgid "Côte d'Ivoire"
+msgstr "Côte d'Ivoire"
+
+msgid "DRC"
+msgstr "RDC"
+
+msgid "South Africa"
+msgstr "Afrique du Sud"
+
+msgid "China"
+msgstr "Chine"
+
+msgid "France"
+msgstr "France"
+
+msgid "Russia"
+msgstr "Russie"
+
+msgid "Saudi Arabia"
+msgstr "Arabie Saoudite"
+
+msgid "Turkey"
+msgstr "Turquie"
+
+msgid "Israel"
+msgstr "Israël"
+
+msgid "Iran"
+msgstr "Iran"
+
+msgid "Rwanda"
+msgstr "Rwanda"
+
+msgid "NonState"
+msgstr "Non-État"
+
+msgid "Economic"
+msgstr "Économique"
+
+msgid "Sovereignty"
+msgstr "Souveraineté"
+
+msgid "LGBTQ"
+msgstr "LGBTQ"
+
+msgid "Religious"
+msgstr "Religieux"
+
+msgid "Military presence"
+msgstr "Présence militaire"
+
+msgid "Resource Dependency"
+msgstr "Dépendance aux Ressources"
+
+msgid "Social Fragility"
+msgstr "Fragilité Sociale"
+
+msgid "Election Influence"
+msgstr "Influence Électorale"
+

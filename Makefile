@@ -1,4 +1,5 @@
 # Default configuration
+.DEFAULT_GOAL := build
 IMAGE_NAME ?= vulnerability-tool
 REGION     ?= us-west-1
 ACCOUNT_ID ?= 499665620971
@@ -12,8 +13,29 @@ INF_COMPOSE = docker compose -f docker-compose.inference.yml
 # override without echoing the secret in the recipe itself.
 export VI_INFERENCE_API_KEY
 export VI_INFERENCE_API_URL
+export AWS_PROFILE
+export AWS_REGION
+export GROQ_API_KEY
 
-.PHONY: build push build-test test test-api test-lambda test-split-e2e smoke-api results reset verify db down clean-test
+.PHONY: build push build-test test test-api test-lambda test-split-e2e run-local-dashboard run-local-dashboard-with-lambda-remote-inference run-local-dashboard-with-lambda-local-inference help smoke-api results reset verify db down clean-test
+
+# Credential-free dashboard gate: build, catalogues, full suite and real browser.
+run-local-dashboard:
+	./scripts/test-local.sh
+
+run-local-dashboard-with-lambda-remote-inference:
+	@VI_E2E_INFERENCE_MODE=remote ./scripts/test-split-e2e.sh
+
+run-local-dashboard-with-lambda-local-inference:
+	@VI_E2E_INFERENCE_MODE=local ./scripts/test-split-e2e.sh
+
+help:
+	@printf '%s\n' \
+	  'make run-local-dashboard                            Dashboard build, French catalogue, full tests and browser/PDF checks; no models.' \
+	  '  Optional AWS_PROFILE=<profile> and/or exported GROQ_API_KEY enable live provider checks; AWS_REGION defaults to eu-west-1.' \
+	  'make run-local-dashboard-with-lambda-remote-inference Dashboard + Lambda locally; deployed HTTPS inference; requires VI_INFERENCE_API_KEY.' \
+	  'make run-local-dashboard-with-lambda-local-inference  Entire stack locally; Git LFS models (~13 GB) and >=20 GB Docker memory.' \
+	  'All three are verification runs: they exit and clean up their isolated test data. Nothing is deployed.'
 
 # Build the web image
 build:
@@ -58,6 +80,7 @@ test-lambda:
 # VI_INFERENCE_API_KEY is supplied, keep Lambda/Postgres local and call the
 # deployed HTTPS inference API (or VI_INFERENCE_API_URL when explicitly set).
 test-split-e2e:
+	@printf '%s\n' 'Deprecated name: use make help to choose an explicit local/remote-inference command. Existing key-based selection is retained for compatibility.'
 	./scripts/test-split-e2e.sh
 
 # Boot smoke: gunicorn-boot config.inference_wsgi under the real settings and

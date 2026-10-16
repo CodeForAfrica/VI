@@ -28,6 +28,112 @@ return HTTP 404; the existing overview filters and `/articles/` search remain.
 
 ## Dashboard translation
 
+### Local dashboard verification — one command
+
+```bash
+make run-local-dashboard
+```
+
+Prerequisites: Git, Make and a running Docker installation with Compose v2
+(`up --wait` support). No local Python, Node.js, gettext, AWS profile, API key,
+Git LFS pull or ML model download is needed. On Windows use WSL2 with Docker
+integration. First use downloads the application dependencies and a pinned
+Playwright/Chromium image; later runs reuse the Docker cache.
+
+This is a **verification run**, not a persistent development server. It:
+
+1. Builds the production dashboard image and compiles EN/FR catalogues.
+2. Extracts current marked UI strings and fails on missing, empty, fuzzy or
+   placeholder-invalid French translations. Catalogue checks cover marked
+   messages, not arbitrary article text or unmarked future strings.
+3. Starts the isolated database/cache and runs the full automated suite,
+   including the PostgreSQL locking tests that otherwise skip without a DB.
+4. Migrates an isolated local Postgres and loads 25 synthetic saved article
+   results; starts Redis and the actual Gunicorn dashboard.
+5. Uses Chromium to exercise ten routes in both languages, language switching,
+   filters, real Plotly charts, article rendering, CSRF-protected chat and PDF
+   responses. Third-party CDN styling is excluded from these functional checks;
+   the installed Plotly bundle is served locally.
+
+By default the stack has no published ports, production data, mounted
+credentials or external runtime network access. Test-only WSGI wiring supplies
+controlled Amazon Translate/Groq responses. Provider contract/failure tests are
+included. Ordinary production WSGI is unchanged.
+
+#### Optional live Amazon Translate and Groq checks
+
+Supplying `AWS_PROFILE` and/or `GROQ_API_KEY` automatically opts the selected
+provider into **live calls using synthetic local articles only**. These calls
+can incur charges. Providers without credentials remain controlled and are
+explicitly labelled; a controlled provider is never reported as verified live.
+
+```bash
+# Use your own configured AWS profile (AWS CLI v2 required on the host).
+make run-local-dashboard AWS_PROFILE=hannah AWS_REGION=eu-west-1
+
+# zsh/bash: enter your Groq key without putting its value in shell history.
+read -r -s GROQ_API_KEY
+export GROQ_API_KEY
+make run-local-dashboard
+
+# Both live together, using the exported Groq key and selected AWS profile.
+make run-local-dashboard AWS_PROFILE=hannah AWS_REGION=eu-west-1
+```
+
+AWS profiles are resolved on the host using AWS CLI v2's `configure
+export-credentials`. SSO users should first run `aws sso login --profile hannah`.
+Only the resolved credentials are temporarily passed as a read-only Compose
+secret; the whole `~/.aws` directory is never mounted. The selected identity
+needs `translate:TranslateText` and `comprehend:DetectDominantLanguage` in the
+chosen region. The region defaults explicitly to `eu-west-1` (set `AWS_REGION`
+to change it; the profile's implicit region is not used).
+
+The Groq key is also passed as a temporary file, not a Docker build argument or
+container environment entry. Only the running dashboard receives the secret
+mounts and runtime egress; the automated suite still runs offline without keys.
+The host secret files live in a private temporary directory and are removed on
+success/failure. Docker administrators can access running container secrets;
+use a trusted PC/Docker daemon and least-privilege development credentials.
+
+The live run exercises actual display translation, AI-backed chat, four article
+summaries and the overall analysis for each language's PDF. It checks successful
+provider call counts and fails on any provider error or empty answer, even if
+the application returns HTTP 200 with fallback content. Logs show each provider's
+live/controlled mode and success/failure counts, never credentials. Groq calls
+use the application's existing models, with bounded timeouts and no SDK retries.
+Model accuracy, semantic translation quality and ML inference are not assessed
+by this dashboard-only command.
+
+To force the credential-free run when your terminal already exports provider
+credentials:
+
+```bash
+make run-local-dashboard AWS_PROFILE= GROQ_API_KEY=
+```
+
+Each stage logs progress. Failure exits non-zero with the stage and service
+logs; success prints an explicit coverage summary. Its own containers/fixture
+data are removed on either outcome, while Docker images are retained for reuse.
+Do not run two copies simultaneously. Fix any failure and rerun before pushing;
+this command does not enforce Git push/merge permissions or modify workflows.
+
+Use `make help` to choose a run. For Lambda/inference changes use the explicit
+commands below, not the dashboard-only command.
+
+The dashboard interface supports English and French through Django's language
+selector. Labels are translated; submitted country, actor and intent values stay
+as canonical database keys. The language cookie preserves the selection between
+requests without rewriting article data. Report headings/form labels are also
+translated. Article-body translation and AI-generated output retain their
+existing behavior; this is not automatic French translation of all content.
+
+The Docker build installs GNU gettext in a build-only stage and compiles both
+catalogues from `locale/`, so no manual EC2 package installation is required.
+When editing translations locally, install gettext for your operating system,
+then run `python manage.py compilemessages --locale en --locale fr --ignore=venv`.
+Run bilingual regression tests with
+`python manage.py test test_bilingual_dashboard --settings=inference_api.tests_settings`.
+
 Dashboard display translation uses Amazon Translate in `AWS_REGION_NAME`
 (default `eu-west-1`). Production uses the EC2 instance role, not human access
 keys in the container. The role needs `translate:TranslateText` and
@@ -481,26 +587,27 @@ headers and raw response bodies are deliberately excluded from these events.
 Run the changed architecture end to end with one command:
 
 ```bash
-make test-split-e2e
+make run-local-dashboard-with-lambda-local-inference
 ```
 
 To exercise the real Lambda path against the deployed API while keeping the
 database isolated and local, supply its API key:
 
 ```bash
-make test-split-e2e VI_INFERENCE_API_KEY='<deployed-api-key>'
+make run-local-dashboard-with-lambda-remote-inference
 ```
 
-Supplying the key automatically selects
+Export `VI_INFERENCE_API_KEY` in your terminal before the remote command;
+do not commit it or put it in a shared terminal transcript. Remote inference uses
 `https://vi-model-inference.codeforafrica.org`. Set `VI_INFERENCE_API_URL` as
 well only when intentionally testing another deployment. The key is never
 printed. Remote mode skips Git LFS and starts Postgres, Redis, the dashboard and
 the Lambda verifier, so it does not need the 20GB local-model allocation.
 
-Without a key, this builds the real Lambda and inference images, starts an
+The local-inference command rejects a set API key (unset it first), builds the real Lambda and inference images, starts an
 isolated Postgres, and serves the local inference API through trusted HTTPS.
 Both modes also build the real dashboard image with an isolated Redis cache.
-With a key, model inference remains on the deployed HTTPS API.
+The remote-inference command requires the key and never silently switches to local models.
 Both modes load ten deterministic articles and invoke the Lambda's real
 classification path. The output shows
 seven numbered stages and one `ARTICLE nn/10 PASS` line per fixture, including its
@@ -516,7 +623,8 @@ intentionally non-secret and only exist inside the Compose network.
 
 During the test the dashboard is available at `http://127.0.0.1:8036` (override
 with `VI_E2E_DASHBOARD_PORT`). It is removed with the test stack when the command
-exits. Its internal-only network blocks external provider calls; AWS translation,
+exits. A loopback-only proxy exposes that port while the dashboard stays on an
+internal-only network that blocks external provider calls; AWS translation,
 provider-backed AI chat, PDF report generation, and browser JavaScript execution
 are **not** covered by these dashboard checks. Original text is displayed when
 translation credentials are absent. No AWS profile or Groq key is required.
@@ -553,7 +661,10 @@ docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.dashboard.yml up 
 
 | Command | Description |
 |---------|-------------|
-| `make test-split-e2e` | Run model setup, verify Lambda → HTTPS inference → local Postgres with ten articles, then verify the real dashboard and database-backed chat |
+| `make run-local-dashboard` | Credential-free dashboard build, full suite, French catalogue and EN/FR browser/PDF checks; no Lambda/models |
+| `make run-local-dashboard-with-lambda-remote-inference` | Local dashboard/Lambda/Postgres, deployed HTTPS inference; requires API key, no model downloads |
+| `make run-local-dashboard-with-lambda-local-inference` | Whole stack including local inference/models; Git LFS and >=20 GB Docker memory |
+| `make test-split-e2e` | Deprecated compatibility alias; retains old key-based local/remote selection |
 | `make test` | Build locally, then run the full pipeline in one shot: migrate, seed the sample fixture as unclassified rows, verify Groq, classify, print results |
 | `make results` | Print the current classification (`strategic_intent` / confidence / tone / processed-at) of every row |
 | `make reset` | Reload the fixture, resetting the rows back to unclassified |

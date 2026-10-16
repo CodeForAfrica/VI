@@ -8,3 +8,10 @@ __pycache__
 *.pyd
 .DS_Store
 local_settings.py
+.bin
+tools
+.ruff_cache
+.github/lambda-deploy
+scripts/lambda-production-db.py
+scripts/deploy-lambda-locally.sh
+**/vi-local-provider-credentials.*

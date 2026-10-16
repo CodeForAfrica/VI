@@ -31,6 +31,26 @@ class DashboardViewTests(TestCase):
             with self.subTest(method=method):
                 self.assertTrue(callable(getattr(self.views.DisinfoAnalysisChatbot, method, None)))
 
+    @override_settings(GROQ_MODEL="configured-test-model", ROOT_URLCONF="dashboard.urls")
+    def test_chat_and_pdf_use_the_configured_groq_model(self):
+        from dashboard.models import MediaNarrative
+        from django.utils import timezone
+        MediaNarrative.objects.create(
+            article_text="Trade cooperation supports economic development.",
+            target_country="Ethiopia", inferred_actor="China", strategic_intent="Economic",
+            tone="Factual", confidence=0.8, posting_time=timezone.now(),
+        )
+        with mock.patch("groq.Groq") as provider:
+            provider.return_value.chat.completions.create.return_value = SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="Sample analysis."))])
+            chatbot = self.views.DisinfoAnalysisChatbot()
+            self.assertEqual(chatbot.model, "configured-test-model")
+            response = self.client.get("/generate-report/", {"country": "Ethiopia", "actors": "China"})
+            self.assertEqual(response.status_code, 200)
+            calls = provider.return_value.chat.completions.create.call_args_list
+            self.assertEqual(len(calls), 2)
+            self.assertTrue(all(call.kwargs["model"] == "configured-test-model" for call in calls))
+
     def test_ai_response_removes_reasoning_and_rejects_missing_answers(self):
         for content in ("<think>Private reasoning.</think>Final answer.",
                         "<THINK>Reasoning\nacross lines.</THINK> Final answer. ",

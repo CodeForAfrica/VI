@@ -1,0 +1,6 @@
+FROM mcr.microsoft.com/playwright:v1.64.0-noble
+WORKDIR /checks
+RUN npm install --prefix /checks --no-audit --no-fund playwright@1.64.0
+COPY scripts/test_local_browser.cjs ./test_local_browser.cjs
+USER pwuser
+CMD ["node", "test_local_browser.cjs"]

@@ -26,6 +26,22 @@ COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
     && pip install -r requirements.txt
 
+FROM builder AS translations
+
+RUN apt-get update && apt-get install -y --no-install-recommends gettext \
+    && rm -rf /var/lib/apt/lists/*
+COPY locale/en/LC_MESSAGES/django.po ./locale/en/LC_MESSAGES/django.po
+COPY locale/fr/LC_MESSAGES/django.po ./locale/fr/LC_MESSAGES/django.po
+RUN echo '[build] Compiling English and French translation catalogues.' \
+    && python -m django compilemessages --locale en --locale fr --ignore=venv \
+    && echo '[build] OK - English and French catalogues compiled.'
+
+FROM translations AS local-checks
+COPY dashboard ./dashboard
+COPY config ./config
+COPY scripts/check_translations.py ./scripts/check_translations.py
+CMD ["python", "scripts/check_translations.py"]
+
 FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -51,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
+COPY --from=translations /app/locale/ ./locale/
 
 RUN python manage.py collectstatic --noinput \
     && chown -R appuser:appgroup /app

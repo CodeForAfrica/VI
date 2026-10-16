@@ -1,0 +1,20 @@
+# Loaded only when the operator supplies AWS_PROFILE and/or GROQ_API_KEY.
+services:
+  dashboard:
+    networks: [providers]
+    environment:
+      VI_LOCAL_AWS_LIVE: ${VI_LOCAL_AWS_LIVE:?set by the local runner}
+      VI_LOCAL_GROQ_LIVE: ${VI_LOCAL_GROQ_LIVE:?set by the local runner}
+      AWS_REGION_NAME: ${AWS_REGION:-eu-west-1}
+    secrets: [local_aws_credentials, local_groq_key]
+  browser:
+    environment:
+      VI_LOCAL_AWS_LIVE: ${VI_LOCAL_AWS_LIVE:?set by the local runner}
+      VI_LOCAL_GROQ_LIVE: ${VI_LOCAL_GROQ_LIVE:?set by the local runner}
+secrets:
+  local_aws_credentials:
+    file: ${VI_LOCAL_CREDENTIALS_DIR:?set by the local runner}/aws.json
+  local_groq_key:
+    file: ${VI_LOCAL_CREDENTIALS_DIR:?set by the local runner}/groq.key
+networks:
+  providers: {}
