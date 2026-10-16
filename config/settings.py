@@ -116,9 +116,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-LANGUAGE_CODE = 'en'
 TIME_ZONE = 'UTC'
-USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
@@ -137,10 +135,8 @@ S3_MODELS_BUCKET = os.getenv('S3_MODELS_BUCKET')
 # API Keys - SECURE: All from environment
 MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-# Default to a live model - the old hardcoded default (llama-4-scout) was
-# decommissioned on Groq (shutdown 2026-07-17), which made the LLM arbitration
-# silently fail. qwen/qwen3.6-27b is the team-chosen replacement.
-GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
+# Keep the model configurable: unavailable model IDs otherwise trigger fallbacks.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 
 # CACHES configuration
 if os.getenv('VI_INFERENCE_SERVER') == '1':

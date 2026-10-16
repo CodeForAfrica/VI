@@ -20,3 +20,4 @@ MIDDLEWARE = ["inference_api.middleware.AccessLogMiddleware"]
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
+GROQ_MODEL = "qwen/qwen3.8-27b"

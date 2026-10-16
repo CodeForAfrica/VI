@@ -119,6 +119,17 @@ FOREIGN_ACTORS = [
     ("NonState", _("NonState")),
 ]
 
+INTENT_CHOICES = [
+    ("Economic", _("Economic")),
+    ("Sovereignty", _("Sovereignty")),
+    ("LGBTQ", _("LGBTQ")),
+    ("Religious", _("Religious")),
+    ("MilitaryPresence", _("Military presence")),
+    ("ResourceDependency", _("Resource Dependency")),
+    ("SocialFragility", _("Social Fragility")),
+    ("ElectionInfluence", _("Election Influence")),
+]
+
 intent_mapping = {
     # Direct matches
     "economic": "Economic",
@@ -186,9 +197,8 @@ def clean_ai_response(content):
 
 class DisinfoAnalysisChatbot:
     def __init__(self):
-        # Initializing the Groq client with your specific Llama 4 model
         self.client = Groq(api_key=settings.GROQ_API_KEY)
-        self.model = "qwen/qwen3.6-27b"
+        self.model = settings.GROQ_MODEL
         self.country_mapping = {
             "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
             "ivory coast": "Côte d'Ivoire", "south africa": "South Africa",
@@ -583,7 +593,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
                                  f"Strategic intent categories: Economic, Sovereignty, LGBTQ, Religious, ElectionInfluence, MilitaryPresence, ResourceDependency, SocialFragility.")
 
         # 2. Filtered Statistics based on detected query terms
-        base_query = MediaNarrative.objects.filter(target_country__in=COUNTRIES) # Apply focus country filter here too, if applicable globally
+        base_query = MediaNarrative.objects.filter(target_country__in=COUNTRIES_DB)
 
         if target_country:
             base_query = base_query.filter(target_country__iexact=target_country)
@@ -1578,7 +1588,7 @@ def generate_report(request):
                     sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:1500]}"
                     sum_response = client.chat.completions.create(
                         messages=[{"role": "user", "content": sum_prompt}],
-                        model="qwen/qwen3.6-27b",
+                        model=settings.GROQ_MODEL,
                         max_tokens=1024
                     )
                     ai_summary = clean_ai_response(sum_response.choices[0].message.content)
@@ -1631,7 +1641,7 @@ def generate_report(request):
             try:
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": insight_prompt}],
-                    model="qwen/qwen3.6-27b"
+                    model=settings.GROQ_MODEL
                 )
                 ai_insights = clean_ai_response(chat_completion.choices[0].message.content)
             except Exception as e_insight:

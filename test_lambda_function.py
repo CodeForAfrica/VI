@@ -496,8 +496,10 @@ class ClassificationLockTests(unittest.TestCase):
 class PostgreSQLClassificationLockTests(unittest.TestCase):
     def setUp(self):
         import psycopg2
-        self.first = psycopg2.connect(host=os.environ["VI_TEST_POSTGRES_HOST"], dbname="postgres", user="postgres", connect_timeout=5)
-        self.second = psycopg2.connect(host=os.environ["VI_TEST_POSTGRES_HOST"], dbname="postgres", user="postgres", connect_timeout=5)
+        connection_options = dict(host=os.environ["VI_TEST_POSTGRES_HOST"], dbname="postgres",
+                                  user=os.environ.get("VI_TEST_POSTGRES_USER", "postgres"), connect_timeout=5)
+        self.first = psycopg2.connect(**connection_options)
+        self.second = psycopg2.connect(**connection_options)
         self.addCleanup(self.first.close)
         self.addCleanup(self.second.close)
 

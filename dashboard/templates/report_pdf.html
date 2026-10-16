@@ -1,8 +1,10 @@
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
-<html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="utf-8">
-    <title>CVI Report - {{ country }}</title>
+    <title>{% blocktrans with value0=country %}CVI Report - {{ value0 }}{% endblocktrans %}</title>
     <style>
         @page {
             margin: 2cm;
@@ -140,30 +142,30 @@
 <body>
     <div class="header">
         <div class="logo">
-            <div class="logo-text">Media Vulnerability Dashboard</div>
+            <div class="logo-text">{% trans "Media Vulnerability Dashboard" %}</div>
         </div>
-        <h1>Contextual Vulnerability Index (CVI) Report</h1>
-        <h2>Target Country: {{ country }}</h2>
-        <p>Generated on: {{ date_generated }}</p>
+        <h1>{% trans "Contextual Vulnerability Index (CVI) Report" %}</h1>
+        <h2>{% blocktrans with value0=country %}Target Country: {{ value0 }}{% endblocktrans %}</h2>
+        <p>{% blocktrans with value0=date_generated %}Generated on: {{ value0 }}{% endblocktrans %}</p>
     </div>
 
     <div class="section">
-        <div class="section-title">Executive Summary</div>
+        <div class="section-title">{% trans "Executive Summary" %}</div>
         <div class="executive-summary">
-            <p><strong>Total Articles Analyzed:</strong> {{ articles_count }}</p>
-            <p>This report provides an assessment of foreign influence vulnerability in {{ country }} based on comprehensive analysis of media narratives and geopolitical risk factors.</p>
+            <p><strong>{% trans "Total Articles Analyzed:" %}</strong> {{ articles_count }}</p>
+            <p>{% blocktrans with value0=country %}This report provides an assessment of foreign influence vulnerability in {{ value0 }} based on comprehensive analysis of media narratives and geopolitical risk factors.{% endblocktrans %}</p>
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">CVI Scores by Foreign Actor</div>
+        <div class="section-title">{% trans "CVI Scores by Foreign Actor" %}</div>
         <table>
             <thead>
                 <tr>
-                    <th style="width: 25%;">Foreign Actor</th>
-                    <th style="width: 20%;">CVI Score</th>
-                    <th style="width: 20%;">Risk Level</th>
-                    <th style="width: 35%;">Primary Threat Type</th>
+                    <th style="width: 25%;">{% trans "Foreign Actor" %}</th>
+                    <th style="width: 20%;">{% trans "CVI Score" %}</th>
+                    <th style="width: 20%;">{% trans "Risk Level" %}</th>
+                    <th style="width: 35%;">{% trans "Primary Threat Type" %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -180,7 +182,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" style="text-align: center;">No assessment data found.</td>
+                    <td colspan="4" style="text-align: center;">{% trans "No assessment data found." %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -188,7 +190,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title">Key Narratives and Articles</div>
+        <div class="section-title">{% trans "Key Narratives and Articles" %}</div>
         {% for narrative in key_narratives %}
         <div class="narrative-item">
             <div>
@@ -197,61 +199,61 @@
             </div>
             <div style="margin-bottom: 5px;"><em>{{ narrative.title }}</em></div>
             <div style="font-size: 13px; color: #64748b; margin-bottom: 5px;">
-                Source: {{ narrative.media_outlet }} | Date: {{ narrative.posting_time }}
+                {% blocktrans with value0=narrative.media_outlet value1=narrative.posting_time %}Source: {{ value0 }} | Date: {{ value1 }}{% endblocktrans %}
             </div>
             <div style="margin-bottom: 10px; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px;">
-                <strong style="color: #334155;">Summary:</strong><br>{{ narrative.summary }}
+                <strong style="color: #334155;">{% trans "Summary:" %}</strong><br>{{ narrative.summary }}
             </div>
             <div>
-                <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">Read Full Article</a>
+                <a href="{{ narrative.url }}" style="color: #1e3a8a; text-decoration: none; font-size: 13px;">{% trans "Read Full Article" %}</a>
             </div>
         </div>
         {% endfor %}
     </div>
 
     <div class="section">
-        <div class="section-title">Insights & Analysis</div>
+        <div class="section-title">{% trans "Insights & Analysis" %}</div>
         <div class="ai-insights">
             {{ ai_insights|linebreaks }}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">Narrative Volume Over Time</div>
+        <div class="section-title">{% trans "Narrative Volume Over Time" %}</div>
         <div class="chart-container">
             {% if volume_chart %}
             <img src="data:image/jpeg;base64,{{ volume_chart }}" style="width: 420pt; height: 210pt;">
             {% else %}
-            <p>No volume chart data available.</p>
+            <p>{% trans "No volume chart data available." %}</p>
             {% endif %}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">Factor Chart</div>
+        <div class="section-title">{% trans "Factor Chart" %}</div>
         <div class="chart-container">
             {% if factor_chart %}
             <img src="data:image/jpeg;base64,{{ factor_chart }}" style="width: 420pt; height: 240pt;">
             {% else %}
-            <p>No factor chart data available.</p>
+            <p>{% trans "No factor chart data available." %}</p>
             {% endif %}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">Key Insights & Recommendations</div>
+        <div class="section-title">{% trans "Key Insights & Recommendations" %}</div>
         <div class="recommendations">
             <ul>
-                <li><strong>Highest Risk Actor:</strong> {{ highest_risk_actor }}</li>
-                <li><strong>Primary Vulnerability Areas:</strong> Identified via narrative analysis.</li>
-                <li><strong>Recommendation:</strong> Proactive narrative monitoring recommended for high-risk actors.</li>
+                <li><strong>{% trans "Highest Risk Actor:" %}</strong> {{ highest_risk_actor }}</li>
+                <li><strong>{% trans "Primary Vulnerability Areas:" %}</strong> {% trans "Identified via narrative analysis." %}</li>
+                <li><strong>{% trans "Recommendation:" %}</strong> {% trans "Proactive narrative monitoring recommended for high-risk actors." %}</li>
             </ul>
         </div>
     </div>
 
     <div class="footer">
-        <div class="logo-text">Code for Africa</div>
-        <p>Data as of {{ date_generated }}</p>
+        <div class="logo-text">{% trans "Code for Africa" %}</div>
+        <p>{% blocktrans with value0=date_generated %}Data as of {{ value0 }}{% endblocktrans %}</p>
     </div>
 </body>
 </html>

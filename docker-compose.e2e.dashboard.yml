@@ -22,8 +22,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${VI_E2E_DASHBOARD_PORT:-8036}:8000"
     environment:
       DJANGO_SECRET_KEY: local-e2e-not-secret
       DEBUG: "false"
@@ -45,11 +43,23 @@ services:
       retries: 30
       start_period: 30s
 
+  dashboard-proxy:
+    image: caddy:2.10-alpine
+    networks: [default, dashboard]
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${VI_E2E_DASHBOARD_PORT:-8036}:8000"
+    command: ["caddy", "reverse-proxy", "--from", "http://:8000", "--to", "http://dashboard:8000"]
+
   e2e:
     networks: [default, dashboard]
     depends_on:
       dashboard:
         condition: service_healthy
+      dashboard-proxy:
+        condition: service_started
     environment:
       VI_E2E_DASHBOARD_URL: http://dashboard:8000
 

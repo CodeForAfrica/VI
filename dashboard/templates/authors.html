@@ -1,6 +1,6 @@
 <!-- dashboard/templates/authors.html -->
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n %}
 
 {% block content %}
 <style>
@@ -41,8 +41,8 @@
 <div class="container py-4">
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header bg-white py-3">
-            <h5 class="fw-bold mb-0 text-primary">Top Journalists by Articles Published</h5>
-            <small class="text-muted">Visualizing the most active contributors in the dataset</small>
+            <h5 class="fw-bold mb-0 text-primary">{% trans "Top Journalists by Articles Published" %}</h5>
+            <small class="text-muted">{% trans "Visualizing the most active contributors in the dataset" %}</small>
         </div>
         <div class="card-body">
             {% if authors_chart %}
@@ -50,7 +50,7 @@
             {% else %}
                 <div class="text-center py-5 text-muted">
                     <i class="fas fa-chart-bar fa-3x mb-3 opacity-25"></i>
-                    <p>Chart data is currently being processed...</p>
+                    <p>{% trans "Chart data is currently being processed..." %}</p>
                 </div>
             {% endif %}
         </div>
@@ -61,30 +61,30 @@
         <div class="col-lg-4 mb-4">
             <div class="card shadow-sm border-0 sticky-sidebar">
                 <div class="card-header bg-white py-3">
-                    <h5 class="fw-bold mb-0">Journalist Directory</h5>
+                    <h5 class="fw-bold mb-0">{% trans "Journalist Directory" %}</h5>
                 </div>
                 
                 <!-- 🔍 SEARCH BOX -->
                 <form method="GET" class="p-3 border-bottom">
                     <div class="input-group input-group-sm">
                         <input type="text" name="search" value="{{ search_query }}" 
-                               class="form-control" placeholder="Search journalists...">
+                               class="form-control" placeholder="{% trans 'Search journalists...' %}">
                         <button type="submit" class="btn btn-primary">🔍</button>
                         {% if search_query %}
-                            <a href="{% url 'authors' %}" class="btn btn-outline-secondary">Clear</a>
+                            <a href="{% url 'authors' %}" class="btn btn-outline-secondary">{% trans "Clear" %}</a>
                         {% endif %}
                     </div>
                 </form>
 
                 <!-- 📊 Paginated Journalist Directory -->
                 <div class="mb-2 px-3 d-flex justify-content-between align-items-center small text-muted">
-                    <span>Page {{ authors_page.number }} of {{ authors_page.paginator.num_pages }}</span>
-                    <span>({{ authors_page.paginator.count }} total)</span>
+                    <span>{% blocktrans with value0=authors_page.number value1=authors_page.paginator.num_pages %}Page {{ value0 }} of {{ value1 }}{% endblocktrans %}</span>
+                    <span>{% blocktrans with value0=authors_page.paginator.count %}({{ value0 }} total){% endblocktrans %}</span>
                 </div>
 
                 <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
                     <a href="{% url 'authors' %}" class="list-group-item list-group-item-action {% if not selected_journalist %}active{% endif %}">
-                        <strong>View All Journalists</strong>
+                        <strong>{% trans "View All Journalists" %}</strong>
                     </a>
                     {% for journalist in authors_page %}
                         <a href="?journalist={{ journalist.author|urlencode }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_journalist %}&page=1{% endif %}" 
@@ -94,7 +94,7 @@
                             <span class="badge bg-primary rounded-pill">{{ journalist.article_count }}</span>
                         </a>
                     {% empty %}
-                        <div class="p-3 text-muted text-center">No journalists found.</div>
+                        <div class="p-3 text-muted text-center">{% trans "No journalists found." %}</div>
                     {% endfor %} 
                 </div>
 
@@ -149,8 +149,8 @@
                         </div>
                     </div>
                     <div class="row small text-muted">
-                        <div class="col-sm-4"><strong>Nationality:</strong> {{ selected_journalist.nationality|default:"-" }}</div>
-                        <div class="col-sm-8 text-sm-end"><strong>Data Source:</strong> Verified Media Record</div>
+                        <div class="col-sm-4"><strong>{% trans "Nationality:" %}</strong> {{ selected_journalist.nationality|default:"-" }}</div>
+                        <div class="col-sm-8 text-sm-end"><strong>{% trans "Data Source:" %}</strong> {% trans "Verified Media Record" %}</div>
                     </div>
                 </div>
             </div>
@@ -162,7 +162,7 @@
                     <div class="card stats-card border-0">
                         <div class="card-body text-center">
                             <div class="stat-value">{{ journalist_stats.total_articles }}</div>
-                            <div class="stat-label">Total Articles</div>
+                            <div class="stat-label">{% trans "Total Articles" %}</div>
                         </div>
                     </div>
                 </div>
@@ -170,7 +170,7 @@
                     <div class="card stats-card border-0">
                         <div class="card-body text-center">
                             <div class="stat-value">{% if journalist_stats.avg_confidence %}{{ journalist_stats.avg_confidence|floatformat:2 }}{% else %}N/A{% endif %}</div>
-                            <div class="stat-label">Avg. Confidence</div>
+                            <div class="stat-label">{% trans "Avg. Confidence" %}</div>
                         </div>
                     </div>
                 </div>
@@ -181,7 +181,7 @@
             {% if journalist_intent_chart %}
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
-                    <h6 class="fw-bold mb-0">Focus Areas Distribution</h6>
+                    <h6 class="fw-bold mb-0">{% trans "Focus Areas Distribution" %}</h6>
                 </div>
                 <div class="card-body">
                     {{ journalist_intent_chart|safe }}
@@ -194,7 +194,7 @@
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm">
                         <div class="card-header bg-white py-2">
-                            <h6 class="fw-bold mb-0">Common Intents</h6>
+                            <h6 class="fw-bold mb-0">{% trans "Common Intents" %}</h6>
                         </div>
                         <div class="card-body p-2">
                             {% if common_intents %}
@@ -205,7 +205,7 @@
                                     </div>
                                 {% endfor %} 
                             {% else %}
-                                <small class="text-muted">No common intents found.</small>
+                                <small class="text-muted">{% trans "No common intents found." %}</small>
                             {% endif %} 
                         </div>
                     </div>
@@ -213,7 +213,7 @@
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm">
                         <div class="card-header bg-white py-2">
-                            <h6 class="fw-bold mb-0">Covered Countries</h6>
+                            <h6 class="fw-bold mb-0">{% trans "Covered Countries" %}</h6>
                         </div>
                         <div class="card-body p-2">
                             {% if common_countries %}
@@ -224,7 +224,7 @@
                                     </div>
                                 {% endfor %} 
                             {% else %}
-                                <small class="text-muted">No common countries found.</small>
+                                <small class="text-muted">{% trans "No common countries found." %}</small>
                             {% endif %} 
                         </div>
                     </div>
@@ -232,7 +232,7 @@
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm">
                         <div class="card-header bg-white py-2">
-                            <h6 class="fw-bold mb-0">Mentioned Actors</h6>
+                            <h6 class="fw-bold mb-0">{% trans "Mentioned Actors" %}</h6>
                         </div>
                         <div class="card-body p-2">
                             {% if common_actors %}
@@ -243,7 +243,7 @@
                                     </div>
                                 {% endfor %} 
                             {% else %}
-                                <small class="text-muted">No common actors found.</small>
+                                <small class="text-muted">{% trans "No common actors found." %}</small>
                             {% endif %} 
                         </div>
                     </div>
@@ -259,7 +259,7 @@
                         All Recent Publications
                     {% endif %}
                 </h5>
-                <span class="text-muted small">Total: {{ page_obj.paginator.count }} articles</span>
+                <span class="text-muted small">{% blocktrans with value0=page_obj.paginator.count %}Total: {{ value0 }} articles{% endblocktrans %}</span>
             </div>
 
             <div class="row g-3">
@@ -278,17 +278,17 @@
                             </h6>
                             <p class="small text-muted mb-3">{{ article.article_text|truncatewords:30 }}</p>
                             <div class="d-flex gap-2">
-                                <span class="badge bg-light text-dark border small">Tone: {{ article.tone|title }}</span>
-                                <span class="badge bg-light text-dark border small">Intent: {{ article.strategic_intent|title }}</span>
-                                <span class="badge bg-light text-dark border small">Actor: {{ article.inferred_actor|title }}</span>
-                                <span class="badge bg-light text-dark border small">Country: {{ article.target_country }}</span>
+                                <span class="badge bg-light text-dark border small">{% blocktrans with value0=article.tone|title %}Tone: {{ value0 }}{% endblocktrans %}</span>
+                                <span class="badge bg-light text-dark border small">{% blocktrans with value0=article.strategic_intent|title %}Intent: {{ value0 }}{% endblocktrans %}</span>
+                                <span class="badge bg-light text-dark border small">{% blocktrans with value0=article.inferred_actor|title %}Actor: {{ value0 }}{% endblocktrans %}</span>
+                                <span class="badge bg-light text-dark border small">{% blocktrans with value0=article.target_country %}Country: {{ value0 }}{% endblocktrans %}</span>
                             </div>
                         </div>
                     </div>
                 </div>
                 {% empty %}
                 <div class="col-12 text-center py-5 card shadow-sm border-0">
-                    <p class="text-muted mb-0">No articles found for this selection.</p>
+                    <p class="text-muted mb-0">{% trans "No articles found for this selection." %}</p>
                 </div>
                 {% endfor %} 
             </div>
@@ -297,11 +297,11 @@
             <nav class="mt-4">
                 <ul class="pagination justify-content-center">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.previous_page_number }}">{% trans "Previous" %}</a></li>
                     {% endif %}
-                    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+                    <li class="page-item disabled"><span class="page-link">{% blocktrans with value0=page_obj.number value1=page_obj.paginator.num_pages %}Page {{ value0 }} of {{ value1 }}{% endblocktrans %}</span></li>
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?journalist={{ selected_name|urlencode }}&page={{ page_obj.next_page_number }}">{% trans "Next" %}</a></li>
                     {% endif %}
                 </ul>
             </nav>

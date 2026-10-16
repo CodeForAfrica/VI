@@ -36,13 +36,23 @@ unavailable_model_files() {
   done <<<"${tracked_model_files}"
 }
 
-require_command git "Install Git before running this test."
-git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
-  fail "${REPO_ROOT} is not a Git worktree."
-
 remote_mode=false
 compose_file="${REPO_ROOT}/docker-compose.e2e.yml"
 compose_project="vi-split-e2e-local"
+case "${VI_E2E_INFERENCE_MODE:-auto}" in
+  remote)
+    [[ -n "${VI_INFERENCE_API_KEY:-}" ]] || fail "Remote inference requires VI_INFERENCE_API_KEY. Export the API key in your terminal, then rerun make run-local-dashboard-with-lambda-remote-inference."
+    ;;
+  local)
+    [[ -z "${VI_INFERENCE_API_KEY:-}" ]] || fail "Local inference was explicitly selected, but VI_INFERENCE_API_KEY is set. Unset it for local inference, or use make run-local-dashboard-with-lambda-remote-inference."
+    ;;
+  auto) ;;
+  *) fail "Invalid VI_E2E_INFERENCE_MODE; expected local or remote." ;;
+esac
+
+require_command git "Install Git before running this test."
+git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+  fail "${REPO_ROOT} is not a Git worktree."
 if [[ -n "${VI_INFERENCE_API_KEY:-}" ]]; then
   remote_mode=true
   compose_file="${REPO_ROOT}/docker-compose.e2e.remote.yml"

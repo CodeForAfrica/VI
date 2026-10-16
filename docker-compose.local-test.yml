@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:15
+    networks: [local]
+    environment:
+      POSTGRES_DB: vi_local_test
+      POSTGRES_USER: vi_local_test
+      POSTGRES_PASSWORD: local-test-not-a-secret
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U vi_local_test -d vi_local_test]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    networks: [local]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  dashboard:
+    image: vi-dashboard:local-test
+    build: .
+    networks: [local]
+    environment:
+      DJANGO_SETTINGS_MODULE: config.local_test_settings
+      DJANGO_SECRET_KEY: local-test-not-a-secret
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: vi_local_test
+      DB_USER: vi_local_test
+      DB_PASSWORD: local-test-not-a-secret
+      REDIS_URL: redis://redis:6379/1
+      AWS_EC2_METADATA_DISABLED: "true"
+      VI_TEST_POSTGRES_HOST: db
+      VI_TEST_POSTGRES_USER: vi_local_test
+      PGPASSWORD: local-test-not-a-secret
+      GROQ_API_KEY: ""
+      ALLOWED_HOSTS: dashboard,localhost,127.0.0.1,testserver
+    command: [gunicorn, config.local_test_wsgi:application, --bind, "0.0.0.0:8000", --workers, "1", --timeout, "120", --access-logfile, "-"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/chat/', timeout=5)"]
+      interval: 5s
+      timeout: 8s
+      retries: 20
+  checks:
+    build:
+      context: .
+      target: local-checks
+    network_mode: none
+  browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.local-browser
+    networks: [local]
+    init: true
+    shm_size: 512mb
+networks:
+  local:
+    internal: true
