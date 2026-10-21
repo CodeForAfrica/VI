@@ -30,6 +30,19 @@ return HTTP 404; the existing overview filters and `/articles/` search remain.
 
 ### Local dashboard verification — one command
 
+Dashboard chat and report summaries use OpenRouter model
+`meta-llama/llama-4-scout`, configurable via `OPENROUTER_MODEL`. Set
+`OPENROUTER_API_KEY` in the dashboard runtime secret/config before deployment;
+the key is never built into an image. There is no dashboard fallback to Groq.
+The legacy Dokku host reads its key from encrypted SSM parameter
+`/vi/dashboard/openrouter-api-key`; configure `OPENROUTER_API_KEY` and
+`OPENROUTER_MODEL` without restarting before the GitHub dashboard release. Retain
+the previous image and Groq configuration during the rollback window. No key is
+stored in GitHub build inputs or release artifacts.
+The separate Lambda's existing Groq arbitration and local model inference are
+unchanged by this dashboard-only migration. Local verification uses controlled
+OpenRouter responses unless explicitly given an OpenRouter key below.
+
 ```bash
 make run-local-dashboard
 ```
@@ -62,7 +75,7 @@ This is a **verification run**, not a persistent development server. It:
    results; starts Redis and the actual Gunicorn dashboard. First boots the
    uninstrumented production `config.wsgi:application` and requests `/chat/`
    to exercise production imports, URL loading and template rendering. A dummy
-   non-secret key permits Groq SDK construction; no provider calls are made by
+   non-secret key permits OpenRouter SDK construction; no provider calls are made by
    that startup smoke. Then starts the instrumented browser-test server.
 5. Uses Chromium to exercise ten routes in both languages, language switching,
    filters, real Plotly charts, article rendering, CSRF-protected chat and PDF
@@ -71,7 +84,7 @@ This is a **verification run**, not a persistent development server. It:
 
 By default the stack has no published ports, production data, mounted
 credentials or external runtime network access. Test-only WSGI wiring supplies
-controlled Amazon Translate/Groq responses. Provider contract/failure tests are
+controlled Amazon Translate/OpenRouter responses. Provider contract/failure tests are
 included. Ordinary production WSGI is unchanged.
 
 #### Same release gate locally and on GitHub
@@ -80,7 +93,7 @@ included. Ordinary production WSGI is unchanged.
 make run-local-dashboard
 ```
 
-No live AWS/Groq calls or credentials are required for release checks. Both
+No live AWS/OpenRouter calls or credentials are required for release checks. Both
 locally and in GitHub, the required gate checks installed dependency pins,
 dependency consistency, vulnerabilities, catalogue validation, the full suite,
 production WSGI startup and EN/FR browser/PDF functionality using controlled
@@ -96,7 +109,7 @@ leave a passing receipt. Local uncommitted changes can be tested, but **cannot b
 published**; checks must run again from the final clean commit on GitHub.
 
 `deploy_dashboard_to_prod` invokes `scripts/test-local.sh`, the same script that
-`make run-local-dashboard` invokes, with `AWS_PROFILE=` and `GROQ_API_KEY=`.
+`make run-local-dashboard` invokes, with `AWS_PROFILE=` and `OPENROUTER_API_KEY=`.
 Registry login happens first solely to enable build-cache access; release-image
 publishing still happens only after all checks pass. Invoking the script directly avoids requiring Make on CFA runners
 while running identical checks. Empty provider variables prevent inherited runner credentials
@@ -108,7 +121,7 @@ other-run receipts block promotion. Receipt/scan evidence is retained for three
 days; it contains package metadata, not provider credentials.
 
 Existing `CFA_RUNNER_LABELS` and Dokku/Docker Hub deployment secrets remain
-required. No extra AWS role, OIDC permission, Groq secret variable or AWS CLI is
+required. No extra AWS role, OIDC permission, OpenRouter secret variable or AWS CLI is
 required by the workflow. Runner requires Bash, Git, Python 3, gzip and Docker
 Compose v2. The workflow explicitly sets up Compose v5.1.4 (the locally tested
 version) inside the job's isolated Docker configuration, with binary caching
@@ -142,14 +155,14 @@ repository, not release tags. It needs Buildx's `docker-container` driver with l
 image loading (`default-load=true`); CI configures this automatically. Do not point
 it at an untrusted/public cache if your source is private. No provider credentials
 are passed to Docker builds or cache exports.
-The required gate incurs no AWS/Groq call charges or rate-limit cooldown. Concurrency stays
+The required gate incurs no AWS/OpenRouter call charges or rate-limit cooldown. Concurrency stays
 serialized with `cancel-in-progress: false` to avoid interrupting a Dokku release.
 Disable the main `push` trigger to make releases manual-only. No production change
 is made by the local command; deployment/rollback remain the existing Dokku path.
 
-#### Optional live Amazon Translate and Groq checks
+#### Optional live Amazon Translate and OpenRouter checks
 
-Supplying `AWS_PROFILE` and/or `GROQ_API_KEY` automatically opts the selected
+Supplying `AWS_PROFILE` and/or `OPENROUTER_API_KEY` automatically opts the selected
 provider into **live calls using synthetic local articles only**. These calls
 can incur charges. Providers without credentials remain controlled and are
 explicitly labelled; a controlled provider is never reported as verified live.
@@ -158,12 +171,12 @@ explicitly labelled; a controlled provider is never reported as verified live.
 # Use your own configured AWS profile (AWS CLI v2 required on the host).
 make run-local-dashboard AWS_PROFILE=hannah AWS_REGION=eu-west-1
 
-# zsh/bash: enter your Groq key without putting its value in shell history.
-read -r -s GROQ_API_KEY
-export GROQ_API_KEY
+# zsh/bash: enter your OpenRouter key without putting its value in shell history.
+read -r -s OPENROUTER_API_KEY
+export OPENROUTER_API_KEY
 make run-local-dashboard
 
-# Both live together, using the exported Groq key and selected AWS profile.
+# Both live together, using the exported OpenRouter key and selected AWS profile.
 make run-local-dashboard AWS_PROFILE=hannah AWS_REGION=eu-west-1
 ```
 
@@ -175,7 +188,7 @@ needs `translate:TranslateText` and `comprehend:DetectDominantLanguage` in the
 chosen region. The region defaults explicitly to `eu-west-1` (set `AWS_REGION`
 to change it; the profile's implicit region is not used).
 
-The Groq key is also passed as a temporary file, not a Docker build argument or
+The OpenRouter key is also passed as a temporary file, not a Docker build argument or
 container environment entry. Only the running dashboard receives the secret
 mounts and runtime egress; the automated suite still runs offline without keys.
 The host secret files live in a private temporary directory and are removed on
@@ -186,22 +199,20 @@ The live run exercises actual display translation, AI-backed chat, four article
 summaries and the overall analysis for each language's PDF. It checks successful
 provider call counts and fails on any provider error or empty answer, even if
 the application returns HTTP 200 with fallback content. Logs show each provider's
-live/controlled mode and success/failure counts, never credentials. Groq calls
-use the application's existing models, with bounded timeouts and no SDK retries.
+live/controlled mode and success/failure counts, never credentials. OpenRouter calls
+use the configured OpenRouter model, with bounded timeouts and no automatic retries.
 Model accuracy, semantic translation quality and ML inference are not assessed
 by this dashboard-only command.
 
-With live Groq enabled, the browser run waits 75 seconds between the English
-and French flows, logging progress every 25 seconds. This avoids bursting both
-languages' AI requests into one minute's quota. It does not retry failed calls:
-shared-account traffic or exhausted quotas can still return HTTP 429 and fail
-the run. Controlled-provider runs do not wait.
+There is no fixed delay between the English and French flows. Shared-account
+traffic or exhausted OpenRouter quotas can return HTTP 429 and fail the run;
+failed calls are not retried or accepted as successful fallback answers.
 
 To force the credential-free run when your terminal already exports provider
 credentials:
 
 ```bash
-make run-local-dashboard AWS_PROFILE= GROQ_API_KEY=
+make run-local-dashboard AWS_PROFILE= OPENROUTER_API_KEY=
 ```
 
 Each stage logs progress. Failure exits non-zero with the stage and service

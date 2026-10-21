@@ -14,7 +14,7 @@ from dashboard.models import MediaNarrative
 
 @override_settings(
     ROOT_URLCONF="dashboard.urls",
-    GROQ_API_KEY="test-only-not-a-credential",
+    OPENROUTER_API_KEY="test-only-not-a-credential",
     LANGUAGE_CODE="en",
     LANGUAGES=[("en", "English"), ("fr", "Français")],
     LOCALE_PATHS=[Path(__file__).parent / "locale"],
@@ -172,7 +172,7 @@ class BilingualDashboardTests(TestCase):
     def test_report_accepts_canonical_choices_in_both_languages(self):
         completion = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="Sample report analysis."))])
         for language in ("en", "fr"):
-            with self.subTest(language=language), mock.patch("groq.Groq") as provider:
+            with self.subTest(language=language), mock.patch("dashboard.views.OpenRouterClient") as provider:
                 provider.return_value.chat.completions.create.return_value = completion
                 response = self.client_for(language).get("/generate-report/", {"country": "Ethiopia", "actors": "China"})
                 self.assertEqual(response.status_code, 200)

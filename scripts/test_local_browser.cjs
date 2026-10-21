@@ -6,17 +6,17 @@ const routes = ['/', '/vulnerability-index/', '/dashboard/', '/vi/', '/authors/'
   '/outlets/', '/countries/', '/articles/', '/generate-report/', '/chat/'];
 const expectedModes = {
   aws_translate: process.env.VI_LOCAL_AWS_LIVE === '1' ? 'live' : 'controlled',
-  groq: process.env.VI_LOCAL_GROQ_LIVE === '1' ? 'live' : 'controlled',
+  openrouter: process.env.VI_LOCAL_OPENROUTER_LIVE === '1' ? 'live' : 'controlled',
 };
 
-async function verifyProviders(context, stage, requireGroq = false) {
+async function verifyProviders(context, stage, requireOpenRouter = false) {
   const response = await context.request.get(base + '/__local_test__/providers');
   assert.equal(response.status(), 200, 'Local provider instrumentation missing');
   const providers = await response.json();
   for (const [name, expectedMode] of Object.entries(expectedModes)) {
     assert.equal(providers[name].mode, expectedMode, `${name}: incorrect provider mode`);
     assert.equal(providers[name].failed, 0, `${stage}: ${name} failed; the app may have returned fallback content. Check credentials/permissions, region/model, quota and service logs.`);
-    if (name === 'aws_translate' || requireGroq) assert.ok(providers[name].succeeded > 0, `${stage}: ${name} was never called`);
+    if (name === 'aws_translate' || requireOpenRouter) assert.ok(providers[name].succeeded > 0, `${stage}: ${name} was never called`);
   }
   return providers;
 }
@@ -96,17 +96,9 @@ async function run() {
       assert.equal(pdf.headers()['content-type'], 'application/pdf');
       assert.ok((await pdf.body()).subarray(0, 4).equals(Buffer.from('%PDF')));
       const afterPdf = await verifyProviders(context, 'PDF AI summaries and analysis', true);
-      assert.equal(afterPdf.groq.succeeded - beforePdf.groq.succeeded, 5, 'PDF must complete four article summaries and one analysis, not fallback text');
+      assert.equal(afterPdf.openrouter.succeeded - beforePdf.openrouter.succeeded, 5, 'PDF must complete four article summaries and one analysis, not fallback text');
       console.log(`[run-local-dashboard] PASS ${language}: 10 routes, language POST, preserved filters, real Plotly chart, articles, chat/CSRF, PDF (${(await pdf.body()).length} bytes).`);
-      if (language === 'en' && expectedModes.groq === 'live') {
-        // Separate each language's six real AI calls into minute-sized quota
-        // windows; never hide provider errors by retrying or accepting fallbacks.
-        for (let remaining = 75; remaining > 0; remaining -= 25) {
-          console.log(`[run-local-dashboard] Groq quota cooldown before French checks: ${remaining}s remaining.`);
-          await new Promise(resolve => setTimeout(resolve, 25000));
-        }
-        console.log('[run-local-dashboard] Groq quota cooldown finished; starting French checks.');
-      }
+
     }
     assert.deepEqual(errors, [], `Browser JavaScript errors: ${errors.join('; ')}`);
     const providers = await verifyProviders(context, 'final verification', true);

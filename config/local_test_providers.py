@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 
 class ProviderTracker:
-    def __init__(self, aws_live=False, groq_live=False):
+    def __init__(self, aws_live=False, openrouter_live=False):
         self.lock = Lock()
         self.providers = {name: {"mode": "live" if live else "controlled", "succeeded": 0, "failed": 0}
-                          for name, live in (("aws_translate", aws_live), ("groq", groq_live))}
+                          for name, live in (("aws_translate", aws_live), ("openrouter", openrouter_live))}
 
     def call(self, provider, operation, validate):
         try:
@@ -33,7 +33,7 @@ class ControlledTranslate:
         return {"TranslatedText": kwargs["Text"]}
 
 
-class ControlledGroq:
+class ControlledOpenRouter:
     def __init__(self, **kwargs):
         self.chat = SimpleNamespace(completions=self)
 
@@ -54,11 +54,11 @@ class TrackedTranslate:
         return self.tracker.call("aws_translate", lambda: self.client.translate_text(**kwargs), validate)
 
 
-class TrackedGroq:
+class TrackedOpenRouter:
     def __init__(self, client, tracker, clean_answer):
         self.client, self.tracker, self.clean_answer = client, tracker, clean_answer
         self.chat = SimpleNamespace(completions=self)
 
     def create(self, **kwargs):
-        return self.tracker.call("groq", lambda: self.client.chat.completions.create(**kwargs),
+        return self.tracker.call("openrouter", lambda: self.client.chat.completions.create(**kwargs),
                                  lambda result: self.clean_answer(result.choices[0].message.content))

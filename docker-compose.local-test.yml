@@ -41,7 +41,7 @@ services:
       VI_TEST_POSTGRES_HOST: db
       VI_TEST_POSTGRES_USER: vi_local_test
       PGPASSWORD: local-test-not-a-secret
-      GROQ_API_KEY: ""
+      OPENROUTER_API_KEY: ""
       ALLOWED_HOSTS: dashboard,localhost,127.0.0.1,testserver
     command: [gunicorn, config.local_test_wsgi:application, --bind, "0.0.0.0:8000", --workers, "1", --timeout, "120", --access-logfile, "-"]
     healthcheck:

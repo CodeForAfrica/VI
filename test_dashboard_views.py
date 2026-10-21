@@ -16,7 +16,7 @@ from pypdf.generic import ContentStream
 
 
 @override_settings(
-    GROQ_API_KEY="test-only-not-a-credential",
+    OPENROUTER_API_KEY="test-only-not-a-credential",
     AWS_REGION_NAME="eu-west-1",
     TEMPLATES=[{"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}],
 )
@@ -31,8 +31,8 @@ class DashboardViewTests(TestCase):
             with self.subTest(method=method):
                 self.assertTrue(callable(getattr(self.views.DisinfoAnalysisChatbot, method, None)))
 
-    @override_settings(GROQ_MODEL="configured-test-model", ROOT_URLCONF="dashboard.urls")
-    def test_chat_and_pdf_use_the_configured_groq_model(self):
+    @override_settings(OPENROUTER_MODEL="configured-test-model", ROOT_URLCONF="dashboard.urls")
+    def test_chat_and_pdf_use_the_configured_openrouter_model(self):
         from dashboard.models import MediaNarrative
         from django.utils import timezone
         MediaNarrative.objects.create(
@@ -40,7 +40,7 @@ class DashboardViewTests(TestCase):
             target_country="Ethiopia", inferred_actor="China", strategic_intent="Economic",
             tone="Factual", confidence=0.8, posting_time=timezone.now(),
         )
-        with mock.patch("groq.Groq") as provider:
+        with mock.patch("dashboard.views.OpenRouterClient") as provider:
             provider.return_value.chat.completions.create.return_value = SimpleNamespace(
                 choices=[SimpleNamespace(message=SimpleNamespace(content="Sample analysis."))])
             chatbot = self.views.DisinfoAnalysisChatbot()
@@ -175,7 +175,7 @@ class DashboardViewTests(TestCase):
 
     @override_settings(ROOT_URLCONF="dashboard.urls")
     def test_report_handles_empty_results_without_calling_ai(self):
-        with mock.patch("groq.Groq") as client:
+        with mock.patch("dashboard.views.OpenRouterClient") as client:
             for params in ({"country": "Ethiopia", "actors": "China"}, {"country": "Unknown", "actors": "Unknown"}):
                 with self.subTest(params=params):
                     response = self.client.get("/generate-report/", params)
@@ -275,7 +275,7 @@ class DashboardViewTests(TestCase):
         def completion(content):
             return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
         long_analysis = "Trade cooperation supports economic development and regional road links. " * 40 + "END OF ANALYSIS"
-        with mock.patch("groq.Groq") as client:
+        with mock.patch("dashboard.views.OpenRouterClient") as client:
             client.return_value.chat.completions.create.side_effect = [
                 completion("<think>Private reasoning.</think>Sample summary.") for _ in range(4)
             ] + [completion("<think>Private reasoning.</think>" + long_analysis)]

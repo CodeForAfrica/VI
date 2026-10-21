@@ -37,7 +37,7 @@ cleanup() {
     rm -f "${results_directory}/passed.json"
   fi
   if [[ -n "${credentials_directory}" ]]; then
-    rm -f "${credentials_directory}/aws.json" "${credentials_directory}/groq.key"
+    rm -f "${credentials_directory}/aws.json" "${credentials_directory}/openrouter.key"
     rmdir "${credentials_directory}"
     log "Temporary provider credentials removed."
   fi
@@ -70,8 +70,8 @@ mkdir "${results_directory}/running" || fail "Another dashboard check started; w
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-export VI_LOCAL_AWS_LIVE=0 VI_LOCAL_GROQ_LIVE=0
-if [[ -n "${AWS_PROFILE:-}" || -n "${GROQ_API_KEY:-}" ]]; then
+export VI_LOCAL_AWS_LIVE=0 VI_LOCAL_OPENROUTER_LIVE=0
+if [[ -n "${AWS_PROFILE:-}" || -n "${OPENROUTER_API_KEY:-}" ]]; then
   live_mode=true
   stage="preparing explicitly selected live provider credentials"
   log "Live provider checks selected: synthetic text only; provider charges may apply. Database remains disposable/local."
@@ -79,7 +79,7 @@ if [[ -n "${AWS_PROFILE:-}" || -n "${GROQ_API_KEY:-}" ]]; then
   credentials_directory="$(mktemp -d "${TMPDIR:-/tmp}/vi-local-provider-credentials.XXXXXX")"
   export VI_LOCAL_CREDENTIALS_DIR="${credentials_directory}"
   printf '{}\n' > "${credentials_directory}/aws.json"
-  printf '%s' "${GROQ_API_KEY:-}" > "${credentials_directory}/groq.key"
+  printf '%s' "${OPENROUTER_API_KEY:-}" > "${credentials_directory}/openrouter.key"
   if [[ -n "${AWS_PROFILE:-}" ]]; then
     command -v aws >/dev/null 2>&1 || fail "AWS_PROFILE was supplied, but AWS CLI is missing. Install AWS CLI v2 and authenticate that profile."
     log "Resolving the selected AWS profile on this PC (no credential values are logged)."
@@ -89,17 +89,17 @@ if [[ -n "${AWS_PROFILE:-}" || -n "${GROQ_API_KEY:-}" ]]; then
     export VI_LOCAL_AWS_LIVE=1
     log "AWS profile credentials resolved; Amazon Translate will use region ${AWS_REGION:-eu-west-1}."
   fi
-  if [[ -n "${GROQ_API_KEY:-}" ]]; then
-    export VI_LOCAL_GROQ_LIVE=1
-    log "Groq key supplied: chat and PDF analysis must succeed against Groq, not fallback text."
+  if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+    export VI_LOCAL_OPENROUTER_LIVE=1
+    log "OpenRouter key supplied: chat and PDF analysis must succeed against OpenRouter, not fallback text."
   fi
   # The containing directory stays 0700 on the host. Files are read-only
   # mounted as Compose secrets so the non-root app can read them in Docker.
-  chmod 0644 "${credentials_directory}/aws.json" "${credentials_directory}/groq.key"
+  chmod 0644 "${credentials_directory}/aws.json" "${credentials_directory}/openrouter.key"
   compose_files+=(-f "${REPO_ROOT}/docker-compose.local-test.live.yml")
   compose config --quiet || fail "The live-provider Compose configuration is invalid."
 else
-  log "No provider credentials supplied: AWS Translate/Groq use controlled responses; runtime egress is disabled."
+  log "No provider credentials supplied: AWS Translate/OpenRouter use controlled responses; runtime egress is disabled."
 fi
 if [[ -n "${VI_BUILD_CACHE_REPOSITORY:-}" ]]; then
   [[ "${VI_BUILD_CACHE_REPOSITORY}" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$ ]] \
@@ -157,7 +157,7 @@ log "PASS: English/French browser checks and PDF generation."
 if [[ "${live_mode}" == true ]]; then
   log "Provider modes and successful/failed call counts are reported above; supplied providers were verified live. Omitted providers stayed controlled."
 else
-  log "NOT RUN: Live Amazon Translate/Groq. Provider contracts/failures are tested with controlled responses."
+  log "NOT RUN: Live Amazon Translate/OpenRouter. Provider contracts/failures are tested with controlled responses."
 fi
 log "LOCAL APPLICATION CHECKS PASSED. Nothing deployed; ML inference/model accuracy are outside this dashboard-only run."
 log "RELEASE CHECKS PASSED: live provider checks are optional. Publishing still requires a clean committed checkout and this exact checked image."

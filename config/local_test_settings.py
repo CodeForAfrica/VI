@@ -3,5 +3,5 @@ import os
 from .settings import *  # noqa: F403
 
 ROOT_URLCONF = "config.local_test_urls"
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 DEBUG = False

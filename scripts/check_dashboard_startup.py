@@ -29,7 +29,7 @@ def main():
     # A syntactically present, non-secret key allows SDK construction only.
     # Internal-only networking prevents this smoke test contacting providers.
     environment = dict(os.environ, DJANGO_SETTINGS_MODULE="config.settings",
-                       GROQ_API_KEY="local-startup-test-not-a-credential")
+                       OPENROUTER_API_KEY="local-startup-test-not-a-credential")
     process = subprocess.Popen([
         "gunicorn", "config.wsgi:application", "--bind", "127.0.0.1:8765",
         "--workers", "1", "--timeout", "30", "--access-logfile", "-",

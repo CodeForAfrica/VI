@@ -180,3 +180,7 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+
+# Dashboard AI; Groq settings above remain exclusive to legacy Lambda arbitration.
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-4-scout")

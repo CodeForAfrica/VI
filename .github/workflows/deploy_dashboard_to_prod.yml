@@ -103,8 +103,8 @@ jobs:
           VI_BUILD_CACHE_REPOSITORY: ${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
-          echo '[dashboard] Running dependency, production startup, vulnerability, full-suite and browser checks with controlled external providers; no AWS/Groq credentials required.'
-          AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh
+          echo '[dashboard] Running dependency, production startup, vulnerability, full-suite and browser checks with controlled external providers; no AWS/OpenRouter credentials required.'
+          GROQ_API_KEY='' AWS_PROFILE='' OPENROUTER_API_KEY='' ./scripts/test-local.sh
           echo '[dashboard] OK - all shared local release checks passed.'
 
       - name: Publish only the checked image and verify registry digest
@@ -127,7 +127,7 @@ jobs:
               receipt = Path('.dashboard-check/passed.json')
               if receipt.exists():
                   data = json.loads(receipt.read_text())
-                  summary.write(f"Checked image: `{data['image_id']}`\n\nCommit: `{data['commit']}`\n\nLive AWS/Groq: {data['aws_live']}/{data['groq_live']}\n\nVulnerabilities: `{data['vulnerabilities']}`\n")
+                  summary.write(f"Checked image: `{data['image_id']}`\n\nCommit: `{data['commit']}`\n\nLive AWS/OpenRouter: {data['aws_live']}/{data['openrouter_live']}\n\nVulnerabilities: `{data['vulnerabilities']}`\n")
               else:
                   summary.write('No passing receipt: checks failed or did not finish; deployment blocked.\n')
           PY

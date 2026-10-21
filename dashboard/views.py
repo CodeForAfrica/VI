@@ -51,7 +51,7 @@ from datetime import datetime
 from io import BytesIO
 from math import isfinite
 from botocore.exceptions import ClientError, NoCredentialsError
-from groq import Groq
+from dashboard.openrouter import OpenRouterClient
 from xhtml2pdf import pisa
 
 from django.shortcuts import render
@@ -197,8 +197,8 @@ def clean_ai_response(content):
 
 class DisinfoAnalysisChatbot:
     def __init__(self):
-        self.client = Groq(api_key=settings.GROQ_API_KEY)
-        self.model = settings.GROQ_MODEL
+        self.client = OpenRouterClient(api_key=settings.OPENROUTER_API_KEY)
+        self.model = settings.OPENROUTER_MODEL
         self.country_mapping = {
             "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire",
             "ivory coast": "Côte d'Ivoire", "south africa": "South Africa",
@@ -1570,13 +1570,8 @@ def generate_report(request):
             strategic_intent__in=['', None, 'Unknown', 'unknown']
         ).order_by('-posting_time')[:4]
 
-        # Import Groq inside the try block to handle potential import errors gracefully
-        from groq import Groq
-        groq_api_key = os.environ.get('GROQ_API_KEY') # Prefer environment variable
-        if not groq_api_key:
-            # Fallback to Django settings if environment variable is not set
-            groq_api_key = getattr(settings, 'GROQ_API_KEY', None)
-        client = Groq(api_key=groq_api_key, timeout=20.0) if groq_api_key else None
+        openrouter_api_key = settings.OPENROUTER_API_KEY
+        client = OpenRouterClient(api_key=openrouter_api_key, timeout=20.0) if openrouter_api_key else None
 
         # ---: INDIVIDUAL AI SUMMARIES FOR EACH NARRATIVE ---
         for article in display_articles:
@@ -1588,7 +1583,7 @@ def generate_report(request):
                     sum_prompt = f"Summarize this news article in 2 concise sentences for a risk report: {article.article_text[:1500]}"
                     sum_response = client.chat.completions.create(
                         messages=[{"role": "user", "content": sum_prompt}],
-                        model=settings.GROQ_MODEL,
+                        model=settings.OPENROUTER_MODEL,
                         max_tokens=1024
                     )
                     ai_summary = clean_ai_response(sum_response.choices[0].message.content)
@@ -1641,7 +1636,7 @@ def generate_report(request):
             try:
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": insight_prompt}],
-                    model=settings.GROQ_MODEL
+                    model=settings.OPENROUTER_MODEL
                 )
                 ai_insights = clean_ai_response(chat_completion.choices[0].message.content)
             except Exception as e_insight:
@@ -1649,15 +1644,15 @@ def generate_report(request):
                  ai_insights = f"AI analysis could not be completed. (Error: {str(e_insight)[:50]})" # Short error message
         else:
              if not client:
-                 logger.warning("Groq client not initialized for AI insights.")
+                 logger.warning("OpenRouter client not initialized for AI insights.")
                  ai_insights = "AI analysis skipped: API key not configured."
              elif not all_text_context.strip():
                  logger.info("Insufficient text context for AI analysis.")
                  ai_insights = "Insufficient data for AI analysis."
 
     except ImportError:
-        logger.error("Groq library not found.")
-        ai_insights = "AI analysis skipped: Groq library not installed."
+        logger.error("OpenRouter client not found.")
+        ai_insights = "AI analysis skipped: OpenRouter client not installed."
     except Exception as e:
         logger.error(f"Narrative/AI processing error: {str(e)}")
         ai_insights = f"Narrative and AI analysis could not be completed. (Error: {str(e)[:50]})" # Short error message

@@ -16,6 +16,7 @@ export VI_INFERENCE_API_URL
 export AWS_PROFILE
 export AWS_REGION
 export GROQ_API_KEY
+export OPENROUTER_API_KEY
 
 .PHONY: build push build-test test test-api test-lambda test-split-e2e run-local-dashboard run-local-dashboard-with-lambda-remote-inference run-local-dashboard-with-lambda-local-inference help smoke-api results reset verify db down clean-test
 
@@ -32,7 +33,7 @@ run-local-dashboard-with-lambda-local-inference:
 help:
 	@printf '%s\n' \
 	  'make run-local-dashboard                            Dashboard build, French catalogue, full tests and browser/PDF checks; no models.' \
-	  '  Optional AWS_PROFILE=<profile> and/or exported GROQ_API_KEY enable live provider checks; AWS_REGION defaults to eu-west-1.' \
+	  '  Optional AWS_PROFILE=<profile> and/or exported OPENROUTER_API_KEY enable live provider checks; AWS_REGION defaults to eu-west-1.' \
 	  '  GitHub runs this same gate with controlled providers; live provider credentials are optional, never a release requirement.' \
 	  'make run-local-dashboard-with-lambda-remote-inference Dashboard + Lambda locally; deployed HTTPS inference; requires VI_INFERENCE_API_KEY.' \
 	  'make run-local-dashboard-with-lambda-local-inference  Entire stack locally; Git LFS models (~13 GB) and >=20 GB Docker memory.' \

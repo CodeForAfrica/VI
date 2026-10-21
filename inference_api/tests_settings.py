@@ -21,3 +21,5 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memor
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 GROQ_MODEL = "qwen/qwen3.8-27b"
+OPENROUTER_API_KEY = ""
+OPENROUTER_MODEL = "meta-llama/llama-4-scout"

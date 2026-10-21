@@ -68,7 +68,7 @@ def write_receipt(directory, image):
         "commit": command("git", "rev-parse", "HEAD"),
         "dirty": bool(command("git", "status", "--porcelain", "--untracked-files=all")),
         "aws_live": os.environ.get("VI_LOCAL_AWS_LIVE") == "1",
-        "groq_live": os.environ.get("VI_LOCAL_GROQ_LIVE") == "1",
+        "openrouter_live": os.environ.get("VI_LOCAL_OPENROUTER_LIVE") == "1",
         "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
         "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "local"),
         "created": datetime.now(timezone.utc).isoformat(), "vulnerabilities": counts,

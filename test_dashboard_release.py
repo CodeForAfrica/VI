@@ -48,7 +48,7 @@ class ReleasePolicyTests(unittest.TestCase):
         report_bytes = json.dumps(self.report).encode()
         (directory / "security.json").write_bytes(report_bytes)
         data = {"schema": 2, "checks": REQUIRED_CHECKS, "image_id": self.image["Id"], "identity": identity(self.image),
-                "commit": "commit", "dirty": False, "aws_live": False, "groq_live": False,
+                "commit": "commit", "dirty": False, "aws_live": False, "openrouter_live": False,
                 "run_id": "local", "run_attempt": "local", "created": datetime.now(timezone.utc).isoformat(),
                 "security_sha256": hashlib.sha256(report_bytes).hexdigest()}
         (directory / "passed.json").write_text(json.dumps(data))
@@ -96,7 +96,7 @@ class ReleasePolicyTests(unittest.TestCase):
 
     def test_workflow_caches_builds_but_checks_before_promoting_without_rebuild(self):
         workflow = Path('.github/workflows/deploy_dashboard_to_prod.yml').read_text()
-        self.assertIn("AWS_PROFILE='' GROQ_API_KEY='' ./scripts/test-local.sh", workflow)
+        self.assertIn("AWS_PROFILE='' OPENROUTER_API_KEY='' ./scripts/test-local.sh", workflow)
         self.assertLess(workflow.index('Authenticate to Docker Hub for build-cache access'), workflow.index('Run the same local release checks'))
         self.assertLess(workflow.index('Run the same local release checks'), workflow.index('Publish only the checked image'))
         self.assertIn('VI_BUILD_CACHE_REPOSITORY: ${{ env.IMAGE_NAME }}', workflow)
@@ -106,7 +106,7 @@ class ReleasePolicyTests(unittest.TestCase):
         self.assertIn('version: v5.1.4', workflow)
         self.assertIn('dashboard_release.py publish', workflow)
         self.assertIn('IMAGE_NAME@$BUILT_DIGEST', workflow)
-        for unwanted in ('VI_DASHBOARD_TEST_ROLE_ARN', 'VI_DASHBOARD_TEST_GROQ_SECRET_ID',
+        for unwanted in ('VI_DASHBOARD_TEST_ROLE_ARN', 'VI_DASHBOARD_TEST_OPENROUTER_SECRET_ID',
                          'configure-aws-credentials', 'id-token: write', 'secretsmanager'):
             self.assertNotIn(unwanted, workflow)
 
@@ -159,7 +159,7 @@ exit 99
         environment = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", TMPDIR=str(root),
                            AWS_PROFILE='', AWS_ACCESS_KEY_ID='fake-access',
                            AWS_SECRET_ACCESS_KEY='fake-private-secret', AWS_SESSION_TOKEN='fake-session',
-                           GROQ_API_KEY='', VI_BUILD_CACHE_REPOSITORY=cache_repository)
+                           OPENROUTER_API_KEY='', VI_BUILD_CACHE_REPOSITORY=cache_repository)
         return subprocess.run(['bash', 'scripts/test-local.sh'], env=environment, cwd=root,
                               capture_output=True, text=True, timeout=10)
 
@@ -173,7 +173,7 @@ exit 99
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('controlled responses; runtime egress is disabled', result.stdout)
             self.assertIn('deliberate build failure', result.stderr)
-            for secret in ('fake-private-secret', 'fake-private-groq', 'fake-session', 'fake-access'):
+            for secret in ('fake-private-secret', 'fake-private-openrouter', 'fake-session', 'fake-access'):
                 self.assertNotIn(secret, result.stdout + result.stderr)
             self.assertFalse(list(root.glob('vi-local-provider-credentials.*')))
             self.assertFalse((root / '.dashboard-check/running').exists())
