@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 from sklearn.preprocessing import LabelEncoder
 import joblib
-from dashboard.services.calibrators import ProbabilitiesEstimator
+from dashboard.services.calibrators import ProbabilitiesEstimator, load_calibrator_pickle
 import logging
 # Import PEFT and safetensors if PEFT models are used
 from peft import PeftModel, PeftConfig
@@ -169,8 +169,8 @@ class VennAbersCalibrator:
                  ToneProbabilitiesEstimator = globals()['ToneProbabilitiesEstimator']
                  current_module.__dict__['ProbabilitiesEstimator'] = ToneProbabilitiesEstimator
 
-        with open(load_path, 'rb') as f:
-            obj = pickle.load(f) # Now pickle should find ProbabilitiesEstimator
+        # Maps notebook classes (__main__.ProbabilitiesEstimator) to the repo's.
+        obj = load_calibrator_pickle(load_path)
         # save() writes the bare VennAbersMultiClass, but a file written by a
         # wrapper (this class or calibrators.VennAbersStrategicCalibrator)
         # holds the fitted object in .va_multi. Accept both.

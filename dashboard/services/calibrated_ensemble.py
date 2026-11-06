@@ -126,11 +126,22 @@ class CalibratedStrategicClassifier:
 
     def predict(self, texts, batch_size=1, calibrated=True, return_probs=False):
         """Make predictions with optional calibration"""
+        use_calibration = calibrated and getattr(self.calibrator, 'calibrated', False)
+
+        # Temperature scaling works on the ensemble's averaged logits.
+        if use_calibration and getattr(self.calibrator, 'uses_logits', False):
+            logits = self.ensemble.predict(texts, batch_size=batch_size, return_logits=True)
+            probabilities = self.calibrator.calibrate_logits(logits)
+            predictions = np.argmax(probabilities, axis=1)
+            if return_probs:
+                return predictions, probabilities
+            return predictions
+
         predictions, probabilities = self.ensemble.predict(
             texts, batch_size=batch_size
         )
 
-        if calibrated and getattr(self.calibrator, 'calibrated', False):
+        if use_calibration:
             calibrated_probs = self.calibrator.calibrate(probabilities)
             predictions = np.argmax(calibrated_probs, axis=1)
             probabilities = calibrated_probs # Update probabilities to calibrated ones

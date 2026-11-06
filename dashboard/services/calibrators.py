@@ -19,6 +19,77 @@ class ProbabilitiesEstimator:
         return np.argmax(X, axis=1)
 
 
+def _softmax(x, axis=-1):
+    x = np.asarray(x, dtype=np.float64)
+    x = x - x.max(axis=axis, keepdims=True)
+    e = np.exp(x)
+    return e / e.sum(axis=axis, keepdims=True)
+
+
+class TemperatureScalingCalibrator:
+    """Temperature scaling: softmax(logits / T).
+
+    Matches the object the fine-tuning notebook saved (attributes
+    ``temperature`` - a float or a 1-element torch Parameter - and
+    ``calibrated``). T < 1 sharpens probabilities, T > 1 softens them.
+    """
+    uses_logits = True
+
+    def __init__(self, temperature=1.0):
+        self.temperature = temperature
+        self.calibrated = True
+
+    @property
+    def temperature_value(self):
+        t = self.temperature
+        if hasattr(t, 'detach'):          # torch tensor / Parameter
+            t = t.detach().cpu().reshape(-1)[0].item()
+        t = float(t)
+        if not np.isfinite(t) or t <= 0:
+            raise ValueError(f"Invalid calibration temperature: {t}")
+        return t
+
+    def calibrate_logits(self, logits):
+        """Preferred path: scale the ensemble's averaged logits."""
+        return _softmax(np.asarray(logits) / self.temperature_value, axis=1)
+
+    def calibrate(self, probabilities):
+        """Fallback when only probabilities are available.
+
+        softmax(log(p) / T) equals softmax(logits / T) for a single model; for
+        an averaged ensemble it is a close approximation.
+        """
+        p = np.clip(np.asarray(probabilities, dtype=np.float64), 1e-12, 1.0)
+        return _softmax(np.log(p) / self.temperature_value, axis=1)
+
+
+class _RepoUnpickler(pickle.Unpickler):
+    """Load calibrators saved from a notebook.
+
+    A notebook records its own classes as ``__main__.<Name>``, which does not
+    exist in production. Map those names to the repo's equivalent classes.
+    """
+    _MAIN_ALIASES = {
+        'ProbabilitiesEstimator': ProbabilitiesEstimator,
+        'ToneProbabilitiesEstimator': ProbabilitiesEstimator,
+        'TemperatureScalingCalibrator': TemperatureScalingCalibrator,
+    }
+
+    def find_class(self, module, name):
+        if module == '__main__':
+            if name in self._MAIN_ALIASES:
+                return self._MAIN_ALIASES[name]
+            if name == 'VennAbersStrategicCalibrator':
+                return VennAbersStrategicCalibrator
+        return super().find_class(module, name)
+
+
+def load_calibrator_pickle(path):
+    """pickle.load that understands calibrators saved from a notebook."""
+    with open(path, 'rb') as f:
+        return _RepoUnpickler(f).load()
+
+
 class VennAbersStrategicCalibrator:
     """Venn-Abers calibrator for strategic intent"""
     def __init__(self):
@@ -85,7 +156,16 @@ class VennAbersStrategicCalibrator:
           * an instance of this class (older pickles)          -> returned as is
           * a dict of attributes with a 'va_multi' entry      -> rebuilt
           * a bare VennAbersMultiClass (what ``save`` writes) -> wrapped
+          * {'method': 'temperature', 'calibrator': TemperatureScalingCalibrator}
+            or a bare TemperatureScalingCalibrator            -> that object
         """
+        # Temperature scaling (saved by the fine-tuning notebook).
+        if isinstance(obj, dict) and obj.get('method') == 'temperature':
+            obj = obj.get('calibrator')
+        if isinstance(obj, TemperatureScalingCalibrator):
+            obj.temperature_value          # validates the stored temperature
+            obj.calibrated = True
+            return obj
         if isinstance(obj, cls):
             if obj.va_multi is not None:
                 obj.calibrated = True
@@ -107,7 +187,10 @@ class VennAbersStrategicCalibrator:
     @classmethod
     def load(cls, load_path):
         """Load a calibrator saved by ``save`` (or an older wrapper pickle)."""
-        with open(load_path, 'rb') as f:
-            instance = cls.from_saved(pickle.load(f))
-        print(f"✅ Venn-Abers calibrator loaded from {load_path}")
+        instance = cls.from_saved(load_calibrator_pickle(load_path))
+        if isinstance(instance, TemperatureScalingCalibrator):
+            print(f"✅ Temperature-scaling calibrator loaded from {load_path} "
+                  f"(T={instance.temperature_value:.4f})")
+        else:
+            print(f"✅ Venn-Abers calibrator loaded from {load_path}")
         return instance
