@@ -43,6 +43,7 @@ class MLInferenceService:
         from dashboard.services.tone_ensemble import ProbabilitiesEstimator
         from transformers import AutoTokenizer
         print("MLInferenceService.__init__ called")
+        self._last_llm = (None, None)
         # GPU SUPPORT
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -615,6 +616,7 @@ class MLInferenceService:
 
  # 1. Add country and actor to the arguments here
     def perform_strategic_intent_inference(self, article_text, country="Unknown", actor="Unknown"):
+        self._last_llm = (None, None)
         """
         SINGLE INFERENCE WITH LLM FALLBACK
         Includes Database Risk Score lookup based on Country and Actor.
@@ -1241,6 +1243,7 @@ class MLInferenceService:
                 'strategic_intent': 'unknown', 'confidence': 0.0,
                 'tone': 'neutral', 'tone_confidence': 0.0,
                 'prediction_source': 'empty_text',
+                'llm_strategic_intent': None, 'llm_confidence': None,
                 'vulnerability_index': 0.0,
                 'inferred_actor': 'Unknown', 'target_country': 'Unknown',
             }
