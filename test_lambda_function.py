@@ -54,7 +54,12 @@ class PipelineParityTests(unittest.TestCase):
                 with self.subTest(case=case, failure=failure):
                     local = self.service(False, *case, failure=failure)
                     remote = self.service(True, *case, failure=failure)
-                    self.assertEqual(remote.perform_inference("  Article text  "),
+                    remote_result = remote.perform_inference("  Article text  ")
+                    # model_version is added only by the remote adapter (it comes
+                    # from the API response); everything else must match exactly.
+                    self.assertIn("model_version", remote_result)
+                    remote_result.pop("model_version")
+                    self.assertEqual(remote_result,
                                      local.perform_inference("  Article text  "))
                     self.assertEqual(remote._get_llm_strategic_intent.call_args,
                                      local._get_llm_strategic_intent.call_args)
@@ -84,7 +89,10 @@ class PipelineParityTests(unittest.TestCase):
                 '{"strategic_intent":"Sovereignty","strategic_intent_conf":0.95,"notes":"test"}')
             result = service.perform_inference("Article text")
         self.assertEqual(result["strategic_intent"], "Sovereignty")
-        self.assertEqual(result["confidence"], .95)
+        self.assertEqual(result["confidence"], .95)          # intent score (LLM won)
+        self.assertEqual(result["tone_confidence"], .72)     # tone kept separate
+        self.assertEqual(result["llm_strategic_intent"], "Sovereignty")
+        self.assertEqual(result["llm_confidence"], .95)
         call = groq.return_value.chat.completions.create.call_args.kwargs
         self.assertEqual(call["messages"][1]["content"], "Article text")
         self.assertEqual(call["model"], "test-model")
@@ -389,10 +397,12 @@ class PersistenceTests(unittest.TestCase):
         c = self.connection()
         lf.save_classification(c, 3, {"strategic_intent": "Neutral", "confidence": .7, "tone": "neutral"})
         sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
-        self.assertEqual(params, (None, .7, "neutral", 3))
+        # (intent, confidence, tone, tone_confidence, prediction_source, llm_strat,
+        #  llm_strat_conf, model_version, confidence_is_intent_only, id)
+        self.assertEqual(params, (None, .7, "neutral", None, None, None, None, None, False, 3))
         self.assertIn("ml_processed_at = NOW()", sql)
         self.assertNotIn("inference_status", sql)
-        self.assertNotIn("prediction_source", sql)
+        self.assertEqual(sql.count("%s"), len(params))
 
     def test_political_destabilization_uses_existing_canonical_mapping(self):
         c = self.connection()
@@ -406,7 +416,32 @@ class PersistenceTests(unittest.TestCase):
             },
         )
         _, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
-        self.assertEqual(params, ("SocialFragility", .7, "Factual", 3))
+        self.assertEqual(params, ("SocialFragility", .7, "Factual",
+                                  None, None, None, None, None, False, 3))
+
+    def test_saved_confidence_is_intent_score_even_when_tone_is_higher(self):
+        c = self.connection()
+        lf.save_classification(c, 42, {
+            "strategic_intent": "Political Destabilization", "confidence": .41,
+            "tone": "Hostile", "tone_confidence": .93, "prediction_source": "model",
+            "llm_strategic_intent": "Sovereignty Erosion", "llm_confidence": .35,
+            "model_version": "2026-09-04",
+        })
+        sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertEqual(params, ("SocialFragility", .41, "Hostile", .93, "model",
+                                  "Sovereignty Erosion", .35, "2026-09-04", True, 42))
+        self.assertEqual(sql.count("%s"), len(params))
+        for column in ("tone_confidence", "prediction_source", "llm_strat",
+                       "llm_strat_conf", "model_version", "confidence_is_intent_only"):
+            self.assertIn(f"{column} = %s", sql)
+
+    def test_result_without_tone_confidence_is_not_flagged_intent_only(self):
+        # An unfixed perform_inference may still put max(intent, tone) in confidence.
+        c = self.connection()
+        lf.save_classification(c, 7, {"strategic_intent": "Neutral", "confidence": .9, "tone": "Factual"})
+        _, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertIsNone(params[3])      # tone_confidence
+        self.assertIs(params[8], False)   # confidence_is_intent_only
 
     def test_batch_runs_orchestration_before_saving(self):
         c = self.connection([(3, "article", None, None)])
