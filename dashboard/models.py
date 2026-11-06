@@ -84,6 +84,9 @@ class MediaNarrative(Model):
     llm_strat_id = IntegerField(blank=True, null=True)
     strategic_intent_id = IntegerField(blank=True, null=True)
     author = CharField(max_length=255, blank=True, null=True, default="Unknown")
+    tone_confidence = models.FloatField(null=True, blank=True)
+    model_version = models.CharField(max_length=50, null=True, blank=True)
+    confidence_is_intent_only = models.BooleanField(default=False, db_index=True)
     
     journalist_fk = ForeignKey('Journalist', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
     media_outlet_fk = ForeignKey('MediaOutlet', on_delete=SET_NULL, null=True, blank=True, related_name='articles')
