@@ -429,7 +429,9 @@ def _classify_pending_locked(conn, client=None, deadline=None, pipeline=None, ar
             counts["classified"] += 1
             _log("INFO", "article_classification_saved",
                  strategic_intent=result.get("strategic_intent"),
-                 tone=result.get("tone"), confidence=result.get("confidence"))
+                 tone=result.get("tone"), confidence=result.get("confidence"),
+                 tone_confidence=result.get("tone_confidence"),
+                 prediction_source=result.get("prediction_source"))
         except Exception as exc:
             conn.rollback()
             counts["failed"] += 1
