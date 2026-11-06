@@ -26,7 +26,8 @@ class RemoteInferenceService(MLInferenceService):
         started = time.monotonic()
         self.event_logger("INFO", "article_inference_started", input_characters=len(article_text))
         result = super().perform_inference(article_text)
-        self.event_logger("INFO", "article_inference_completed",
+        result['model_version'] = (self._result or {}).get('model_version')
+
                           request_id=self._request_id,
                           duration_ms=int((time.monotonic() - started) * 1000),
                           local_models_available=self._error is None,
