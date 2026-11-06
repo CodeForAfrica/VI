@@ -307,16 +307,32 @@ def fetch_pending(conn, limit, article_ids=None, pending_article_ids=None):
 
 
 def save_classification(conn, article_id, result):
-    """Match fill_missing_intents: canonical intent, confidence, tone, processed time."""
+    """Match fill_missing_intents: canonical intent, confidence, tone, processed time.
+
+    ``confidence`` is the strategic-intent score only. The tone score is stored
+    separately in ``tone_confidence`` (it used to be merged in via max()).
+    ``confidence_is_intent_only`` marks rows written under this rule so the
+    dashboard can leave out older rows whose confidence may be the tone score.
+    """
     from dashboard.utils import map_to_canonical_intent
     with conn.cursor() as cur:
         cur.execute(f"""
             UPDATE {TABLE_NAME}
             SET strategic_intent = %s, confidence = %s, tone = %s,
+                tone_confidence = %s, prediction_source = %s,
+                llm_strat = %s, llm_strat_conf = %s, model_version = %s,
+                confidence_is_intent_only = %s,
                 ml_processed_at = NOW()
             WHERE id = %s
         """, (map_to_canonical_intent(result.get("strategic_intent")),
-              result.get("confidence", 0.0), result.get("tone", "Factual"), article_id))
+              result.get("confidence", 0.0), result.get("tone", "Factual"),
+              result.get("tone_confidence"), result.get("prediction_source"),
+              result.get("llm_strategic_intent"), result.get("llm_confidence"),
+              result.get("model_version"),
+              # Only the fixed perform_inference returns tone_confidence; an
+              # older one still puts max(intent, tone) in "confidence".
+              "tone_confidence" in result,
+              article_id))
     conn.commit()
 
 
