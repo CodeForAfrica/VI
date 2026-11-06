@@ -170,7 +170,15 @@ class VennAbersCalibrator:
                  current_module.__dict__['ProbabilitiesEstimator'] = ToneProbabilitiesEstimator
 
         with open(load_path, 'rb') as f:
-            self.va_multi = pickle.load(f) # Now pickle should find ProbabilitiesEstimator
+            obj = pickle.load(f) # Now pickle should find ProbabilitiesEstimator
+        # save() writes the bare VennAbersMultiClass, but a file written by a
+        # wrapper (this class or calibrators.VennAbersStrategicCalibrator)
+        # holds the fitted object in .va_multi. Accept both.
+        if hasattr(obj, 'va_multi'):
+            obj = obj.va_multi
+        if obj is None or not hasattr(obj, 'predict_proba'):
+            raise TypeError(f"{load_path} does not contain a fitted Venn-Abers calibrator")
+        self.va_multi = obj
         self.calibrated = True
         print(f"✅ Venn-Abers calibrator loaded from {load_path}")
         return self
@@ -373,7 +381,15 @@ class CalibratedStackedEnsemble:
 
         # Load calibrator
         calibrator = VennAbersCalibrator()
-        calibrator_path = os.path.join(load_dir, 'venn_abers_calibrator.pkl')
+        # save() writes venn_abers_calibrator.pkl; the strategic ensemble uses
+        # calibrator.pkl. Previously only the first name was checked, so an
+        # archive using the second silently ran the tone model uncalibrated.
+        calibrator_names = ('venn_abers_calibrator.pkl', 'calibrator.pkl')
+        calibrator_path = next(
+            (os.path.join(load_dir, n) for n in calibrator_names
+             if os.path.exists(os.path.join(load_dir, n))),
+            os.path.join(load_dir, calibrator_names[0]),
+        )
         if os.path.exists(calibrator_path):
             logger.info(f"Loading Venn-Abers calibrator from {calibrator_path}...")
             try:
@@ -396,7 +412,9 @@ class CalibratedStackedEnsemble:
                  # raise # Uncomment if calibrator is mandatory
                  logger.warning("Continuing without Venn-Abers calibrator due to load error.")
         else:
-             logger.warning(f"Venn-Abers calibrator file {calibrator_path} not found.")
+             logger.warning(
+                 f"No tone calibrator ({' or '.join(calibrator_names)}) in {load_dir}; "
+                 f"tone probabilities will be UNCALIBRATED.")
 
         print(f"✅ Calibrated ensemble loaded from {load_dir}")
         return cls(ensemble, calibrator)

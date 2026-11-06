@@ -74,12 +74,40 @@ class VennAbersStrategicCalibrator:
                 pickle.dump(self.va_multi, f)
             print(f"✅ Venn-Abers calibrator saved to {save_path}")
     
-    @staticmethod
-    def load(load_path):
-        """Load calibrator - static method to avoid pickle import issues"""
-        instance = VennAbersStrategicCalibrator()
-        with open(load_path, 'rb') as f:
-            instance.va_multi = pickle.load(f)
+    @classmethod
+    def from_saved(cls, obj):
+        """Rebuild a calibrator from whatever a calibrator.pkl file contained.
+
+        ``save`` above writes the *bare* VennAbersMultiClass object, not this
+        wrapper. Callers check ``.calibrated`` and call ``.calibrate()``, which
+        the bare object does not have, so it must be wrapped again on load.
+        Accepted inputs:
+          * an instance of this class (older pickles)          -> returned as is
+          * a dict of attributes with a 'va_multi' entry      -> rebuilt
+          * a bare VennAbersMultiClass (what ``save`` writes) -> wrapped
+        """
+        if isinstance(obj, cls):
+            if obj.va_multi is not None:
+                obj.calibrated = True
+            return obj
+        instance = cls()
+        if isinstance(obj, dict):
+            instance.__dict__.update(obj)
+            instance.calibrated = instance.va_multi is not None
+            return instance
+        if not hasattr(obj, 'predict_proba'):
+            raise TypeError(
+                f"Calibrator file holds {type(obj).__name__}, which is neither a "
+                f"{cls.__name__} nor a fitted Venn-Abers object"
+            )
+        instance.va_multi = obj
         instance.calibrated = True
+        return instance
+
+    @classmethod
+    def load(cls, load_path):
+        """Load a calibrator saved by ``save`` (or an older wrapper pickle)."""
+        with open(load_path, 'rb') as f:
+            instance = cls.from_saved(pickle.load(f))
         print(f"✅ Venn-Abers calibrator loaded from {load_path}")
         return instance

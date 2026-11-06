@@ -8,6 +8,7 @@ import numpy as np
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 from django.conf import settings
+from django.utils import timezone
 from dashboard.models import MediaNarrative
 from dashboard.services.ml_inference_service import get_ml_service
 
@@ -178,18 +179,34 @@ class Command(BaseCommand):
         # 6. Tone inference using the service
         self.stdout.write("Running tone inference...")
         tone_classifier = ml_service._load_tone_classifier()
-        if tone_classifier:
+        have_tone = bool(tone_classifier)
+        if have_tone:
             texts = [a['article_text'] for a in articles_data]
             tone_probs = tone_classifier.predict_proba(texts, calibrated=True, batch_size=8)
             tone_pred_indices = np.argmax(tone_probs, axis=1)
             tone_labels = ml_service._tone_label_encoder.inverse_transform(tone_pred_indices)
+            tone_confidences = np.max(tone_probs, axis=1)
             for i, article in enumerate(articles_data):
                 article['tone'] = tone_labels[i]
+                # Kept separate from the intent confidence, never merged into it.
+                article['tone_confidence'] = float(tone_confidences[i])
         else:
             self.stderr.write("Tone classifier not available; tone will remain unchanged.")
 
         # 7. Bulk update database
         self.stdout.write(f"Updating database in batches of {batch_size}...")
+        # 'confidence' is the strategic-intent score only (final_conf comes from
+        # the intent decision above, never from tone). The LLM's own answer is
+        # kept too, so the scores can be calibrated later. Tone columns are only
+        # written when the tone model ran; previously a missing tone model
+        # overwrote every row's tone with NULL.
+        update_fields = ['strategic_intent', 'confidence', 'prediction_source',
+                         'llm_strat', 'llm_strat_conf', 'confidence_is_intent_only',
+                         'ml_processed_at']
+        if have_tone:
+            update_fields += ['tone', 'tone_confidence']
+        processed_at = timezone.now()
+
         objects_to_update = []
         for article in articles_data:
             if 'final_strategic_intent' not in article:
@@ -199,25 +216,24 @@ class Command(BaseCommand):
                 strategic_intent=article['final_strategic_intent'],
                 confidence=article['final_confidence'],
                 prediction_source=article['final_source'],
+                llm_strat=article.get('llm_strat'),
+                llm_strat_conf=article.get('llm_strat_conf'),
+                confidence_is_intent_only=True,
+                ml_processed_at=processed_at,
                 tone=article.get('tone'),
+                tone_confidence=article.get('tone_confidence'),
             )
             objects_to_update.append(obj)
 
             if len(objects_to_update) >= batch_size:
                 with transaction.atomic():
-                    MediaNarrative.objects.bulk_update(
-                        objects_to_update,
-                        ['strategic_intent', 'confidence', 'prediction_source', 'tone']
-                    )
+                    MediaNarrative.objects.bulk_update(objects_to_update, update_fields)
                 self.stdout.write(f"  Updated {len(objects_to_update)} records.")
                 objects_to_update = []
 
         if objects_to_update:
             with transaction.atomic():
-                MediaNarrative.objects.bulk_update(
-                    objects_to_update,
-                    ['strategic_intent', 'confidence', 'prediction_source', 'tone']
-                )
+                MediaNarrative.objects.bulk_update(objects_to_update, update_fields)
             self.stdout.write(f"  Updated final {len(objects_to_update)} records.")
 
         self.stdout.write(self.style.SUCCESS("Strategic intent update complete."))

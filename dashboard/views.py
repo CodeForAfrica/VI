@@ -66,6 +66,18 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from .utils import calculate_contextual_score, map_to_canonical_intent
 from django.core.paginator import Paginator 
 from django.views.decorators.csrf import csrf_exempt
+
+
+def intent_confidence_avg():
+    """Average strategic-intent confidence, leaving out rows saved before the fix.
+
+    Older rows stored max(intent_score, tone_score) in `confidence`, so their
+    value may be the tone score. Only rows flagged confidence_is_intent_only
+    (set by Lambda, fill_missing_intents and update_strategic_intent after the
+    fix, or by the backfill) are averaged. Returns None when no row qualifies.
+    """
+    return Avg('confidence', filter=Q(confidence_is_intent_only=True))
+
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import gettext as _g
 
@@ -421,8 +433,12 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
             if stats:
                 lines = ["📊 Actor Statistics" + (f" for {country}" if country else "")]
                 for s in stats[:5]:
+                    # get_actor_stats returns avg_confidence (there is no
+                    # avg_vulnerability key; the old line raised KeyError).
+                    conf = s.get('avg_confidence')
+                    conf_text = f"{conf:.3f}" if conf is not None else "n/a"
                     lines.append(f"• {s['inferred_actor']}: {s['article_count']} articles, "
-                              f"Avg Vulnerability: {s['avg_vulnerability']:.3f}")
+                              f"Avg Intent Confidence: {conf_text}")
                 return "\n".join(lines)
             return "No statistics available."
         
@@ -817,7 +833,7 @@ We've identified {len(narrative_list)} main strategic narratives across {total} 
         
         return qs.values('inferred_actor').annotate(
             article_count=Count('id'),
-            avg_confidence=Avg('confidence')
+            avg_confidence=intent_confidence_avg()
         ).order_by('-article_count')
     
     def get_intent_breakdown(self, actor, country=None):
@@ -1060,7 +1076,7 @@ def overview(request):
         unique_actors = full_stats_qs.exclude(inferred_actor__in=['', 'Unknown', None]).values('inferred_actor').distinct().count()
         
         # Only aggregate confidence here since vulnerability_index is gone
-        avg_stats = full_stats_qs.aggregate(avg_conf=Avg('confidence'))
+        avg_stats = full_stats_qs.aggregate(avg_conf=intent_confidence_avg())
         avg_confidence = avg_stats['avg_conf'] or 0.0
     
         # B. Fetch Average Vulnerability from the NEW table
@@ -1311,7 +1327,7 @@ def media(request):
         # Calculate stats for the selected outlet
         outlet_stats = selected_outlet_qs.aggregate(
             total_articles=Count('id'),
-            avg_confidence=Avg('confidence'), # Average confidence of predictions for this outlet
+            avg_confidence=intent_confidence_avg(), # Average confidence of predictions for this outlet
             # Potentially avg tone score if applicable
         )
 
@@ -2069,7 +2085,7 @@ def countries(request):
     if selected_country_raw: # Use raw name for MN filtering
         country_stats = qs.aggregate( # qs is already filtered by selected_country_raw
             total_articles=Count('id'),
-            avg_confidence=Avg('confidence'), # Average confidence of predictions
+            avg_confidence=intent_confidence_avg(), # Average confidence of predictions
             # Potentially avg tone score if applicable
         )
 
@@ -2118,7 +2134,7 @@ def authors(request):
             author__regex=r'^https?://'
         ).values('author').annotate(
             article_count=Count('id'),
-            avg_strategic_confidence=Avg('confidence'),
+            avg_strategic_confidence=intent_confidence_avg(),
         ).filter(
             author__isnull=False,
             author__regex=r'^[A-Za-z\s\.\'\-]+$',
@@ -2194,7 +2210,7 @@ def authors(request):
             author__iexact=journalist_name
         ).aggregate(
             total_articles=Count('id'),
-            avg_confidence=Avg('confidence'),
+            avg_confidence=intent_confidence_avg(),
         )
         
         # Get most common intents

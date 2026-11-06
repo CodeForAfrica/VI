@@ -101,8 +101,17 @@ class Command(BaseCommand):
 
                 # Update the article object in memory with the results from the inference
                 article.strategic_intent = canonical_intent # Save the canonical form
-                article.confidence = inference_result.get('confidence', 0.0) # Update confidence from result dict
-                article.tone = inference_result.get('tone', 'Factual') # Update tone from result dict
+                # 'confidence' is the strategic-intent score only; tone has its own score.
+                article.confidence = inference_result.get('confidence', 0.0)
+                article.tone = inference_result.get('tone', 'Factual')
+                article.tone_confidence = inference_result.get('tone_confidence')
+                article.prediction_source = inference_result.get('prediction_source')
+                article.llm_strat = inference_result.get('llm_strategic_intent')
+                article.llm_strat_conf = inference_result.get('llm_confidence')
+                article.model_version = inference_result.get('model_version')
+                # Only the fixed perform_inference returns tone_confidence; an older
+                # one still puts max(intent, tone) in 'confidence'.
+                article.confidence_is_intent_only = 'tone_confidence' in inference_result
                 article.ml_processed_at = timezone.now() # Mark as processed so Neutral/NULL rows don't re-run forever
                 # Optionally update other fields like inferred_actor, target_country if needed
                 # article.inferred_actor = inference_result.get('inferred_actor', article.inferred_actor) # Keep original if not found
@@ -117,7 +126,9 @@ class Command(BaseCommand):
                     'raw_intent': raw_intent,
                     'canonical_intent': canonical_intent,
                     'confidence': article.confidence,
-                    'tone': article.tone, # Add tone to backup if updated
+                    'tone': article.tone,
+                    'tone_confidence': article.tone_confidence,
+                    'prediction_source': article.prediction_source,
                     'status': 'SUCCESS'
                 })
 
@@ -155,7 +166,11 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     # Bulk update the specified fields for the chunk
                     # Include 'tone' and 'confidence' if you updated them above
-                    fields_to_update = ['strategic_intent', 'confidence', 'tone', 'ml_processed_at'] # Add other fields updated above if any
+                    fields_to_update = [
+                        'strategic_intent', 'confidence', 'tone', 'tone_confidence',
+                        'prediction_source', 'llm_strat', 'llm_strat_conf',
+                        'model_version', 'confidence_is_intent_only', 'ml_processed_at',
+                    ]
                     MediaNarrative.objects.bulk_update(
                         chunk,
                         fields_to_update,

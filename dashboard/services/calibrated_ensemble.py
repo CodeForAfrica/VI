@@ -130,7 +130,7 @@ class CalibratedStrategicClassifier:
             texts, batch_size=batch_size
         )
 
-        if calibrated and self.calibrator.calibrated:
+        if calibrated and getattr(self.calibrator, 'calibrated', False):
             calibrated_probs = self.calibrator.calibrate(probabilities)
             predictions = np.argmax(calibrated_probs, axis=1)
             probabilities = calibrated_probs # Update probabilities to calibrated ones
@@ -170,7 +170,7 @@ class CalibratedStrategicClassifier:
                 raise # Propagate error if both fail
 
         # Save calibrator using its own save method (likely uses pickle)
-        if self.calibrator.calibrated:
+        if getattr(self.calibrator, 'calibrated', False):
             self.calibrator.save(os.path.join(save_dir, 'calibrator.pkl'))
 
         # Save metadata with num_labels
@@ -179,7 +179,7 @@ class CalibratedStrategicClassifier:
             'num_labels': len(self.ensemble.label_encoder.classes_),
             'label_classes': self.ensemble.label_encoder.classes_.tolist(),
             'calibrator_type': type(self.calibrator).__name__,
-            'has_calibrator': self.calibrator.calibrated,
+            'has_calibrator': bool(getattr(self.calibrator, 'calibrated', False)),
             'training_method': 'contrastive_peft',
             'contrastive_loss': 'supcon'
         }
@@ -207,12 +207,26 @@ class CalibratedStrategicClassifier:
         print(f"  Models: {info['num_models']}")
         print(f"  Classes: {info['num_labels']}")
         # Load label encoder
+        # save() writes .skops first and .pkl only as a fallback, so each format
+        # must be read with its own loader (pickle cannot read a skops file).
         label_enc_path = os.path.join(save_dir, 'label_encoder.pkl')
-        if not os.path.exists(label_enc_path):
-            # Try .skops extension if .pkl not found
-            label_enc_path = os.path.join(save_dir, 'label_encoder.skops')
-        with open(label_enc_path, 'rb') as f:
-            label_encoder = pickle.load(f)
+        label_enc_path_skops = os.path.join(save_dir, 'label_encoder.skops')
+        if os.path.exists(label_enc_path):
+            with open(label_enc_path, 'rb') as f:
+                label_encoder = pickle.load(f)
+        elif os.path.exists(label_enc_path_skops):
+            untrusted = sio.get_untrusted_types(file=label_enc_path_skops)
+            allowed = {t for t in untrusted
+                       if t.startswith(('sklearn.preprocessing.', 'numpy.'))}
+            unexpected = sorted(set(untrusted) - allowed)
+            if unexpected:
+                raise ValueError(
+                    f"label_encoder.skops contains unexpected types {unexpected}; "
+                    f"refusing to load it")
+            label_encoder = sio.load(label_enc_path_skops, trusted=sorted(allowed))
+        else:
+            raise FileNotFoundError(
+                f"Neither label_encoder.pkl nor label_encoder.skops found in {save_dir}")
         num_labels = len(label_encoder.classes_)
         models, tokenizers = [], []
         for i in range(info['num_models']):
@@ -291,20 +305,19 @@ class CalibratedStrategicClassifier:
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
     
         # Load calibrator (if present)
+        # calibrators.py's save() writes the bare VennAbersMultiClass object.
+        # Loading that as-is made `self.calibrator.calibrated` (predict, line
+        # ~133) raise AttributeError, so it is wrapped again here.
         calibrator = None
         calibrator_path = os.path.join(save_dir, 'calibrator.pkl')
         if os.path.exists(calibrator_path):
-            with open(calibrator_path, 'rb') as f:
-                save_dict = pickle.load(f)
-                # Reconstruct calibrator (handles HybridCalibrator, VennAbers, etc.)
-                if isinstance(save_dict, dict) and 'method' in save_dict:
-                    # Assuming VennAbersStrategicCalibrator or similar reconstruction logic
-                    # This part might need adjustment based on how different calibrators are saved
-                    calibrator = VennAbersStrategicCalibrator() # Or reconstruct HybridCalibrator
-                    calibrator.__dict__.update(save_dict) # Example reconstruction
-                else:
-                    calibrator = save_dict  # direct instance (like VennAbersStrategicCalibrator)
+            calibrator = VennAbersStrategicCalibrator.load(calibrator_path)
             print("✅ Calibrator loaded")
+        else:
+            logger.warning(
+                "No calibrator.pkl in %s; strategic-intent probabilities will be "
+                "UNCALIBRATED even when calibrated=True is requested.", save_dir
+            )
     
         print("✅ Ensemble loaded successfully")
         return cls(ensemble, calibrator)
