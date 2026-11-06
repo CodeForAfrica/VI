@@ -641,6 +641,8 @@ class MLInferenceService:
             logger.error(f"Model inference failed: {e}")
 
         llm_intent, llm_confidence, llm_notes = self._get_llm_strategic_intent(article_text)
+        self._last_llm = (llm_intent, llm_confidence)
+
         
         # --- (Step 3: Your exact Decision Logic stays the same) ---
         final_intent = "unknown"
@@ -1236,15 +1238,13 @@ class MLInferenceService:
         processed_text = self.preprocess_text(article_text)
         if not processed_text:
             return {
-                'strategic_intent': strategic_intent,
-                'strategic_intent_conf': si_confidence,      # ✅ NEW
-                'strategic_intent_source': 'model',          # ✅ NEW  
-                'confidence': max(si_confidence, tone_confidence),
-                'tone': tone,
-                'vulnerability_index': float(vi_score),
-                'inferred_actor': inferred_actor,
-                'target_country': target_country
+                'strategic_intent': 'unknown', 'confidence': 0.0,
+                'tone': 'neutral', 'tone_confidence': 0.0,
+                'prediction_source': 'empty_text',
+                'vulnerability_index': 0.0,
+                'inferred_actor': 'Unknown', 'target_country': 'Unknown',
             }
+
 
         try:
             # 1. STRATEGIC INTENT
@@ -1268,21 +1268,23 @@ class MLInferenceService:
             
             # 4. VULNERABILITY INDEX
             vi_score = self.calculate_vulnerability_index(
-                strategic_intent=strategic_intent,
-                tone=tone,
-                target_country=target_country,
-                inferred_actor=inferred_actor,
-                confidence=max(si_confidence, tone_confidence)
+                strategic_intent=strategic_intent, tone=tone,
+                target_country=target_country, inferred_actor=inferred_actor,
+                confidence=si_confidence,                     
             )
-            
             return {
                 'strategic_intent': strategic_intent,
-                'confidence': max(si_confidence, tone_confidence),
+                'confidence': si_confidence,                  
                 'tone': tone,
-                'vulnerability_index': float(vi_score),  # ✅ FLOAT - No NoneType errors!
+                'tone_confidence': tone_confidence,           
+                'prediction_source': prediction_source,       
+                'llm_strategic_intent': self._last_llm[0],    
+                'llm_confidence': self._last_llm[1],          
+                'vulnerability_index': float(vi_score),
                 'inferred_actor': inferred_actor,
-                'target_country': target_country
+                'target_country': target_country,
             }
+
             
         except Exception as e:
             logger.error(f"Pipeline inference error: {e}")
