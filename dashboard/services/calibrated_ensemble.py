@@ -35,7 +35,32 @@ def _is_complete_local_base_model(model_dir):
     )
     return any(os.path.isfile(os.path.join(model_dir, name)) for name in weight_files)
 
+def _random_pooler_reason(model_dir, missing_keys):
+    """Return a reason string if this adapter would run on a random pooler, else None.
 
+    DeBERTa-style models have a pooler that is NOT in the Hugging Face base
+    checkpoint, so from_pretrained() initialises it randomly. If the adapter
+    only saved a LoRA delta for the pooler (lora_A/lora_B) and not the pooler's
+    full weights, every load gets a different random pooler and predictions
+    change between restarts.
+    """
+    from safetensors import safe_open
+    adapter_file = os.path.join(model_dir, 'adapter_model.safetensors')
+    if not os.path.isfile(adapter_file):
+        return None
+    with safe_open(adapter_file, 'pt') as f:
+        keys = list(f.keys())
+    pooler_keys = [k for k in keys if '.pooler.' in k]
+    if not pooler_keys:
+        return None
+    if any('lora_' not in k for k in pooler_keys):
+        return None          # full pooler weights saved (modules_to_save) -> restored on load
+    if missing_keys is not None and not any(k.startswith('pooler.') or '.pooler.' in k
+                                            for k in missing_keys):
+        return None          # base checkpoint supplies the pooler -> deterministic
+    return ("pooler is randomly initialised on every load: the adapter saved only its LoRA "
+            "delta, and the base checkpoint has no pooler weights")
+    
 class StrategicEnsemble:
     """
     Ensemble for strategic intent classification (supports PEFT models)
@@ -216,7 +241,7 @@ class CalibratedStrategicClassifier:
         with open(label_enc_path, 'rb') as f:
             label_encoder = pickle.load(f)
         num_labels = len(label_encoder.classes_)
-        models, tokenizers = [], []
+        models, tokenizers, skipped_models = [], [], []
         for i in range(info['num_models']):
             print(f"  Loading model {i+1}/{info['num_models']}...", end='\r')
             model_dir = os.path.join(save_dir, f'ensemble_model_{i}')
@@ -265,13 +290,30 @@ class CalibratedStrategicClassifier:
     
             # 5. Load base model from the determined path
             print(f"    DEBUG: Loading base model weights from: {actual_base_model_path}")
-            base_model = AutoModelForSequenceClassification.from_pretrained(
-                actual_base_model_path, # Use the local path or hub ID
+            load_kwargs = dict(
                 config=config,
                 ignore_mismatched_sizes=True,
                 torch_dtype=torch.float32,
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
             )
+            try:
+                base_model, loading_info = AutoModelForSequenceClassification.from_pretrained(
+                    actual_base_model_path, output_loading_info=True, **load_kwargs)
+                missing_keys = list(loading_info.get('missing_keys', []))
+            except TypeError:
+                base_model = AutoModelForSequenceClassification.from_pretrained(
+                    actual_base_model_path, **load_kwargs)
+                missing_keys = None   # unknown: decide from the adapter alone
+
+            # Skip models that would predict through a random pooler. Set
+            # VI_KEEP_RANDOM_POOLER_MODELS=1 to keep them (old behaviour).
+            reason = _random_pooler_reason(model_dir, missing_keys)
+            if reason and os.environ.get('VI_KEEP_RANDOM_POOLER_MODELS') != '1':
+                logger.warning("Skipping ensemble_model_%d (%s): %s", i, base_model_name_or_path, reason)
+                print(f"\n    ⚠️ SKIPPING ensemble_model_{i} ({base_model_name_or_path}): {reason}")
+                skipped_models.append(i)
+                del base_model
+                continue
     
             # 6. Load PEFT adapter on top of the loaded base model
             model = PeftModel.from_pretrained(base_model, model_dir)
@@ -288,6 +330,14 @@ class CalibratedStrategicClassifier:
                 torch.cuda.empty_cache()
     
         print()  # new line after progress
+        if not models:
+            raise RuntimeError("No usable strategic-intent models: all were skipped "
+                               f"(skipped: {skipped_models})")
+        if skipped_models:
+            print(f"  ⚠️ Using {len(models)} of {info['num_models']} models; "
+                  f"skipped {skipped_models} (random pooler). Retrain them with "
+                  f"modules_to_save=['classifier', 'pooler'] to restore them.")
+
     
         # Create ensemble (models stay on CPU)
         ensemble = StrategicEnsemble(models, tokenizers, label_encoder, device=device)
