@@ -126,11 +126,13 @@ class CalibratedStrategicClassifier:
 
     def predict(self, texts, batch_size=1, calibrated=True, return_probs=False):
         """Make predictions with optional calibration"""
+        use_calibration = calibrated and getattr(self.calibrator, 'calibrated', False)
+
         predictions, probabilities = self.ensemble.predict(
             texts, batch_size=batch_size
         )
 
-        if calibrated and self.calibrator.calibrated:
+        if use_calibration:
             calibrated_probs = self.calibrator.calibrate(probabilities)
             predictions = np.argmax(calibrated_probs, axis=1)
             probabilities = calibrated_probs # Update probabilities to calibrated ones
