@@ -153,6 +153,26 @@ def _as_confidence(result, field, fallback=None):
     return value
 
 
+def _as_probs(result):
+    """Optional {label: probability} map; dropped (None) if malformed so an
+    older or partial model never fails the whole request."""
+    probs = result.get("strategic_intent_probs")
+    if not isinstance(probs, dict) or not probs:
+        return None
+    clean = {}
+    for label, value in probs.items():
+        if not isinstance(label, str) or isinstance(value, bool):
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not 0.0 <= value <= 1.0:
+            return None
+        clean[label] = value
+    return clean
+
+
 def _shape_result(result, article_text):
     if not isinstance(result, dict):
         raise InferenceRuntimeError("invalid_model_result",
@@ -179,6 +199,7 @@ def _shape_result(result, article_text):
         "lang_detect": _detect_language(article_text),
         "prediction_source": prediction_source,
         "model_version": MODEL_VERSION,
+        "strategic_intent_probs": _as_probs(result),
     }
 
 

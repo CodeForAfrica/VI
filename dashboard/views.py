@@ -1814,8 +1814,9 @@ def countries(request):
         "drc": "DRC",
         "Ethiopia": "Ethiopia",
         "ethiopia": "Ethiopia",
-        "South Africa": "SouthAfrica",
-        "south africa": "SouthAfrica",
+        "South Africa": "South Africa",
+        "south africa": "South Africa",
+        "SA": "South Africa",  # ingestion stores South Africa as "SA"
     }
 
     # 3. Get the mapped country name for VulnerabilityIndex queries

@@ -615,6 +615,68 @@ class MLInferenceService:
             return [("unknown", 0.0)] * len(article_texts)
 
  # 1. Add country and actor to the arguments here
+    # ------------------------------------------------------------------
+    # Model / LLM arbitration
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _canonical_intent(label):
+        """Map a model label (59 fine-grained classes) or an LLM label (9 canonical
+        classes) to the same canonical form, so the two can be compared.
+
+        Returns the canonical name, 'Neutral' for neutral/none, or None if the
+        label cannot be mapped.
+        """
+        if label is None:
+            return None
+        raw = str(label).strip()
+        if raw.lower() in ('neutral', 'none', ''):
+            return 'Neutral'
+        if raw.lower() == 'unknown':
+            return None
+        from dashboard.utils import map_to_canonical_intent
+        canonical = map_to_canonical_intent(raw)
+        return str(canonical) if canonical else None
+
+    def _arbitrate_intent(self, model_intent, model_confidence, llm_intent, llm_confidence,
+                          threshold=0.6):
+        """Decide the final intent from the model and LLM predictions.
+
+        * They AGREE when both map to the same canonical intent. Then the model's
+          label and the model's confidence are kept (the LLM only confirms).
+        * They DISAGREE otherwise; the higher confidence wins.
+
+        Returns (final_intent, final_confidence, prediction_source).
+        """
+        model_canon = self._canonical_intent(model_intent)
+        llm_canon = self._canonical_intent(llm_intent)
+
+        same_raw = (str(model_intent or '').strip().lower() == str(llm_intent or '').strip().lower()
+                    and str(model_intent or '').strip().lower() not in ('', 'unknown'))
+        if same_raw or (model_canon is not None and model_canon == llm_canon):
+            source = ("ensemble_matched_confirmed" if model_confidence >= threshold
+                      else "ensemble_matched_low_confidence")
+            return model_intent, model_confidence, source
+
+        if model_confidence >= llm_confidence:
+            return model_intent, model_confidence, "model"
+        return llm_intent, llm_confidence, "llm"
+
+    def _intent_probs_dict(self, prob_row):
+        """Map one row of class probabilities to {label: probability}.
+
+        PPI/AIPW needs the probability of every intent, not only the top one.
+        Returns None if the labels cannot be resolved, so callers fall back
+        safely instead of saving mislabelled probabilities."""
+        try:
+            encoder = self._strategic_label_encoder
+            labels = list(encoder.classes_) if encoder is not None else None
+            row = [float(v) for v in np.asarray(prob_row).ravel()]
+            if not labels or len(labels) != len(row):
+                return None
+            return {str(label): round(p, 6) for label, p in zip(labels, row)}
+        except Exception:
+            return None
+
     def perform_strategic_intent_inference(self, article_text, country="Unknown", actor="Unknown"):
         self._last_llm = (None, None)
         """
@@ -626,6 +688,7 @@ class MLInferenceService:
 
         model_intent = "unknown"
         model_confidence = 0.0
+        self._last_intent_probs = None   # per-intent probabilities for PPI (this article only)
         
         # --- (Steps 1 & 2: Model and LLM Prediction stay exactly the same) ---
         try:
@@ -639,6 +702,8 @@ class MLInferenceService:
                 )
                 model_intent = self._decode_label(predictions[0])
                 model_confidence = float(np.max(probabilities[0]))
+                if self._last_intent_probs is None:
+                    self._last_intent_probs = self._intent_probs_dict(probabilities[0])
         except Exception as e:
             logger.error(f"Model inference failed: {e}")
 
@@ -646,32 +711,12 @@ class MLInferenceService:
         self._last_llm = (llm_intent, llm_confidence)
 
         
-        # --- (Step 3: Your exact Decision Logic stays the same) ---
-        final_intent = "unknown"
-        final_confidence = 0.0
-        prediction_source = "unknown"
-        CONFIDENCE_THRESHOLD_FOR_MATCH = 0.6
-
-        if model_intent and llm_intent:
-            if model_intent.lower() == llm_intent.lower():
-                max_conf = max(model_confidence, llm_confidence)
-                if max_conf >= CONFIDENCE_THRESHOLD_FOR_MATCH:
-                    final_intent, final_confidence = model_intent, max_conf
-                    prediction_source = "ensemble_matched_confirmed"
-                else:
-                    if model_confidence >= llm_confidence:
-                        final_intent, final_confidence = model_intent, model_confidence
-                        prediction_source = "model_selected_after_low_match"
-                    else:
-                        final_intent, final_confidence = llm_intent, llm_confidence
-                        prediction_source = "llm_selected_after_low_match"
-            else:
-                if model_confidence >= llm_confidence:
-                    final_intent, final_confidence = model_intent, model_confidence
-                    prediction_source = "model"
-                else:
-                    final_intent, final_confidence = llm_intent, llm_confidence
-                    prediction_source = "llm"
+        # --- Step 3: Decision logic ---
+        # Agree = model and LLM map to the same canonical intent (the model has 59
+        # fine-grained labels, the LLM answers with 9 canonical ones, so raw strings
+        # never match). On agreement the model's own score is kept.
+        final_intent, final_confidence, prediction_source = self._arbitrate_intent(
+            model_intent, model_confidence, llm_intent, llm_confidence)
 
         # 2. Lookup the risk score from the ContextualRisk table
         risk_score = self.lookup_risk(country, final_intent, actor)
@@ -1244,6 +1289,7 @@ class MLInferenceService:
                 'tone': 'neutral', 'tone_confidence': 0.0,
                 'prediction_source': 'empty_text',
                 'llm_strategic_intent': None, 'llm_confidence': None,
+                'intent_probs': None,
                 'vulnerability_index': 0.0,
                 'inferred_actor': 'Unknown', 'target_country': 'Unknown',
             }
@@ -1282,7 +1328,8 @@ class MLInferenceService:
                 'tone_confidence': tone_confidence,           
                 'prediction_source': prediction_source,       
                 'llm_strategic_intent': self._last_llm[0],    
-                'llm_confidence': self._last_llm[1],          
+                'llm_confidence': self._last_llm[1],
+                'intent_probs': getattr(self, '_last_intent_probs', None),          
                 'vulnerability_index': float(vi_score),
                 'inferred_actor': inferred_actor,
                 'target_country': target_country,
@@ -1448,6 +1495,7 @@ class MLInferenceService:
         """Only local model operations; caller owns preprocessing and arbitration."""
         from inference_api.logs import log_event
         model_intent, model_confidence = "unknown", 0.0
+        intent_probs = None
         log_event("INFO", "strategic_inference_started")
         try:
             classifier = self._load_strategic_classifier()
@@ -1456,6 +1504,7 @@ class MLInferenceService:
                     [article_text], batch_size=1, calibrated=True, return_probs=True)
                 model_intent = self._decode_label(predictions[0])
                 model_confidence = float(np.max(probabilities[0]))
+                intent_probs = self._intent_probs_dict(probabilities[0])
             log_event("INFO", "strategic_inference_completed",
                       prediction_available=classifier is not None)
         except Exception as exc:
@@ -1470,8 +1519,9 @@ class MLInferenceService:
             "strategic_intent": model_intent,
             "strategic_intent_confidence": model_confidence,
             "tone": tone, "tone_confidence": tone_confidence,
-            "confidence": max(model_confidence, tone_confidence),
+            "confidence": model_confidence,   # intent confidence only (was the higher of intent and tone)
             "prediction_source": "model",
+            "strategic_intent_probs": intent_probs,
         }
 
     def cleanup(self):
