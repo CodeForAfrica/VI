@@ -57,6 +57,24 @@ class VulnerabilityIndex(models.Model):
     class Meta:
         unique_together = ('actor', 'country', 'intent')
         ordering = ['actor', 'country', 'intent']
+
+
+class IntentCalibration(models.Model):
+    """One fitted calibrator for the per-intent probabilities used by PPI.
+
+    `params` maps each contextual intent to isotonic-regression breakpoints
+    {"x": [...], "y": [...]}; applying it is a linear interpolation, so no
+    pickled objects are stored.
+    """
+    created_at = models.DateTimeField(auto_now_add=True)
+    n_samples = models.IntegerField()
+    params = models.JSONField()
+    brier_before = models.FloatField(null=True, blank=True)
+    brier_after = models.FloatField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
     
         
 class MediaNarrative(Model):
@@ -94,6 +112,13 @@ class MediaNarrative(Model):
     is_anchor = models.BooleanField(default=False)
     true_label = CharField(max_length=255, blank=True, null=True,
     help_text="Human-verified ground truth strategic intent for anchor articles")
+    anchor_split = CharField(
+        max_length=10, blank=True, null=True,
+        choices=[("train", "Used for model training"), ("calib", "Held out for calibration and PPI")],
+        help_text="Which anchor set a labelled article belongs to. Only 'calib' anchors correct the index.")
+    intent_probs = models.JSONField(
+        blank=True, null=True,
+        help_text="Raw model probability for every strategic-intent class, {label: probability}")
 
     class Meta:
         ordering = ['-posting_time']

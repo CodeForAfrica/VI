@@ -1,0 +1,8 @@
+{
+  "cron": [
+    {
+      "command": "python manage.py update_vulnerability_indexes",
+      "schedule": "30 5 * * *"
+    }
+  ]
+}

@@ -393,13 +393,23 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["saved_intent"], "Economic")
         self.assertEqual(result["results"][0]["saved_confidence"], .9)
 
+    def test_per_intent_probabilities_are_saved_for_ppi(self):
+        c = self.connection()
+        probs = {"Economic Dependency": 0.7, "Social Fragility": 0.3}
+        lf.save_classification(c, 3, {"strategic_intent": "Economic Dependency", "confidence": .7,
+                                       "tone": "Factual", "tone_confidence": .5, "intent_probs": probs})
+        sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
+        self.assertIn("intent_probs = %s", sql)
+        self.assertEqual(json.loads(params[8]), probs)
+        self.assertEqual(sql.count("%s"), len(params))
+
     def test_neutral_keeps_original_null_mapping(self):
         c = self.connection()
         lf.save_classification(c, 3, {"strategic_intent": "Neutral", "confidence": .7, "tone": "neutral"})
         sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
         # (intent, confidence, tone, tone_confidence, prediction_source, llm_strat,
         #  llm_strat_conf, model_version, confidence_is_intent_only, id)
-        self.assertEqual(params, (None, .7, "neutral", None, None, None, None, None, False, 3))
+        self.assertEqual(params, (None, .7, "neutral", None, None, None, None, None, None, False, 3))
         self.assertIn("ml_processed_at = NOW()", sql)
         self.assertNotIn("inference_status", sql)
         self.assertEqual(sql.count("%s"), len(params))
@@ -417,7 +427,7 @@ class PersistenceTests(unittest.TestCase):
         )
         _, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
         self.assertEqual(params, ("SocialFragility", .7, "Factual",
-                                  None, None, None, None, None, False, 3))
+                                  None, None, None, None, None, None, False, 3))
 
     def test_saved_confidence_is_intent_score_even_when_tone_is_higher(self):
         c = self.connection()
@@ -429,7 +439,7 @@ class PersistenceTests(unittest.TestCase):
         })
         sql, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
         self.assertEqual(params, ("SocialFragility", .41, "Hostile", .93, "model",
-                                  "Sovereignty Erosion", .35, "2026-09-04", True, 42))
+                                  "Sovereignty Erosion", .35, "2026-09-04", None, True, 42))
         self.assertEqual(sql.count("%s"), len(params))
         for column in ("tone_confidence", "prediction_source", "llm_strat",
                        "llm_strat_conf", "model_version", "confidence_is_intent_only"):
@@ -441,7 +451,7 @@ class PersistenceTests(unittest.TestCase):
         lf.save_classification(c, 7, {"strategic_intent": "Neutral", "confidence": .9, "tone": "Factual"})
         _, params = c.cursor.return_value.__enter__.return_value.execute.call_args.args
         self.assertIsNone(params[3])      # tone_confidence
-        self.assertIs(params[8], False)   # confidence_is_intent_only
+        self.assertIs(params[9], False)   # confidence_is_intent_only
 
     def test_batch_runs_orchestration_before_saving(self):
         c = self.connection([(3, "article", None, None)])

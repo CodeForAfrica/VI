@@ -91,6 +91,8 @@ class RemoteInferenceService(MLInferenceService):
 
     def predict(self, texts, **kwargs):
         result = self._remote_result(texts[0])
+        probs = result.get("strategic_intent_probs")
+        self._last_intent_probs = probs if isinstance(probs, dict) and probs else None
         return [result["strategic_intent"]], [[result["strategic_intent_confidence"]]]
 
     def _decode_label(self, label):

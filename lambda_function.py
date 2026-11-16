@@ -315,12 +315,14 @@ def save_classification(conn, article_id, result):
     dashboard can leave out older rows whose confidence may be the tone score.
     """
     from dashboard.utils import map_to_canonical_intent
+    probs = result.get("intent_probs")   # per-intent probabilities, used by PPI
     with conn.cursor() as cur:
         cur.execute(f"""
             UPDATE {TABLE_NAME}
             SET strategic_intent = %s, confidence = %s, tone = %s,
                 tone_confidence = %s, prediction_source = %s,
                 llm_strat = %s, llm_strat_conf = %s, model_version = %s,
+                intent_probs = %s,
                 confidence_is_intent_only = %s,
                 ml_processed_at = NOW()
             WHERE id = %s
@@ -329,6 +331,7 @@ def save_classification(conn, article_id, result):
               result.get("tone_confidence"), result.get("prediction_source"),
               result.get("llm_strategic_intent"), result.get("llm_confidence"),
               result.get("model_version"),
+              json.dumps(probs) if isinstance(probs, dict) and probs else None,
               # Only the fixed perform_inference returns tone_confidence; an
               # older one still puts max(intent, tone) in "confidence".
               "tone_confidence" in result,
