@@ -107,7 +107,6 @@ class VennAbersCalibrator:
             import venn_abers.venn_abers
             from sklearn.model_selection import train_test_split as sklearn_tts
             
-            # PATCH: Fix for sklearn InvalidParameterError (shuffle=None) in venn-abers library
             def custom_tts(*args, **kwargs):
                 if 'shuffle' in kwargs and kwargs['shuffle'] is None:
                     kwargs['shuffle'] = True
@@ -155,11 +154,11 @@ class VennAbersCalibrator:
         # Define the alias *before* loading, within this module's scope
         # This ensures pickle can find ProbabilitiesEstimator when unpickling
         import sys
-        # Get the current module (tone_ensemble)
+        # Get the module (tone_ensemble)
         current_module = sys.modules[__name__] # __name__ is 'dashboard.services.tone_ensemble'
         # Temporarily add the alias to the current module's globals
         if 'ProbabilitiesEstimator' not in current_module.__dict__:
-             # Ensure ToneProbabilitiesEstimator is defined first (it should be by now)
+             # Ensure ToneProbabilitiesEstimator is defined first
              if 'ToneProbabilitiesEstimator' in current_module.__dict__:
                  current_module.__dict__['ProbabilitiesEstimator'] = current_module.__dict__['ToneProbabilitiesEstimator']
              else:
@@ -171,9 +170,7 @@ class VennAbersCalibrator:
 
         # Maps notebook classes (__main__.ProbabilitiesEstimator) to the repo's.
         obj = load_calibrator_pickle(load_path)
-        # save() writes the bare VennAbersMultiClass, but a file written by a
-        # wrapper (this class or calibrators.VennAbersStrategicCalibrator)
-        # holds the fitted object in .va_multi. Accept both.
+        
         if hasattr(obj, 'va_multi'):
             obj = obj.va_multi
         if obj is None or not hasattr(obj, 'predict_proba'):
@@ -214,23 +211,14 @@ class CalibratedStackedEnsemble:
             model.save_pretrained(model_dir)
             tokenizer.save_pretrained(model_dir)
 
-        # Save meta-model using skops if possible, fallback to joblib
-        import skops.io as sio # Import here if needed for saving
+        # Save meta-model with joblib 
         meta_model_path_joblib = os.path.join(save_dir, 'meta_model.pkl')
-        meta_model_path_skops = os.path.join(save_dir, 'meta_model.skops')
-        try:
-            # Attempt to save with skops first (works if meta_model is sklearn-compatible)
-            logger.info(f"Attempting to save meta_model using skops...")
-            sio.dump(self.ensemble.meta_model, meta_model_path_skops)
-            logger.info(f"✅ Meta-model saved using skops: {meta_model_path_skops}")
-        except Exception as e_skops:
-            logger.warning(f"Skops save failed for meta_model: {e_skops}. Falling back to joblib.")
-            try:
-                joblib.dump(self.ensemble.meta_model, meta_model_path_joblib)
-                logger.info(f"✅ Meta-model saved using joblib: {meta_model_path_joblib}")
-            except Exception as e_joblib:
-                logger.error(f"Joblib save also failed for meta_model: {e_joblib}")
-                raise # Propagate error if both fail
+        stale_skops = os.path.join(save_dir, 'meta_model.skops')
+        if os.path.exists(stale_skops):
+            os.remove(stale_skops)
+            logger.info(f"Removed old {stale_skops}")
+        joblib.dump(self.ensemble.meta_model, meta_model_path_joblib)
+        logger.info(f"✅ Meta-model saved using joblib: {meta_model_path_joblib}")
 
         # Save label encoder info
         label_info = {
@@ -270,9 +258,7 @@ class CalibratedStackedEnsemble:
                 # Load PEFT config to get base model name and adapter details
                 peft_config = PeftConfig.from_pretrained(full_path)
 
-                # Load base model (assuming it's available locally or can be downloaded)
-                # You might need to adjust the base model name/path based on your setup
-                # For example, if the base model is always expected to be local:
+                # Load base model 
                 KNOWN_MODELS_DIR_EC2 = os.environ.get("BASE_MODELS_DIR", "/home/ubuntu/Vulnerability_index_tool/app/models")
                 expected_base_model_dir_name = peft_config.base_model_name_or_path.split('/')[-1] # Get last part of path as name
                 base_model_local_path_ec2 = os.path.join(KNOWN_MODELS_DIR_EC2, expected_base_model_dir_name)
@@ -331,45 +317,17 @@ class CalibratedStackedEnsemble:
             tokenizers.append(tokenizer)
             base_models.append(model)
 
-        # Load meta-model: Try skops first, then joblib
-        import skops.io as sio # Import here for loading
-        meta_model_path_skops = os.path.join(load_dir, 'meta_model.skops')
+        # Load the meta-model 
         meta_model_path_joblib = os.path.join(load_dir, 'meta_model.pkl')
+        stale_skops = os.path.join(load_dir, 'meta_model.skops')
+        if os.path.exists(stale_skops):
+            logger.warning(f"Ignoring old {stale_skops}; using meta_model.pkl")
+        if not os.path.exists(meta_model_path_joblib):
+            raise FileNotFoundError(f"meta_model.pkl not found in {load_dir}")
+        logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
+        meta_model = joblib.load(meta_model_path_joblib)
+        logger.info(f"✅ Meta-model loaded: {type(meta_model).__name__}")
 
-        meta_model = None
-        if os.path.exists(meta_model_path_skops):
-            logger.info(f"Loading meta_model from {meta_model_path_skops} using skops...")
-            try:
-                # Load with skops, specifying trusted types if needed
-                # It's safest to use get_untrusted_types first on your saved model.
-                # trusted_types = sio.get_untrusted_types(file=meta_model_path_skops)
-                # print("Untrusted types found:", trusted_types)
-                # Then, after reviewing, pass them: trusted=trusted_types
-                # For this example, we'll use a broad default, but you should refine this.
-                trusted_types = [
-                    "builtins.type", "builtins.function", "numpy.dtype", "numpy.ndarray",
-                    # Add specific sklearn types based on your actual meta_model type
-                    # e.g., "sklearn.linear_model._logistic.LogisticRegression",
-                    # Add other necessary types reported by get_untrusted_types
-                ]
-                meta_model = sio.load(meta_model_path_skops, trusted=trusted_types)
-                logger.info("✅ Meta-model loaded using skops.")
-            except Exception as e_skops:
-                logger.warning(f"Failed to load meta_model with skops ({e_skops}), falling back to joblib.")
-
-        # Corrected Line: Fixed the missing closing parenthesis
-        if meta_model is None and os.path.exists(meta_model_path_joblib):
-            logger.info(f"Loading meta_model from {meta_model_path_joblib} using joblib...")
-            try:
-                meta_model = joblib.load(os.path.join(load_dir, 'meta_model.pkl'))
-                logger.info("✅ Meta-model loaded using joblib.")
-            except Exception as e_joblib:
-                logger.error(f"Failed to load meta_model with joblib: {e_joblib}")
-                raise # Or handle more gracefully
-
-        if meta_model is None:
-            raise FileNotFoundError("Neither meta_model.skops nor meta_model.pkl found in the model directory.")
-            
         # Create label encoder
         with open(os.path.join(load_dir, 'label_info.json'), 'r') as f:
             label_info = json.load(f)
@@ -378,48 +336,30 @@ class CalibratedStackedEnsemble:
 
         # Create ensemble
         ensemble = StackedEnsemble(base_models, tokenizers, label_encoder, meta_model)
-
-        # Load calibrator
         calibrator = VennAbersCalibrator()
-        # save() writes venn_abers_calibrator.pkl; the strategic ensemble uses
-        # calibrator.pkl. Previously only the first name was checked, so an
-        # archive using the second silently ran the tone model uncalibrated.
         calibrator_names = ('venn_abers_calibrator.pkl', 'calibrator.pkl')
-        calibrator_path = next(
-            (os.path.join(load_dir, n) for n in calibrator_names
-             if os.path.exists(os.path.join(load_dir, n))),
-            os.path.join(load_dir, calibrator_names[0]),
-        )
-        if os.path.exists(calibrator_path):
-            logger.info(f"Loading Venn-Abers calibrator from {calibrator_path}...")
+        found = [n for n in calibrator_names if os.path.exists(os.path.join(load_dir, n))]
+        if type(meta_model).__name__ == "CalibratedClassifierCV":
+            logger.info("Tone probabilities are calibrated inside the meta-model "
+                        "(CalibratedClassifierCV); no separate calibrator file used.")
+            if found:
+                logger.warning(f"Ignoring {', '.join(found)} in {load_dir}: the meta-model is "
+                               f"already calibrated, so a second calibration would distort scores.")
+        elif found:
+            calibrator_path = os.path.join(load_dir, found[0])
+            logger.info(f"Loading tone calibrator from {calibrator_path}...")
             try:
-                # Load calibrator using its own method (which uses pickle internally)
-                # To handle the aliasing issue, temporarily define ProbabilitiesEstimator in this scope
-                # or ensure the class ToneProbabilitiesEstimator is available where pickle looks.
-                # The line ProbabilitiesEstimator = ToneProbabilitiesEstimator at the end of the module
-                # should help, but if the pickle specifically looks for 'ProbabilitiesEstimator',
-                # this might be the root cause.
-                # A common workaround is to define the alias *before* the pickle.load call
-                # in the scope where it will be unpickled. Since this happens inside VennAbersCalibrator.load,
-                # which uses pickle.load internally, we ensure the class is available globally.
-                # The assignment at the end of the file should suffice for most cases.
-                # If issues persist, the calibrator might need to be re-saved using ToneProbabilitiesEstimator directly.
                 calibrator.load(calibrator_path)
             except Exception as e_cal:
-                 logger.error(f"Failed to load Venn-Abers calibrator: {e_cal}")
-                 # Depending on your needs, you might want to continue without the calibrator
-                 # or raise an error here. Let's continue without it for now.
-                 # raise # Uncomment if calibrator is mandatory
-                 logger.warning("Continuing without Venn-Abers calibrator due to load error.")
+                logger.error(f"Failed to load tone calibrator: {e_cal}")
+                logger.warning("Continuing with UNCALIBRATED tone probabilities.")
         else:
-             logger.warning(
-                 f"No tone calibrator ({' or '.join(calibrator_names)}) in {load_dir}; "
-                 f"tone probabilities will be UNCALIBRATED.")
+            logger.warning(f"No tone calibration in {load_dir} (meta-model is "
+                           f"{type(meta_model).__name__}, no calibrator file); "
+                           f"tone probabilities will be UNCALIBRATED.")
 
         print(f"✅ Calibrated ensemble loaded from {load_dir}")
         return cls(ensemble, calibrator)
 
 # --- ALIAS DEFINITION (Important for Pickle Loading) ---
-# This line helps if the VennAbers calibrator was saved expecting 'ProbabilitiesEstimator'.
-# It should be at the module level, after the class definitions.
 ProbabilitiesEstimator = ToneProbabilitiesEstimator
