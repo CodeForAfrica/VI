@@ -247,7 +247,11 @@ class CalibratedStackedEnsemble:
         for model_dir in base_model_dirs:
             full_path = os.path.join(load_dir, model_dir)
             # Use local path, not remote name
-            tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
+            # transformers 5 models ship fast tokenizers only; older ones may need the slow one
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(full_path)
+            except Exception:
+                tokenizer = AutoTokenizer.from_pretrained(full_path, use_fast=False)
             
             # --- ADDED PEFT LOADING LOGIC ---
             # Get PEFT config to check if it's a PEFT model directory

@@ -60,6 +60,14 @@ def map_to_canonical_intent(stored_intent_str, article_title=""):
     if canonical:
         return canonical
 
+    # Fall back to the mapping the vulnerability index (PPI) uses, so a model
+    # label gets the same canonical intent in the dashboard as in the index.
+    if normalized_input not in ('other', 'neutral', 'none', 'unknown'):
+        from dashboard.management.commands.update_vulnerability_indexes import map_raw_intent_to_contextual
+        index_intent = map_raw_intent_to_contextual(stored_intent_str)
+        if index_intent and index_intent != "Other":
+            return index_intent
+
     # Recovery Logic for 'Other' using title keywords
     if (normalized_input == 'other' or not canonical) and article_title:
         title_l = article_title.lower()
